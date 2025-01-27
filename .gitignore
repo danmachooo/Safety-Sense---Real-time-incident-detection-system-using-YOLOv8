@@ -1,0 +1,53 @@
+# .gitignore
+
+# General
+.DS_Store
+Thumbs.db
+*.log
+
+# Environment/config files
+**/.env
+**/.env.local
+**/.env.*.local
+**/config/*
+**/*.config.js
+!**/example.config.js  # Keep example configs if needed
+
+# Node.js modules (frontend and backend)
+**/node_modules/
+
+# Backend-specific (Express.js)
+/backend/.env
+/backend/logs/
+/backend/build/
+/backend/coverage/
+
+# Frontend-specific (Vue.js)
+/frontend/.env
+/frontend/dist/
+/frontend/build/
+/frontend/node_modules/
+/frontend/.vscode/
+
+# IDE/Editor
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Dependency directories (global)
+jspm_packages/
+.pnp/
+.pnp.js
+
+# Optional npm cache directory
+.npm
+.yarn/
+.yarnrc
+
+# Optional ESLint/Prettier cache
+.eslintcache
+.prettierignore

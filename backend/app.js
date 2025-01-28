@@ -1,17 +1,21 @@
 const express = require('express');
 const cors = require('cors');
-const bodyParser = require('body-parser');
 const app = express();
 const errorHandlerMiddleware = require('./middlewares/ErrorHandlerMiddleware');
+const inventoryRouter = require('./routes/InventoryManagementRoutes');
 
-require('dotenv').config()
+require('dotenv').config();
 
-//Middlewares
+// Middlewares
 app.use(cors());
-app.use(bodyParser.json({urlencoded:true}));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(errorHandlerMiddleware);
 
-//Start backend
+// Routes
+app.use(inventoryRouter);
+
+// Start backend
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

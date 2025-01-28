@@ -104,10 +104,15 @@ const deleteItem = async (req, res) => {
     return res.status(200).json({success: true, message: 'Item has been deleted!'});
 }
 
+const test = (req, res) => {
+    res.status(200).json({message: 'test'});
+}
+
 module.exports = {
     createItem,
     checkinItem,
     checkoutItem,
     updateItem,
-    deleteItem
+    deleteItem,
+    test
 }

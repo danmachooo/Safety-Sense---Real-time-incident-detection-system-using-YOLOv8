@@ -1,50 +1,81 @@
 const InventoryItem = require('../../models/Inventory/InventoryItem');
-const ActionLog = require('../../models/Inventory/ActionLog');
+const { BadRequestError, NotFoundError  } = require('../../utils/Error');
 
 const createItem = async (req, res) => {
     const { name, description, quantity } = req.body;
+    
+    if(!name || !description || !quantity)
+        throw new BadRequestError("Invalid Request! Required fields are missing.");
+
+    if (typeof quantity !== 'number' || quantity <= 0) {
+        throw new BadRequestError("Quantity must be a positive number.");
+      }
 
     const newItem = await InventoryItem.create({
         name: name,
-        description, description,
+        description: description,
         quantity: quantity
     });
-
-    if(!newItem) return res.status(500).json({ success: false,  message: "Internal server error.", error: error.message });
     
     return res.status(201).json({ success: true, message: "Item has been added successfully!", data: newItem});
     
 }
 
 const checkinItem = async (req, res) => {
-    const {userId, sku, quantity } = req.body;
+    const { sku, quantity } = req.body;
+    const userId = req.user.id; 
+
+    if(!userId || !sku || !quantity) 
+        throw new BadRequestError("Invalid Request! Required fields are missing.");
+
+    if (typeof quantity !== 'number' || quantity <= 0) {
+        throw new BadRequestError("Quantity must be a positive number.");
+    }
 
     const checkin = await InventoryItem.checkin(sku, userId, quantity);
+    if (!checkin) {
+        throw new NotFoundError("Item not found.");
+    }
 
-    if(!checkin) return res.status(500).json({ success: false,  message: "Internal server error.", error: error.message });
-
-    return res.status(200).json({ success: true, message: `${quantity} of ${sku} has been checked in by ${userId}`, data: newItem});
+    return res.status(200).json({ success: true, message: `${quantity} of ${sku} has been checked in by ${userId}`, data: checkin});
 
 }
 
 const checkoutItem = async (req, res) => {
-    const {userId, sku, quantity } = req.body;
+    const { sku, quantity } = req.body;
+    const userId = req.user.id; 
+
+    if(!userId || !sku || !quantity) 
+        throw new BadRequestError("Invalid Request! Required fields are missing.");
+    
+    if (typeof quantity !== 'number' || quantity <= 0) {
+        throw new BadRequestError("Quantity must be a positive number.");
+    }
 
     const checkout = await InventoryItem.checkout(sku, userId, quantity);
+    if (!checkout) {
+        throw new NotFoundError("Item not found.");
+    }
 
-    if(!checkout) return res.status(500).json({ success: false,  message: "Internal server error.", error: error.message });
-    
-    return res.status(200).json({ success: true, message: `${quantity} of ${sku} has been checked out by ${userId}`, data: newItem});
+    return res.status(200).json({ success: true, message: `${quantity} of ${sku} has been checked out by ${userId}`, data: checkout});
 
 }
 
 const updateItem = async (req, res) => {
-    const {id, name, description, quantity } = req.body;
+    const { id } = req.params;
+    const { name, description, quantity } = req.body;
+
+    if(!id || !name || !description || !quantity) 
+        throw new BadRequestError("Invalid Request! Required fields are missing.");
+
+    if (typeof quantity !== 'number' || quantity <= 0) {
+        throw new BadRequestError("Quantity must be a positive number.");
+    }
 
     const updateItem = await InventoryItem.update(
     {
         name: name,
-        description, description,
+        description: description,
         quantity: quantity
     },
     {
@@ -52,20 +83,31 @@ const updateItem = async (req, res) => {
             id: id
         }
     });
-
-    if(!updateItem) return res.status(500).json({ success: false,  message: "Internal server error.", error: error.message });
-    
-    return res.status(201).json({ success: true, message: "Item has been updated successfully!", data: updateItem});
+    const updatedItem = await InventoryItem.findByPk(id);
+s
+    return res.status(201).json({ success: true, message: "Item has been updated successfully!", data: updatedItem});
     
 }
 
 const deleteItem = async (req, res) => {
     const { id } = req.body;
     
+    if(!id) throw new BadRequestError("Invalid Request! Required fields are missing.");
+
+    
     const item = await InventoryItem.findByPk(id);
 
-    if(!item) return res.status(404).json({ success: false,  message: "Item not found!" });
+    if(!item) throw new NotFoundError("Item not found.");
+
 
     await item.destroy();
     return res.status(200).json({success: true, message: 'Item has been deleted!'});
+}
+
+module.exports = {
+    createItem,
+    checkinItem,
+    checkoutItem,
+    updateItem,
+    deleteItem
 }

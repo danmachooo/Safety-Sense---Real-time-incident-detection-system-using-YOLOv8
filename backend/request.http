@@ -1,0 +1,8 @@
+POST url http://localhost:3000/
+Content-Type: application/json
+
+{
+    "name": "Test",
+    "description": "This is a test post",
+    "quantity": 999
+}

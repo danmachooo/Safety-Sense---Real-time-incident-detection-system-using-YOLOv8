@@ -1,4 +1,4 @@
-const { DataTypes } = require('sequelize');
+const { DataTypes, Op } = require('sequelize');
 const sequelize = require('../../config/database');
 
 const InventoryItem = sequelize.define('InventoryItem', {
@@ -39,24 +39,30 @@ const InventoryItem = sequelize.define('InventoryItem', {
   }
 }, {
   hooks: {
-    beforeCreate: async (item) => {
-      item.sku = await generateSKU(item.name);
-    },
     afterCreate: (item) => logAction('create', item.id),
     afterUpdate: (item) => logAction('update', item.id),
     afterDestroy: (item) => logAction('delete', item.id)
   }
 });
 
-// Helper function to generate SKU (DATE-NAME-NUMBER)
+// Generate SKU Helper Function
 const generateSKU = async (name) => {
-    const date = new Date().toISOString().split('T')[0].replace(/-/g, ''); // Format: YYYYMMDD
-    const baseSKU = name.toUpperCase().replace(/\s+/g, '-'); // Convert name to uppercase and replace spaces with hyphens
-    const count = await InventoryItem.count({ where: { name } }); // Count existing items with the same name
-    return `${date}-${baseSKU}-${count + 1}`; // Format: DATE-NAME-NUMBER
-  };
+  try {
+    const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
+    const baseSKU = name.toUpperCase().replace(/\s+/g, '-').replace(/[^A-Z0-9-]/gi, '').substring(0, 20);
+    
+    const count = await InventoryItem.count({
+      where: { name: { [Op.like]: name } }
+    });
 
-// Helper function for action logging
+    return `${date}-${baseSKU}-${count + 1}`;
+  } catch (error) {
+    console.error('SKU Generation Failed:', error);
+    throw new Error('SKU generation failed');
+  }
+};
+
+// Logging Function
 const logAction = async (action, itemId, details = '') => {
   await sequelize.models.ActionLog.create({
     action,
@@ -65,8 +71,8 @@ const logAction = async (action, itemId, details = '') => {
   });
 };
 
-// Custom methods
-InventoryItem.checkout = async function(sku, userId, quantity) {
+// Checkout Function
+InventoryItem.checkout = async function (sku, userId, quantity) {
   const item = await this.findOne({ where: { sku } });
   
   if (!item) throw new Error('Item not found');
@@ -86,7 +92,8 @@ InventoryItem.checkout = async function(sku, userId, quantity) {
   return item;
 };
 
-InventoryItem.checkin = async function(sku, userId, quantity) {
+// Checkin Function
+InventoryItem.checkin = async function (sku, userId, quantity) {
   const item = await this.findOne({ where: { sku } });
   
   if (!item) throw new Error('Item not found');
@@ -105,4 +112,4 @@ InventoryItem.checkin = async function(sku, userId, quantity) {
   return item;
 };
 
-module.exports = InventoryItem;
+module.exports = { InventoryItem, generateSKU };

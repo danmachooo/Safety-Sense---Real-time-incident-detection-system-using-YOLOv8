@@ -29,4 +29,4 @@ ActionLog.belongsTo(sequelize.models.InventoryItem, {
   onDelete: 'CASCADE'
 });
 
-module.exports = ActionLog;
+module.exports = {ActionLog};

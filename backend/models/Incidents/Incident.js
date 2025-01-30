@@ -26,5 +26,5 @@ const Incident = sequelize.define('Incident', {
     },
   });
   
-module.exports = Incident;
+module.exports = {Incident};
 

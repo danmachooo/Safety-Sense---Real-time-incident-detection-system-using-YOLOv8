@@ -1,25 +1,45 @@
-const InventoryItem = require('../../models/Inventory/InventoryItem');
+const {InventoryItem, generateSKU} = require('../../models/Inventory/InventoryItem');
 const { BadRequestError, NotFoundError  } = require('../../utils/Error');
 
+
 const createItem = async (req, res) => {
+  try {
     const { name, description, quantity } = req.body;
     
-    if(!name || !description || !quantity)
-        throw new BadRequestError("Invalid Request! Required fields are missing.");
+    if (!name || typeof quantity !== 'number') {
+      throw new BadRequestError("Valid name and quantity required");
+    }
 
-    if (typeof quantity !== 'number' || quantity <= 0) {
-        throw new BadRequestError("Quantity must be a positive number.");
-      }
+    console.log('Before creation - req.body:', req.body); // Debug log
+    
+    // Generate SKU using the exported function
+    const sku = await generateSKU(name);
 
     const newItem = await InventoryItem.create({
-        name: name,
-        description: description,
-        quantity: quantity
+      sku,
+      name,
+      description: description || null,
+      quantity
+    });
+
+    console.log('After creation - newItem:', newItem.toJSON()); // Debug log
+    
+    return res.status(201).json({
+      success: true,
+      data: newItem
     });
     
-    return res.status(201).json({ success: true, message: "Item has been added successfully!", data: newItem});
+  } catch (error) {
+    console.error('Creation Error:', error);
     
-}
+    if (error.name === 'SequelizeValidationError') {
+      const messages = error.errors.map(err => `${err.path}: ${err.message}`);
+      throw new BadRequestError(messages.join(', '));
+    }
+    
+    throw error;
+  }
+};
 
 const checkinItem = async (req, res) => {
     const { sku, quantity } = req.body;
@@ -64,47 +84,48 @@ const checkoutItem = async (req, res) => {
 const updateItem = async (req, res) => {
     const { id } = req.params;
     const { name, description, quantity } = req.body;
-
-    if(!id || !name || !description || !quantity) 
-        throw new BadRequestError("Invalid Request! Required fields are missing.");
-
-    if (typeof quantity !== 'number' || quantity <= 0) {
-        throw new BadRequestError("Quantity must be a positive number.");
+  
+    if (!id || !name || typeof quantity !== 'number') {
+      throw new BadRequestError("Invalid request parameters");
     }
-
-    const updateItem = await InventoryItem.update(
-    {
-        name: name,
-        description: description,
-        quantity: quantity
-    },
-    {
-        where: {
-            id: id
-        }
-    });
+  
+    const [affectedCount] = await InventoryItem.update(
+      { name, description, quantity },
+      { where: { id } }
+    );
+  
+    if (affectedCount === 0) {
+      throw new NotFoundError("Item not found");
+    }
+  
     const updatedItem = await InventoryItem.findByPk(id);
-s
-    return res.status(201).json({ success: true, message: "Item has been updated successfully!", data: updatedItem});
-    
-}
+    return res.status(200).json({
+      success: true,
+      message: "Item updated successfully",
+      data: updatedItem
+    });
+  };
 
 const deleteItem = async (req, res) => {
-    const { id } = req.body;
-    
-    if(!id) throw new BadRequestError("Invalid Request! Required fields are missing.");
+  const { id } = req.params; // Changed from req.body
+  
+  if (!id) {
+    throw new BadRequestError("Item ID is required");
+  }
 
-    
-    const item = await InventoryItem.findByPk(id);
+  const item = await InventoryItem.findByPk(id);
+  if (!item) {
+    throw new NotFoundError("Item not found");
+  }
 
-    if(!item) throw new NotFoundError("Item not found.");
+  await item.destroy();
+  return res.status(200).json({
+    success: true,
+    message: "Item deleted successfully"
+  });
+};
 
-
-    await item.destroy();
-    return res.status(200).json({success: true, message: 'Item has been deleted!'});
-}
-
-const test = (req, res) => {
+const test = async (req, res) => {
     res.status(200).json({message: 'test'});
 }
 

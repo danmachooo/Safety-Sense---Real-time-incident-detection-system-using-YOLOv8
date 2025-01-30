@@ -12,7 +12,7 @@ const Camera = sequelize.define('Camera', {
   });
   
 
-module.exports = Camera
+module.exports = {Camera}
 
 
   

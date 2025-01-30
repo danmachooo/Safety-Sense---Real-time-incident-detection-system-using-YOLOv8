@@ -1,13 +1,13 @@
 const { StatusCodes } = require('http-status-codes') ;
 
-export class BadRequestError extends Error {
+class BadRequestError extends Error {
     constructor(message) {
         super(message);
         this.name = "BadRequestError";
         this.message = message
     }
 }
-export class UnauthorizedError extends Error {
+class UnauthorizedError extends Error {
     constructor(message) {
         super(message);
         this.name = "UnauthorizedError";
@@ -15,7 +15,7 @@ export class UnauthorizedError extends Error {
     }
 }
 
-export class ForbiddenError extends Error {
+class ForbiddenError extends Error {
     constructor(message) {
         super(message);
         this.name = "ForbiddenError";
@@ -23,7 +23,7 @@ export class ForbiddenError extends Error {
     }
 }
 
-export class NotFoundError extends Error {
+class NotFoundError extends Error {
     constructor(message) {
         super(message);
         this.name = "NotFoundError";
@@ -31,7 +31,7 @@ export class NotFoundError extends Error {
     }
 }
 
-export class ConflictError extends Error {
+class ConflictError extends Error {
     constructor(message) {
         super(message);
         this.name = "ConflictError";
@@ -39,7 +39,7 @@ export class ConflictError extends Error {
     }
 }
 
-export function makeError(error) {
+function makeError(error) {
     const defaultError = {
         name: error.name,
         message: error.message,
@@ -94,4 +94,13 @@ export function makeError(error) {
     }
    
 }
+
+module.exports = {
+    BadRequestError,
+    UnauthorizedError,
+    ForbiddenError,
+    NotFoundError,
+    ConflictError,
+    makeError,
+};
 

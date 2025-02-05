@@ -1,5 +1,6 @@
 const { DataTypes, Op } = require('sequelize');
 const sequelize = require('../../config/database');
+const ActionLog = require('../Inventory/ActionLog')
 
 const InventoryItem = sequelize.define('InventoryItem', {
   sku: {
@@ -38,21 +39,30 @@ const InventoryItem = sequelize.define('InventoryItem', {
     allowNull: true
   }
 }, {
+  tableName: 'InventoryItem',
   hooks: {
+    beforeValidate: async (item) => {
+      console.log('Before Validate Hook - Item:', item); 
+      if (!item.sku) {
+        item.sku = await generateSKU(item.name);
+        console.log("GENERATED SKU: ", item.sku);
+      }
+    },
     afterCreate: (item) => logAction('create', item.id),
     afterUpdate: (item) => logAction('update', item.id),
     afterDestroy: (item) => logAction('delete', item.id)
   }
+  
 });
 
 // Generate SKU Helper Function
-const generateSKU = async (name) => {
+async function generateSKU(name) {
   try {
     const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
     const baseSKU = name.toUpperCase().replace(/\s+/g, '-').replace(/[^A-Z0-9-]/gi, '').substring(0, 20);
     
     const count = await InventoryItem.count({
-      where: { name: { [Op.like]: name } }
+      where: { sku: { [Op.like]: `${date}-${baseSKU}%` } }
     });
 
     return `${date}-${baseSKU}-${count + 1}`;
@@ -60,16 +70,21 @@ const generateSKU = async (name) => {
     console.error('SKU Generation Failed:', error);
     throw new Error('SKU generation failed');
   }
-};
+}
 
 // Logging Function
 const logAction = async (action, itemId, details = '') => {
-  await sequelize.models.ActionLog.create({
-    action,
-    itemId,
-    details
-  });
+  await ActionLog.create(
+    {
+      action,
+      itemId,
+      details
+    },
+    { hooks: false }  // Disables hooks for ActionLog creation
+  );
 };
+
+
 
 // Checkout Function
 InventoryItem.checkout = async function (sku, userId, quantity) {
@@ -83,7 +98,7 @@ InventoryItem.checkout = async function (sku, userId, quantity) {
   item.lastCheckedBy = userId;
   await item.save();
   
-  await sequelize.models.ActionLog.create({
+  await ActionLog.create({
     action: 'checkout',
     itemId: item.id,
     details: `Checked out ${quantity} units by ${userId}`
@@ -103,7 +118,7 @@ InventoryItem.checkin = async function (sku, userId, quantity) {
   item.lastCheckedBy = userId;
   await item.save();
   
-  await sequelize.models.ActionLog.create({
+  await ActionLog.create({
     action: 'checkin',
     itemId: item.id,
     details: `Checked in ${quantity} units by ${userId}`
@@ -112,4 +127,4 @@ InventoryItem.checkin = async function (sku, userId, quantity) {
   return item;
 };
 
-module.exports = { InventoryItem, generateSKU };
+module.exports = InventoryItem;

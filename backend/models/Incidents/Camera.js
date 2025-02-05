@@ -9,10 +9,12 @@ const Camera = sequelize.define('Camera', {
     },
     name: DataTypes.STRING,
     rtspUrl: DataTypes.STRING,
+  }, {
+    tableName: 'Camera'
   });
   
 
-module.exports = {Camera}
+module.exports = Camera
 
 
   

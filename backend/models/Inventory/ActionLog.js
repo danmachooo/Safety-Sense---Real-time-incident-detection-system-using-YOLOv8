@@ -20,13 +20,13 @@ const ActionLog = sequelize.define('ActionLog', {
   userId: {
     type: DataTypes.STRING,
     allowNull: true
+  },
+  itemId: {
+    type: DataTypes.INTEGER, 
+    allowNull: false
   }
+}, {
+  tableName: 'ActionLog'
 });
 
-// Associations
-ActionLog.belongsTo(sequelize.models.InventoryItem, {
-  foreignKey: 'itemId',
-  onDelete: 'CASCADE'
-});
-
-module.exports = {ActionLog};
+module.exports = ActionLog;

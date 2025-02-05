@@ -9,11 +9,11 @@ const Incident = sequelize.define('Incident', {
       primaryKey: true,
     },
     cameraId: {
-      type: DataTypes.INTEGER, // Use INTEGER to match Cameras.id
+      type: DataTypes.INTEGER,  
       allowNull: false,
       references: {
-        model: Camera, // Name of the model
-        key: 'id',     // Key in Cameras model that cameraId refers to
+        model: Camera, 
+        key: 'id',     
       },
     },
     snapshotUrl: {
@@ -24,7 +24,9 @@ const Incident = sequelize.define('Incident', {
       type: DataTypes.STRING,
       allowNull: false,
     },
+  }, {
+
   });
   
-module.exports = {Incident};
+module.exports = Incident
 

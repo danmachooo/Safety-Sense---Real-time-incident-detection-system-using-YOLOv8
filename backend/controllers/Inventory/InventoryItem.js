@@ -1,4 +1,4 @@
-const {InventoryItem, generateSKU} = require('../../models/Inventory/InventoryItem');
+const {InventoryItem} = require('../../models/Inventory/Associations');
 const { BadRequestError, NotFoundError  } = require('../../utils/Error');
 
 
@@ -10,19 +10,17 @@ const createItem = async (req, res) => {
       throw new BadRequestError("Valid name and quantity required");
     }
 
-    console.log('Before creation - req.body:', req.body); // Debug log
+    console.log('Final Parsed Body:', req.body);
+    console.log('Before creation - req.body:', req.body); 
     
-    // Generate SKU using the exported function
-    const sku = await generateSKU(name);
 
     const newItem = await InventoryItem.create({
-      sku,
-      name,
-      description: description || null,
+      name ,
+      description,
       quantity
     });
 
-    console.log('After creation - newItem:', newItem.toJSON()); // Debug log
+    console.log('After creation - newItem:', newItem.toJSON()); 
     
     return res.status(201).json({
       success: true,
@@ -107,7 +105,7 @@ const updateItem = async (req, res) => {
   };
 
 const deleteItem = async (req, res) => {
-  const { id } = req.params; // Changed from req.body
+  const { id } = req.params; 
   
   if (!id) {
     throw new BadRequestError("Item ID is required");
@@ -125,6 +123,43 @@ const deleteItem = async (req, res) => {
   });
 };
 
+const getItem = async (req, res) => {
+  try {
+    const { id } = req.params;
+  
+    if(!id) throw new BadRequestError("Item ID is required");
+  
+    const item = await InventoryItem.findByPk(id);
+  
+    if(!item) throw new NotFoundError('Item not found.');
+  
+    return res.status(200).json({
+      success: true,
+      message: `Item Found: ${item.id}`,
+      data: item
+    });
+
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+const getAllItems = async (req, res) => {
+  try {
+    const items = await InventoryItem.findAll();
+
+    if(!items) throw new NotFoundError('Item not found.');
+
+    return res.status(200).json({
+      success: true,
+      message: `Item Found: ${items}`,
+      data: items
+    });
+  } catch (error) {
+    console.error('Error: ' + error);
+  }
+}
+
 const test = async (req, res) => {
     res.status(200).json({message: 'test'});
 }
@@ -135,5 +170,7 @@ module.exports = {
     checkoutItem,
     updateItem,
     deleteItem,
+    getItem,
+    getAllItems,
     test
 }

@@ -2,7 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const app = express();
 const errorHandlerMiddleware = require('./middlewares/ErrorHandlerMiddleware');
-const inventoryRouter = require('./routes/InventoryRoutes');
+// const inventoryRouter = require('./routes/InventoryRoutes');
+const authenticationRouter = require('./routes/AuthenticationRoutes');
 
 require('dotenv').config();
 
@@ -12,10 +13,11 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Routes
-app.use(inventoryRouter);
+// app.use(inventoryRouter);
+app.use(authenticationRouter);
 
-// Error handler (MUST BE AFTER ROUTES)
-app.use(errorHandlerMiddleware); // ⚠️ Place after routes
+// Error handler 
+app.use(errorHandlerMiddleware); 
 
 // Start backend
 const PORT = process.env.PORT || 3000;

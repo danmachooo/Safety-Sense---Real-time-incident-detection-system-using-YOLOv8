@@ -1,7 +1,7 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../../config/database');
 
-const User = sequelize.define('User', {
+const User = sequelize.define('Users', {
   email: {
     type: DataTypes.STRING,
     unique: true,
@@ -21,21 +21,29 @@ const User = sequelize.define('User', {
     },
     comment: 'The hashed password of the user',
   },
-  name: {
+  firstname: {
     type: DataTypes.STRING,
     allowNull: false,
     validate: {
       notEmpty: true, 
     },
-    comment: 'The full name of the user',
+    comment: 'The first name of the user',
+  },
+  lastname: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    validate: {
+      notEmpty: true, 
+    },
+    comment: 'The last name of the user',
   },
   role: {
-    type: DataTypes.ENUM('operator', 'rescuer', 'admin'),
+    type: DataTypes.ENUM('rescuer', 'admin'),
     defaultValue: 'rescuer',
     validate: {
-      isIn: [['operator', 'rescuer', 'admin']], 
+      isIn: [['rescuer', 'admin']], 
     },
-    comment: 'The role of the user (operator, rescuer, admin)',
+    comment: 'The role of the user (rescuer, admin)',
   },
   contact: {
     type: DataTypes.STRING,

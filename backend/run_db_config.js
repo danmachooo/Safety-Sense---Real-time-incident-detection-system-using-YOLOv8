@@ -1,7 +1,9 @@
-const {Incident} = require('./models/Incidents/Incident'); 
-const {Camera} = require('./models/Incidents/Camera'); 
-const {InventoryItem} = require('./models/Inventory/InventoryItem');
-const {ActionLog} = require('./models/Inventory/ActionLog');
+const Incident = require('./models/Incidents/Incident'); 
+const Camera = require('./models/Incidents/Camera'); 
+const InventoryItem = require('./models/Inventory/InventoryItem');
+const ActionLog = require('./models/Inventory/ActionLog');
+const User = require('./models/Staffs/User');
+
 const sequelize = require('./config/database');
 
 // Sync models with the database

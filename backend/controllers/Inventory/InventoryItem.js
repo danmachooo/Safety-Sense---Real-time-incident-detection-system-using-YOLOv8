@@ -160,9 +160,7 @@ const getAllItems = async (req, res) => {
   }
 }
 
-const test = async (req, res) => {
-    res.status(200).json({message: 'test'});
-}
+
 
 module.exports = {
     createItem,
@@ -171,6 +169,5 @@ module.exports = {
     updateItem,
     deleteItem,
     getItem,
-    getAllItems,
-    test
+    getAllItems
 }

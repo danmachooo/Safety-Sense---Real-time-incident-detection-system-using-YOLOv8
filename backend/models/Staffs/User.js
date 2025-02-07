@@ -45,6 +45,14 @@ const User = sequelize.define('Users', {
     },
     comment: 'The role of the user (rescuer, admin)',
   },
+  status: {
+    type: DataTypes.ENUM('active', 'blocked'),
+    defaultValue: 'active',
+    validate: {
+      isIn: [['active', 'blocked']], 
+    },
+    comment: 'The status of the user (active, blocked)',
+  },
   contact: {
     type: DataTypes.STRING,
     allowNull: true, 

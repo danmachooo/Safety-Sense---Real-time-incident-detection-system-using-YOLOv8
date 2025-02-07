@@ -1,4 +1,4 @@
-const { BadRequestError, NotFoundError  } = require('../../utils/Error');
+const { BadRequestError, NotFoundError, ForbiddenError  } = require('../../utils/Error');
 const User = require('../../models/Staffs/User');
 const jwt = require('jsonwebtoken');    
 const bcrypt = require('bcryptjs');
@@ -8,7 +8,6 @@ require('dotenv').config();
 
 
 const JWT_SECRET = process.env.JWT_SECRET;
-
 if (!JWT_SECRET) {
     throw new Error('JWT_SECRET is not defined in environment variables');
 }
@@ -26,13 +25,16 @@ const loginUser = async (req, res, next) => {
         });
     
         if(!user) throw new NotFoundError('User not found! Invalid credentials.');
+
+        if(user.status === 'blocked') throw new ForbiddenError('User is blocked and cannot go any further.');
     
         const isMatch = await bcrypt.compare(password, user.password);
     
         if(!isMatch) throw new NotFoundError('User not found! Invalid credentials.');
     
         const token = jwt.sign({
-            userId: user.id
+            userId: user.id,
+            status: user.status
         },
             JWT_SECRET, 
             {

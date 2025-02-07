@@ -1,9 +1,9 @@
+const errorHandlerMiddleware = require('./middlewares/ErrorHandlerMiddleware');
 const express = require('express');
 const cors = require('cors');
 const app = express();
-const errorHandlerMiddleware = require('./middlewares/ErrorHandlerMiddleware');
-// const inventoryRouter = require('./routes/InventoryRoutes');
-const authenticationRouter = require('./routes/AuthenticationRoutes');
+
+const apiRouter = require('./routes/api');
 
 require('dotenv').config();
 
@@ -12,9 +12,8 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Routes
-// app.use(inventoryRouter);
-app.use(authenticationRouter);
+// Main route
+app.use('/api', apiRouter);
 
 // Error handler 
 app.use(errorHandlerMiddleware); 

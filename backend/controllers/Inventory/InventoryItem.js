@@ -1,5 +1,6 @@
 const {InventoryItem} = require('../../models/Inventory/Associations');
 const { BadRequestError, NotFoundError  } = require('../../utils/Error');
+const { StatusCodes } = require('http-status-codes') ;
 
 
 const createItem = async (req, res) => {
@@ -22,7 +23,7 @@ const createItem = async (req, res) => {
 
     console.log('After creation - newItem:', newItem.toJSON()); 
     
-    return res.status(201).json({
+    return res.status(StatusCodes.CREATED).json({
       success: true,
       data: newItem
     });
@@ -55,7 +56,7 @@ const checkinItem = async (req, res) => {
         throw new NotFoundError("Item not found.");
     }
 
-    return res.status(200).json({ success: true, message: `${quantity} of ${sku} has been checked in by ${userId}`, data: checkin});
+    return res.status(StatusCodes.OK).json({ success: true, message: `${quantity} of ${sku} has been checked in by ${userId}`, data: checkin});
 
 }
 
@@ -75,7 +76,7 @@ const checkoutItem = async (req, res) => {
         throw new NotFoundError("Item not found.");
     }
 
-    return res.status(200).json({ success: true, message: `${quantity} of ${sku} has been checked out by ${userId}`, data: checkout});
+    return res.status(StatusCodes.OK).json({ success: true, message: `${quantity} of ${sku} has been checked out by ${userId}`, data: checkout});
 
 }
 
@@ -97,7 +98,7 @@ const updateItem = async (req, res) => {
     }
   
     const updatedItem = await InventoryItem.findByPk(id);
-    return res.status(200).json({
+    return res.status(StatusCodes.OK).json({
       success: true,
       message: "Item updated successfully",
       data: updatedItem
@@ -117,7 +118,7 @@ const deleteItem = async (req, res) => {
   }
 
   await item.destroy();
-  return res.status(200).json({
+  return res.status(StatusCodes.OK).json({
     success: true,
     message: "Item deleted successfully"
   });
@@ -133,7 +134,7 @@ const getItem = async (req, res) => {
   
     if(!item) throw new NotFoundError('Item not found.');
   
-    return res.status(200).json({
+    return res.status(StatusCodes.OK).json({
       success: true,
       message: `Item Found: ${item.id}`,
       data: item
@@ -150,7 +151,7 @@ const getAllItems = async (req, res) => {
 
     if(!items) throw new NotFoundError('Item not found.');
 
-    return res.status(200).json({
+    return res.status(StatusCodes.OK).json({
       success: true,
       message: `Item Found: ${items}`,
       data: items

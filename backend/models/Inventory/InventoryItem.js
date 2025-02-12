@@ -40,6 +40,21 @@ const InventoryItem = sequelize.define('InventoryItem', {
   }
 }, {
   tableName: 'InventoryItem',
+  timestamps: true,
+  paranoid: true,
+  indexes: [
+    {
+      unique: true,
+      fields: ['sku']  // Index on SKU (already unique)
+    },
+    {
+      fields: ['name']
+    },
+    {
+      fields: ['status']
+    }
+  ],
+
   hooks: {
     beforeValidate: async (item) => {
       console.log('Before Validate Hook - Item:', item); 

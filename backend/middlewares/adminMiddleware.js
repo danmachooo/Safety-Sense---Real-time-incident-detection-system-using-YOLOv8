@@ -1,24 +1,22 @@
-const User = require('../models/Staffs/User');
 const { ForbiddenError } = require('../utils/Error');
 
-const adminMiddleware = async (req, res, next) =>  {
+const adminMiddleware = async (req, res, next) => {
     try {
-        // Check if req.user exists
-        if (!req.user || !req.user.id) {
+        // Check if user data is available from the authMiddleware
+        console.log(req.user || undefined)
+        console.log(req.user.role || undefined)
+        if (!req.user || !req.user.role) {
             throw new ForbiddenError('Access denied: No user information available.');
         }
 
-        // Retrieve the user from the database
-        const user = await User.findByPk(req.user.id);
-
-        // Check if the user exists and has the admin role
-        if (!user || user.role !== 'admin') {
+        // Allow only admins (or extend for multiple roles)
+        if (req.user.role !== 'admin') {
             throw new ForbiddenError('Access denied: Admins only!');
         }
 
-        // User is authorized as admin, proceed to the next middleware
-        next();
+        next(); // Proceed if user is an admin
     } catch (error) {
+        console.error("Admin middleware error: " + error)
         next(error);
     }
 };

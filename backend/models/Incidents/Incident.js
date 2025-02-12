@@ -4,29 +4,38 @@ const Camera = require('./Camera');
 
 const Incident = sequelize.define('Incident', {
     id: {
-      type: DataTypes.INTEGER,
-      autoIncrement: true,
-      primaryKey: true,
+        type: DataTypes.INTEGER,
+        autoIncrement: true,
+        primaryKey: true,
     },
     cameraId: {
-      type: DataTypes.INTEGER,  
-      allowNull: false,
-      references: {
-        model: Camera, 
-        key: 'id',     
-      },
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        references: {
+            model: Camera,
+            key: 'id',
+        },
     },
     snapshotUrl: {
-      type: DataTypes.STRING,
-      allowNull: false,
+        type: DataTypes.STRING,
+        allowNull: false,
     },
     name: {
-      type: DataTypes.STRING,
-      allowNull: false,
+        type: DataTypes.STRING,
+        allowNull: false,
     },
-  }, {
+}, {
+    tableName: 'Incident',
+    indexes: [
+        {
+            fields: ['cameraId'], 
+        },
+        {
+            fields: ['name'], 
+        },
+    ],
+    timestamps: true, 
+    paranoid: true, 
+});
 
-  });
-  
-module.exports = Incident
-
+module.exports = Incident;

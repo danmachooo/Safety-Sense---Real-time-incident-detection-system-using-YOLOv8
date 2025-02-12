@@ -3,8 +3,9 @@ const router = express.Router();
 const authMiddleware = require('../middlewares/authMiddleware'); 
 const adminMiddleware = require('../middlewares/adminMiddleware');
 
-const changeUserRole = require('../controllers/Users/authorization');
+const {changeUserRole, changeAccess} = require('../controllers/Users/authorization');
 
-router.post('/change-role/:id', authMiddleware, adminMiddleware, changeUserRole);
+router.patch('/change-role/:id', authMiddleware, adminMiddleware, changeUserRole);
+router.patch('/change-access/:id', authMiddleware, adminMiddleware, changeAccess);
 
 module.exports = router;

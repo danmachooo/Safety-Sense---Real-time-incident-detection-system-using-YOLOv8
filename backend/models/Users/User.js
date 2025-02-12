@@ -10,7 +10,14 @@ const User = sequelize.define('Users', {
       isEmail: true, 
       notEmpty: true, 
     },
-    comment: 'The email address of the user',
+  },
+  isVerified: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false, // Initially false until verified
+  },
+  verificationToken: {
+    type: DataTypes.STRING,
+    allowNull: true, // Stores the token for email verification
   },
   password: {
     type: DataTypes.STRING,
@@ -19,7 +26,14 @@ const User = sequelize.define('Users', {
       len: [8, 100], 
       notEmpty: true, 
     },
-    comment: 'The hashed password of the user',
+  },
+  resetPasswordToken: {
+    type: DataTypes.STRING,
+    allowNull: true, // Stores the token for resetting passwords
+  },
+  resetPasswordExpires: {
+    type: DataTypes.DATE,
+    allowNull: true, // Expiration date for password reset token
   },
   firstname: {
     type: DataTypes.STRING,
@@ -27,7 +41,6 @@ const User = sequelize.define('Users', {
     validate: {
       notEmpty: true, 
     },
-    comment: 'The first name of the user',
   },
   lastname: {
     type: DataTypes.STRING,
@@ -35,7 +48,6 @@ const User = sequelize.define('Users', {
     validate: {
       notEmpty: true, 
     },
-    comment: 'The last name of the user',
   },
   role: {
     type: DataTypes.ENUM('rescuer', 'admin'),
@@ -43,15 +55,10 @@ const User = sequelize.define('Users', {
     validate: {
       isIn: [['rescuer', 'admin']], 
     },
-    comment: 'The role of the user (rescuer, admin)',
   },
-  status: {
-    type: DataTypes.ENUM('active', 'blocked'),
-    defaultValue: 'active',
-    validate: {
-      isIn: [['active', 'blocked']], 
-    },
-    comment: 'The status of the user (active, blocked)',
+  isBlocked: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
   },
   contact: {
     type: DataTypes.STRING,
@@ -59,13 +66,30 @@ const User = sequelize.define('Users', {
     validate: {
       is: /^\+?[0-9\s\-]+$/, 
     },
-    comment: 'Emergency contact information for the user',
   },
 }, {
   timestamps: true, 
   underscored: true, 
+  paranoid: true,
   tableName: 'users', 
-  comment: 'Table for storing user information',
+  indexes: [
+    {
+      unique: true,
+      fields: ['email'],
+    }, 
+    {
+      fields: ['firstname'],
+    },
+    {
+      fields: ['lastname'],
+    },
+    {
+      fields: ['isBlocked'],
+    },
+    {
+      fields: ['deletedAt']
+    }
+  ]
 });
 
 module.exports = User;

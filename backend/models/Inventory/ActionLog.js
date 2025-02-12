@@ -26,7 +26,19 @@ const ActionLog = sequelize.define('ActionLog', {
     allowNull: false
   }
 }, {
-  tableName: 'ActionLog'
+  tableName: 'ActionLog',
+  indexes: [
+    {
+        fields: ['action'], 
+    }, 
+    {
+      fields: ['userId'],
+    },
+    {
+      fields: ['itemId']
+    }
+    
+],
 });
 
 module.exports = ActionLog;

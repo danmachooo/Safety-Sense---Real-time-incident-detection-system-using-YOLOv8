@@ -1,7 +1,10 @@
-const User = require('../../models/Staffs/User');
-const { get } = require('../../routes/AuthenticationRoutes');
+const { Op } = require('sequelize');
+const User = require('../../models/Users/User');
 const { BadRequestError, NotFoundError  } = require('../../utils/Error');
 const { StatusCodes } = require('http-status-codes') ;
+const bcrypt = require('bcryptjs');
+const { get } = require('../../routes/InventoryRoutes');
+
 
 
 const getUser = async (req, res, next) => {
@@ -26,23 +29,35 @@ const getUser = async (req, res, next) => {
     }
 }
 
-const getAllUsers = async (req, res, next) => {
-    try {
-        const users = await User.findAll();
+    const getAllUsers = async (req, res, next) => {
+        try {
+            let { page, limit, showDeleted } = req.query;
+            page = parseInt(page) || 1;
+            limit = parseInt(limit) ||10;
+            const offset = (page - 1) * limit;
 
-        if(!users) throw new NotFoundError('Users not found.');
+            const paranoidOption = showDeleted === 'true' ? false : true;
 
-        return res.status(StatusCodes.OK).json({
-            success: true,
-            message: 'Users has been found.',
-            data: users
-        });
+            const { count, rows } = await User.findAndCountAll({
+                paranoid: paranoidOption,
+                offset, 
+                limit
+            });
 
-    } catch (error) {
-        console.error('An error occured. '  + error);
-        next(error);
+            return res.status(StatusCodes.OK).json({
+                success: true,
+                message: 'Users retrieved successfully.',
+                totalUsers: count,
+                totalPages: Math.ceil(count/limit),
+                currentPage: page,
+                data: rows
+            });
+
+        } catch (error) {
+            console.error('An error occured. '  + error);
+            next(error);
+        }
     }
-}
 
 const updateUser = async (req, res, next) => {
     const { id } = req.params;
@@ -79,7 +94,101 @@ const updateUser = async (req, res, next) => {
     });
 };
 
+const softDeleteUser = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+
+        if (!id) throw new BadRequestError("User's ID is required.");
+
+        const user = await User.findByPk(id);
+        if (!user) throw new NotFoundError("User not found.");
+
+        await user.destroy();  
+
+        return res.status(StatusCodes.OK).json({
+            success: true,
+            message: "User has been soft deleted."
+        });
+    } catch (error) {
+        console.error("An error has occurred: " + error);
+        next(error);
+    }
+};
+
+
+
+const restoreUser = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+
+        if (!id) throw new BadRequestError("User's ID is required.");
+
+        const user = await User.findOne({ where: { id }, paranoid: false });
+        if (!user) throw new NotFoundError("User not found.");
+
+        await user.restore(); // Restore soft deleted user
+
+        return res.status(StatusCodes.OK).json({
+            success: true,
+            message: "User has been restored."
+        });
+    } catch (error) {
+        console.error("An error has occurred: " + error);
+        next(error);
+    }
+};
+
+
+const searchUsers = async (req, res, next) => {
+    try {
+        const { query, role } = req.query;
+
+        const whereCondition = {};
+
+        if(query) {
+            whereCondition[Op.or] = [
+                {firstname: { [Op.like]: `%${query}%`}},
+                {lastname: { [Op.like]: `%${query}%`}},
+                {email: { [Op.like]: `%${query}%`}},
+            ];
+        }
+
+        if(role) whereCondition.role = role;
+
+
+        const users = await User.findAll({where: whereCondition});
+
+        return res.status(StatusCodes.OK).json({
+            success: true,
+            message: "Users retrieved successfully.",
+            data: users
+        });
+
+    } catch (error) {
+        console.error('An error occured: ' + error);
+        next(error);
+    }
+}
+
+const getDeletedUsers = async (req, res, next) => {
+    try {
+        const users = await User.findAll({ where: { deletedAt: { [Op.ne]: null } }, paranoid: false });
+
+        return res.status(StatusCodes.OK).json({
+            success: true,
+            users
+        });
+    } catch (error) {
+        console.error('getDeletedUsers Function error: ' + error);
+        next(error);
+    }
+}
 module.exports = {
     getUser,
-    getAllUsers
+    getAllUsers,
+    updateUser,
+    softDeleteUser,
+    restoreUser,
+    searchUsers,
+    getDeletedUsers
 };

@@ -4,26 +4,36 @@ require('dotenv').config();
 
 const authMiddleware = async (req, res, next) => {
   const authHeader = req.headers.authorization;
-  
+
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return next(new UnauthorizedError('No token provided.'));
   }
 
   const token = authHeader.split(' ')[1];
-  console.log("TOKEN: ", token);
-  console.log("JWT SECRET: ", process.env.JWT_SECRET);
+
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log("DECODED: ", decoded);
 
-    if(decoded.status === "blocked")  next(new UnauthorizedError('User is blocked and cannot go any further.'));
+    // Prevent blocked users from proceeding
+    if (decoded.isBlocked) { 
+      return next(new UnauthorizedError('User is blocked and cannot proceed.'));
+    }
 
-    req.user = { id: decoded.userId };
+    // Store user data for use in protected routes
+    req.user = {
+      id: decoded.userId,
+      role: decoded.role, 
+      isBlocked: decoded.isBlocked
+    };
+
     next();
   } catch (error) {
-    next(new UnauthorizedError('Invalid or expired token'));
+    console.error("Auth middleware error: " + error)
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('JWT Verification Error:', error);
+    }
+    return next(new UnauthorizedError('Invalid or expired token.'));
   }
 };
-
 
 module.exports = authMiddleware;

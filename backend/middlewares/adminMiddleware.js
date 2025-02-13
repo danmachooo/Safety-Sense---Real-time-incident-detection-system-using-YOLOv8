@@ -9,7 +9,7 @@ const adminMiddleware = async (req, res, next) => {
             throw new ForbiddenError('Access denied: No user information available.');
         }
 
-        // Allow only admins (or extend for multiple roles)
+        // Allow only admins 
         if (req.user.role !== 'admin') {
             throw new ForbiddenError('Access denied: Admins only!');
         }

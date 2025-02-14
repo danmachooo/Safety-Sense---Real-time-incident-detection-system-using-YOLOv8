@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobile Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .phone-container {
+            max-width: 375px;
+            min-height: 100vh;
+            margin: 0 auto;
+            background-color: black;
+            display: flex;
+            flex-direction: column;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <!-- Phone Container -->
+    <div class="phone-container px-6 justify-between">
+        <!-- Logo Section -->
+        <div class="flex justify-center items-center pt-20">
+            <img src="/placeholder.svg" alt="App Logo" 
+                 class="w-32 h-32 rounded-full bg-white p-2">
+        </div>
+
+        <!-- Login Section -->
+        <div class="space-y-6 mb-8">
+            <!-- Citizen Login -->
+            <button class="w-full bg-green-500 hover:bg-green-600 text-white py-4 px-4 rounded-lg text-base font-semibold transition-colors">
+                LOGIN AS CITIZEN
+            </button>
+            
+            <!-- Divider -->
+            <div class="relative">
+                <div class="absolute inset-0 flex items-center">
+                    <div class="w-full border-t border-gray-600"></div>
+                </div>
+                <div class="relative flex justify-center text-sm">
+                    <span class="px-2 text-gray-400 bg-black">or</span>
+                </div>
+            </div>
+
+            <!-- Responder Login -->
+            <button class="w-full border-2 border-gray-600 hover:border-gray-500 text-white py-4 px-4 rounded-lg text-base font-semibold transition-colors">
+                LOGIN AS RESPONDER
+            </button>
+        </div>
+
+        <!-- Register Link -->
+        <div class="text-center text-sm pb-8">
+            <span class="text-gray-400">Are you a responder? </span>
+            <a href="#" class="text-purple-400 hover:text-purple-300 font-medium">Register here</a>
+        </div>
+    </div>
+</body>
+</html>

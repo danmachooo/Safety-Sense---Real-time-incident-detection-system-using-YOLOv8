@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registration Success</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .phone-container {
+            max-width: 375px;
+            height: 100vh;
+            margin: 0 auto;
+            background-color: black;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="phone-container flex flex-col px-6">
+        <!-- Header with Back Button -->
+        <div class="pt-12 pb-6">
+            <button class="text-white p-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                </svg>
+            </button>
+        </div>
+
+        <!-- Logo -->
+        <div class="flex justify-center items-center ">
+            <img src="/placeholder.svg" alt="App Logo" 
+                 class="w-32 h-32 rounded-full bg-white p-2">
+        </div>
+
+        <!-- Content Container -->
+        <div class="flex-1 flex flex-col items-center justify-center space-y-8">
+            <!-- Success Message -->
+            <h1 class="text-white text-2xl font-bold text-center">
+                YOU ARE NOW REGISTERED!
+            </h1>
+
+            <!-- Success Icon -->
+            <div class="bg-green-500 rounded-full p-4 w-24 h-24 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+            </div>
+
+            <!-- Verification Message -->
+            <p class="text-white text-center text-sm max-w-xs">
+                PLEASE CHECK YOUR INBOX TO VERIFY YOU ACCOUNT IN ORDER TO FULLY COMPLETE THE REGISTRATION
+            </p>
+
+            <!-- Login Button -->
+            <button class="w-full bg-gray-700 text-white py-3 rounded-md text-sm font-medium hover:bg-gray-600 transition-colors mt-4">
+                Go to login
+            </button>
+        </div>
+    </div>
+</body>
+</html>

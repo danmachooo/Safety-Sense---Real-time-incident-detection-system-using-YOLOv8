@@ -37,7 +37,7 @@ const sendEmail = async (to, subject, html) => {
  * @param {string} token - Verification token
  */
 const sendVerificationEmail = async (email, token) => {
-    const verificationLink = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
+    const verificationLink = `${process.env.MOBILE_APP}/verify-email?token=${token}`;
 
     const htmlContent = `
         <h2>Email Verification</h2>
@@ -55,7 +55,7 @@ const sendVerificationEmail = async (email, token) => {
  * @param {string} token - Password reset token
  */
 const sendPasswordResetEmail = async (email, token) => {
-    const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
+    const resetLink = `${process.env.MOBILE_APP}/reset-password?token=${token}`;
 
     const htmlContent = `
         <h2>Password Reset</h2>

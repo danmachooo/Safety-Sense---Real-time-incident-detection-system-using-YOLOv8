@@ -5,7 +5,6 @@ const adminMiddleware = require('../middlewares/adminMiddleware');
 
 const {changeUserRole, changeAccess} = require('../controllers/Users/authorization');
 
-router.patch('/change-role/:id', authMiddleware, adminMiddleware, changeUserRole);
-router.patch('/change-access/:id', authMiddleware, adminMiddleware, changeAccess);
-
+router.patch('/change-role/:id', changeUserRole);
+router.patch('/change-access/:id', changeAccess);
 module.exports = router;

@@ -3,7 +3,7 @@ const User = require('../../models/Users/User');
 const { BadRequestError, NotFoundError  } = require('../../utils/Error');
 const { StatusCodes } = require('http-status-codes') ;
 const bcrypt = require('bcryptjs');
-const { get } = require('../../routes/InventoryRoutes');
+const { get, search } = require('../../routes/InventoryRoutes');
 
 
 
@@ -29,35 +29,51 @@ const getUser = async (req, res, next) => {
     }
 }
 
-    const getAllUsers = async (req, res, next) => {
-        try {
-            let { page, limit, showDeleted } = req.query;
-            page = parseInt(page) || 1;
-            limit = parseInt(limit) ||10;
-            const offset = (page - 1) * limit;
+const getUsers = async (req, res, next) => {
+    try {
+        let { search, role, page, limit, showDeleted } = req.query;
 
-            const paranoidOption = showDeleted === 'true' ? false : true;
-
-            const { count, rows } = await User.findAndCountAll({
-                paranoid: paranoidOption,
-                offset, 
-                limit
-            });
-
-            return res.status(StatusCodes.OK).json({
-                success: true,
-                message: 'Users retrieved successfully.',
-                totalUsers: count,
-                totalPages: Math.ceil(count/limit),
-                currentPage: page,
-                data: rows
-            });
-
-        } catch (error) {
-            console.error('An error occured. '  + error);
-            next(error);
+        const whereCondition = {};
+        if (search) {
+            whereCondition[Op.or] = [
+                { firstname: { [Op.like]: `%${search}%` } },
+                { lastname: { [Op.like]: `%${search}%` } },
+                { email: { [Op.like]: `%${search}%` } },
+            ];
         }
+
+        if (role) whereCondition.role = role; 
+
+        // Pagination handling
+        const pageNumber = parseInt(page) || 1;
+        const limitNumber = parseInt(limit) || 10;
+        const offset = (pageNumber - 1) * limitNumber;
+
+        // Handle soft-deleted records
+        const paranoidOption = showDeleted === 'true' ? false : true;
+
+        const { count, rows } = await User.findAndCountAll({
+            where: whereCondition,
+            paranoid: paranoidOption,
+            offset,
+            limit: limitNumber,
+        });
+
+        return res.status(StatusCodes.OK).json({
+            success: true,
+            message: "Users retrieved successfully.",
+            totalUsers: count,
+            totalPages: Math.ceil(count / limitNumber),
+            currentPage: pageNumber,
+            data: rows,
+        });
+
+    } catch (error) {
+        console.error("An error occurred: " + error);
+        next(error);
     }
+};
+
 
 const updateUser = async (req, res, next) => {
     const { id } = req.params;
@@ -139,36 +155,47 @@ const restoreUser = async (req, res, next) => {
 };
 
 
-const searchUsers = async (req, res, next) => {
-    try {
-        const { query, role } = req.query;
+// const searchUsers = async (req, res, next) => {
+//     try {
+//         const { query, role, page, limit } = req.query;
 
-        const whereCondition = {};
+//         const whereCondition = {};
+//         if (query) {
+//             whereCondition[Op.or] = [
+//                 { firstname: { [Op.like]: `%${query}%` } },
+//                 { lastname: { [Op.like]: `%${query}%` } },
+//                 { email: { [Op.like]: `%${query}%` } },
+//             ];
+//         }
 
-        if(query) {
-            whereCondition[Op.or] = [
-                {firstname: { [Op.like]: `%${query}%`}},
-                {lastname: { [Op.like]: `%${query}%`}},
-                {email: { [Op.like]: `%${query}%`}},
-            ];
-        }
+//         if (role) whereCondition.role = role;
 
-        if(role) whereCondition.role = role;
+//         // Pagination handling
+//         const pageNumber = parseInt(page) || 1;
+//         const limitNumber = parseInt(limit) || 10;
+//         const offset = (pageNumber - 1) * limitNumber;
 
+//         const { count, rows } = await User.findAndCountAll({
+//             where: whereCondition,
+//             offset,
+//             limit: limitNumber,
+//         });
 
-        const users = await User.findAll({where: whereCondition});
+//         return res.status(StatusCodes.OK).json({
+//             success: true,
+//             message: "Users retrieved successfully.",
+//             totalUsers: count,
+//             totalPages: Math.ceil(count / limitNumber),
+//             currentPage: pageNumber,
+//             data: rows,
+//         });
 
-        return res.status(StatusCodes.OK).json({
-            success: true,
-            message: "Users retrieved successfully.",
-            data: users
-        });
+//     } catch (error) {
+//         console.error("An error occurred: " + error);
+//         next(error);
+//     }
+// };
 
-    } catch (error) {
-        console.error('An error occured: ' + error);
-        next(error);
-    }
-}
 
 const getDeletedUsers = async (req, res, next) => {
     try {
@@ -185,10 +212,10 @@ const getDeletedUsers = async (req, res, next) => {
 }
 module.exports = {
     getUser,
-    getAllUsers,
+    getUsers,
     updateUser,
     softDeleteUser,
     restoreUser,
-    searchUsers,
+    
     getDeletedUsers
 };

@@ -1,7 +1,17 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
-import { Users, Search, Filter, ChevronLeft, ChevronRight } from 'lucide-vue-next';
 import api from "../../../utils/axios";
+import { useRouter } from "vue-router";
+import { 
+  Users, 
+  Search, 
+  Filter, 
+  ChevronLeft, 
+  ChevronRight,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown
+} from 'lucide-vue-next';
 
 const users = ref([]);
 const searchQuery = ref('');
@@ -10,8 +20,80 @@ const currentPage = ref(1);
 const totalPages = ref(1);
 const totalUsers = ref(0);
 const itemsPerPage = ref(10);
+const loggedInUser = ref(JSON.parse(localStorage.getItem('authUser')) || {});
+const isCurrentUser = (email) => email === loggedInUser.value.email;
+
+const router = useRouter();
 
 const roles = ['Admin', 'Rescuer'];
+
+// Sorting state
+const sortField = ref('createdAt');
+const sortOrder = ref('asc');
+
+const columns = [
+  { 
+    key: 'firstname', // Changed from 'name' to match backend
+    label: 'Name',
+    sortable: true,
+    // Add custom sort handling for combined name
+    sortField: 'firstname' // You might need to adjust this based on your backend
+  },
+  { 
+    key: 'email',
+    label: 'Email',
+    sortable: true 
+  },
+  { 
+    key: 'contact',
+    label: 'Contact Number',
+    sortable: true 
+  },
+  { 
+    key: 'role',
+    label: 'Role',
+    sortable: true 
+  },
+  { 
+    key: 'isBlocked', // Changed from 'status' to match backend
+    label: 'Status',
+    sortable: true 
+  },
+  { 
+    key: 'createdAt',
+    label: 'Join Date',
+    sortable: true 
+  },
+  { 
+    key: 'actions',
+    label: 'Actions',
+    sortable: false 
+  }
+];
+const handleSort = (column) => {
+  if (!column.sortable) return;
+  
+  if (sortField.value === column.key) {
+    // Toggle sort order if clicking the same column
+    sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc';
+  } else {
+    // Set new sort field and default to ascending
+    sortField.value = column.key;
+    sortOrder.value = 'asc';
+  }
+  
+  fetchUsers();
+};
+
+const getSortIcon = (column) => {
+  if (!column.sortable) return null;
+  
+  if (sortField.value !== column.key) {
+    return ArrowUpDown;
+  }
+  return sortOrder.value === 'asc' ? ArrowUp : ArrowDown;
+};
+
 
 const fetchUsers = async () => {
   try {
@@ -20,6 +102,8 @@ const fetchUsers = async () => {
       limit: itemsPerPage.value.toString(),
       search: searchQuery.value,
       showDeleted: 'false',
+      sortBy: sortField.value,
+      sortOrder: sortOrder.value
     });
 
     if (roleFilter.value !== 'all') {
@@ -27,11 +111,8 @@ const fetchUsers = async () => {
     }
 
     const requestUrl = `manage-user/get-all?${queryParams.toString()}`;
-    console.log("API Request URL:", requestUrl);
-
     const response = await api.get(requestUrl);
-    console.log("Response Data:", response.data);
-
+    
     users.value = response.data.data;
     totalPages.value = response.data.totalPages;
     totalUsers.value = response.data.totalUsers;
@@ -53,6 +134,10 @@ watch([searchQuery, roleFilter], () => {
 const filteredUsers = computed(() => {
   return users.value;
 });
+
+const viewProfile = (userId) => {
+  router.push(`/admin/users/profile/${userId}`);
+}
 
 const switchRole = async (userId) => {
   const user = users.value.find(u => u.id === userId);
@@ -122,16 +207,39 @@ const goToPage = (page) => {
       <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
           <tr>
-            <th v-for="header in ['Name', 'Email', 'Contact Number', 'Role', 'Status', 'Actions']" :key="header" 
-                class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              {{ header }}
+            <th v-for="column in columns" 
+                :key="column.key"
+                class="px-6 py-3 text-left text-xs font-medium tracking-wider"
+                :class="[
+                  column.sortable ? 'cursor-pointer hover:bg-gray-100' : '',
+                  sortField === column.key ? 'text-blue-600' : 'text-gray-500'
+                ]"
+                @click="handleSort(column)"
+            >
+              <div class="flex items-center space-x-1">
+                <span>{{ column.label }}</span>
+                <component
+                  v-if="column.sortable"
+                  :is="getSortIcon(column)"
+                  class="w-4 h-4"
+                  :class="sortField === column.key ? 'text-blue-600' : 'text-gray-400'"
+                />
+              </div>
             </th>
           </tr>
         </thead>
         <tbody class="bg-white divide-y divide-gray-200">
-          <tr v-for="user in filteredUsers" :key="user.id" class="hover:bg-gray-50">
+          <tr v-for="user in users" :key="user.id" 
+              class="hover:bg-gray-50 transition-colors duration-150">
             <td class="px-6 py-4 whitespace-nowrap">
-              <div class="text-sm font-medium text-gray-900">{{ user.firstname }} {{ user.lastname }}</div>
+              <div class="flex items-center">
+                <div class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-medium mr-3">
+                  {{ user.firstname[0] }}{{ user.lastname[0] }}
+                </div>
+                <div class="text-sm font-medium text-gray-900">
+                  {{ user.firstname }} {{ user.lastname }}
+                </div>
+              </div>
             </td>
             <td class="px-6 py-4 whitespace-nowrap">
               <div class="text-sm text-gray-500">{{ user.email }}</div>
@@ -140,28 +248,39 @@ const goToPage = (page) => {
               <div class="text-sm text-gray-500">{{ user.contact ?? 'No number provided.' }}</div>
             </td>
             <td class="px-6 py-4 whitespace-nowrap">
-              <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
+              <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full"
                     :class="user.role === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'">
                 {{ user.role }}
               </span>
             </td>
             <td class="px-6 py-4 whitespace-nowrap">
-              <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
+              <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full"
                     :class="user.isBlocked ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'">
                 {{ user.isBlocked ? 'Blocked' : 'Active' }}
               </span>
             </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              {{ new Date(user.createdAt).toLocaleDateString() }}
+            </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-              <button @click="switchRole(user.id)" 
-                      :class="user.role === 'admin' ? 'bg-green-100 text-green-600 hover:text-green-900' : 'bg-purple-100 text-purple-600 hover:text-purple-900'"
-                      class="mr-3 px-3 py-1 rounded-full transition duration-300 ease-in-out">
-                Switch to {{ user.role === 'admin' ? 'rescuer' : 'admin' }}
-              </button>
-              <button @click="toggleBlockStatus(user.id)" 
-                      :class="user.isBlocked ? 'bg-blue-100 text-blue-600 hover:text-blue-900' : 'bg-red-100 text-red-600 hover:text-red-900'"
-                      class="px-3 py-1 rounded-full transition duration-300 ease-in-out">
-                {{ user.isBlocked ? 'Unblock' : 'Block' }}
-              </button>
+              <template v-if="!isCurrentUser(user.email)">
+                <button @click="viewProfile(user.id)" 
+                        class="bg-gray-100 text-gray-600 hover:text-gray-900 px-3 py-1 mr-2 rounded-full transition duration-300 ease-in-out">
+                  View Profile
+                </button>
+
+                <button @click="switchRole(user.id)" 
+                        :class="user.role === 'admin' ? 'bg-green-100 text-green-600 hover:text-green-900' : 'bg-purple-100 text-purple-600 hover:text-purple-900'"
+                        class="mr-3 px-3 py-1 rounded-full transition duration-300 ease-in-out">
+                  Switch to {{ user.role === 'admin' ? 'rescuer' : 'admin' }}
+                </button>
+
+                <button @click="toggleBlockStatus(user.id)" 
+                        :class="user.isBlocked ? 'bg-blue-100 text-blue-600 hover:text-blue-900' : 'bg-red-100 text-red-600 hover:text-red-900'"
+                        class="px-3 py-1 rounded-full transition duration-300 ease-in-out">
+                  {{ user.isBlocked ? 'Unblock' : 'Block' }}
+                </button>
+              </template>
             </td>
           </tr>
         </tbody>

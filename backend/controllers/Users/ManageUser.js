@@ -5,7 +5,38 @@ const { StatusCodes } = require('http-status-codes') ;
 const bcrypt = require('bcryptjs');
 const { get, search } = require('../../routes/InventoryRoutes');
 
+const createUser = async (req, res, next) => {
+    try {
+        const { firstname, lastname, email, contact, password } = req.body
+    
+        const existingUser = await User.findOne({
+            where: {
+                email
+            }
+        });
+    
+        if(existingUser) throw new BadRequestError('User or Email already Exist!');
+    
+        const hashedPassword = await bcrypt.hash(password, 10);
 
+        await User.create({
+            firstname,
+            lastname,
+            email,
+            contact,
+            password: hashedPassword,
+            is_verified: true
+        });
+    
+        return res.status(StatusCodes.CREATED).json({
+            success: true,
+            message: 'User has been registered!',
+        });
+    } catch (error) {
+        console.error('An error occured');
+        next(error);
+    }
+}
 
 const getUser = async (req, res, next) => {
     try {
@@ -31,7 +62,7 @@ const getUser = async (req, res, next) => {
 
 const getUsers = async (req, res, next) => {
     try {
-        let { search, role, page, limit, showDeleted } = req.query;
+        let { search, role, page, limit, showDeleted, sortBy, sortOrder } = req.query;
 
         const whereCondition = {};
         if (search) {
@@ -44,19 +75,30 @@ const getUsers = async (req, res, next) => {
 
         if (role) whereCondition.role = role; 
 
-        // Pagination handling
+
         const pageNumber = parseInt(page) || 1;
         const limitNumber = parseInt(limit) || 10;
         const offset = (pageNumber - 1) * limitNumber;
 
-        // Handle soft-deleted records
         const paranoidOption = showDeleted === 'true' ? false : true;
+
+
+        const validSortColumns = ["firstname", "lastname", "email", "role", "createdAt"]; 
+        const validsortOrders = ["asc", "desc"];
+
+        let order = [["createdAt", "desc"]];
+
+        if (sortBy && validSortColumns.includes(sortBy)) {
+            const direction = validsortOrders.includes(sortOrder) ? sortOrder : "asc";
+            order = [[sortBy, direction]];
+        }
 
         const { count, rows } = await User.findAndCountAll({
             where: whereCondition,
             paranoid: paranoidOption,
             offset,
             limit: limitNumber,
+            order, // Apply sorting
         });
 
         return res.status(StatusCodes.OK).json({
@@ -75,19 +117,20 @@ const getUsers = async (req, res, next) => {
 };
 
 
+
 const updateUser = async (req, res, next) => {
     const { id } = req.params;
-    const { firstname, lastname, newPassword, contactNumber } = req.body;
+    const { firstname, lastname, newPassword, contact } = req.body;
 
     if (!id) {
         throw new BadRequestError("User ID is required");
     }
     
-    if (!firstname && !lastname && !newPassword && !contactNumber) {
+    if (!firstname && !lastname && !newPassword && !contact) {
         throw new BadRequestError("At least one field to update is required");
     }
 
-    const updateData = { firstname, lastname, contactNumber };
+    const updateData = { firstname, lastname, contact };
     if (newPassword) {
         const salt = await bcrypt.genSalt(10);
         updateData.password = await bcrypt.hash(newPassword, salt);
@@ -216,6 +259,6 @@ module.exports = {
     updateUser,
     softDeleteUser,
     restoreUser,
-    
+    createUser,
     getDeletedUsers
 };

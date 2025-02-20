@@ -51,7 +51,7 @@ const loginUser = async (req, res, next) => {
             message: 'You are logged in!',
             data: {
                 token: token,
-                role: user.role
+                user: user
             }
         });
     } catch(error) {
@@ -62,7 +62,7 @@ const loginUser = async (req, res, next) => {
 
 const registerUser = async (req, res, next) => {
     try {
-        const { firstname, lastname, email, contactNumber, password } = req.body
+        const { firstname, lastname, email, contact, password } = req.body
     
         const existingUser = await User.findOne({
             where: {
@@ -79,7 +79,7 @@ const registerUser = async (req, res, next) => {
             firstname,
             lastname,
             email,
-            contactNumber,
+            contact,
             password: hashedPassword,
             verificationToken
         });

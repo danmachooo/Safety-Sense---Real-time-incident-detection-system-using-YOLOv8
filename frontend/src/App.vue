@@ -1,17 +1,17 @@
 <template>
   <div class="min-h-screen bg-gray-900">
-    <LoginForm v-if="isLoggedIn" @login-success="handleLoginSuccess" />
+    <LoginForm v-if="!authStore.isAuthenticated" @login-success="handleLoginSuccess" />
     <router-view v-else />
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { useAuthStore } from "./stores/authStore"; // Import Pinia store
 import LoginForm from "./components/LoginForm.vue";
 
-const isLoggedIn = ref(false);
+const authStore = useAuthStore(); // Use Pinia store
 
 const handleLoginSuccess = () => {
-  isLoggedIn.value = true;
+  authStore.isAuthenticated = true; // Set authentication status
 };
 </script>

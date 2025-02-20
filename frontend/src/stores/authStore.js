@@ -7,23 +7,36 @@ export const useAuthStore = defineStore("auth", () => {
   const isAuthenticated = ref(false);
   const token = ref(null);
 
-  // Login function with API request
+  // 🔥 Load token from localStorage when the store initializes
+  const loadAuthState = () => {
+    const savedToken = localStorage.getItem("authToken");
+    const savedUser = localStorage.getItem("authUser");
+
+    if (savedToken && savedUser) {
+      token.value = savedToken;
+      user.value = JSON.parse(savedUser);
+      isAuthenticated.value = true;
+    }
+  };
+
+  // Call this function when the store is first created
+  loadAuthState();
+
+  // Login function
   const login = async (email, password) => {
     try {
-        const response = await api.post("/authentication/login", {
-        email,
-        password
-      });
+      const response = await api.post("/authentication/login", { email, password });
 
-      // If login is successful, store user data and token
-      user.value = response.data.user;
-      token.value = response.data.token;
+      // Store user and token
+      user.value = response.data.data.user;
+      token.value = response.data.data.token;
       isAuthenticated.value = true;
 
-      // Save token in localStorage for persistence
+      // Save to localStorage for persistence
       localStorage.setItem("authToken", token.value);
-      
-      console.log("Login Successful!", response.data);
+      localStorage.setItem("authUser", JSON.stringify(user.value));
+
+      console.log("Login Successful!");
     } catch (error) {
       console.error("Login failed:", error.response?.data?.message || error.message);
     }
@@ -35,8 +48,9 @@ export const useAuthStore = defineStore("auth", () => {
     isAuthenticated.value = false;
     token.value = null;
 
-    // Remove token from localStorage
+    // Remove from localStorage
     localStorage.removeItem("authToken");
+    localStorage.removeItem("authUser");
 
     console.log("Logged Out!");
   };

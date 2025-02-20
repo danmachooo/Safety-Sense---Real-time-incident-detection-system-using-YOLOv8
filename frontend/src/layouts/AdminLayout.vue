@@ -2,6 +2,7 @@
 import { ref } from "vue";
 import { useRouter } from "vue-router";
 import { ChevronDown, Users, ShoppingCart, Eye, UserPlus, UserCog, Package, PlusCircle, Edit } from 'lucide-vue-next';
+import Header from '../components/Header.vue';
 
 const router = useRouter();
 const userDropdown = ref(false);
@@ -17,7 +18,7 @@ const navigateTo = (route) => {
     <!-- Sidebar -->
     <aside class="w-64 bg-white shadow-lg">
       <div class="p-4">
-        <h2 class="text-2xl font-bold text-gray-800 mb-6">Admin Panel</h2>
+        <h2 class="text-2xl font-bold text-gray-800 mb-6">SafetySense</h2>
 
         <nav class="space-y-4">
           <!-- User Management -->
@@ -48,7 +49,6 @@ const navigateTo = (route) => {
                 <li v-for="(item, index) in [
                   { icon: Eye, text: 'View Users', route: '/admin/users/view' },
                   { icon: UserPlus, text: 'Create User', route: '/admin/users/create' },
-                  { icon: UserCog, text: 'Update User', route: '/admin/users/update' }
                 ]" :key="index">
                   <button 
                     @click="navigateTo(item.route)" 
@@ -109,11 +109,15 @@ const navigateTo = (route) => {
 
     <!-- Right-side Content -->
     <main class="flex-1 p-8 overflow-auto">
-      <div class="max-w-10xl mx-auto bg-white rounded-lg shadow-md p-6">
-        <router-view />
+      <div class="max-w-10xl mx-auto">
+        <!-- Add the Header component here -->
+        <Header />
+        <!-- Main content -->
+        <div class="bg-white rounded-b-lg shadow-md p-6">
+          <router-view />
+        </div>
       </div>
-    </main>
-  </div>
+    </main>  </div>
 </template>
 
 <style>

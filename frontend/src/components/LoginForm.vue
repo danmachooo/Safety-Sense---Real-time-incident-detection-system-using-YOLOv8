@@ -57,8 +57,10 @@
 
 <script setup>
 import { ref } from "vue";
+import { useRouter } from "vue-router";
 import { useAuthStore } from "../stores/authStore"; // Import Pinia Store
 
+const router = useRouter();
 const email = ref("");
 const password = ref("");
 const authStore = useAuthStore();
@@ -68,8 +70,7 @@ const handleLogin = async () => {
 
   if (authStore.isAuthenticated) {
     console.log("Redirecting to dashboard...");
-    // // Redirect to another page (modify based on your router)
-    // window.location.href = "/dashboard";
+    router.push("/admin/users/view"); // ✅ Proper route redirection
   }
 };
 </script>

@@ -4,7 +4,7 @@ require('dotenv').config();
 
 const authMiddleware = async (req, res, next) => {
   const authHeader = req.headers.authorization;
-
+  console.log(authHeader);
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return next(new UnauthorizedError('No token provided.'));
   }

@@ -1,9 +1,10 @@
 import { createRouter, createWebHistory } from "vue-router";
 import AdminLayout from "../layouts/AdminLayout.vue";
+import LoginForm from "../components/LoginForm.vue";
 
 import ViewUsers from "../views/admin/users/ViewUsers.vue";
 import CreateUser from "../views/admin/users/CreateUser.vue";
-import UpdateUser from "../views/admin/users/UpdateUser.vue";
+import Profile from "../views/admin/users/UserProfile.vue";
 
 // import ViewInventory from "../views/admin/inventory/ViewInventory.vue";
 // import CreateInventory from "../views/admin/inventory/CreateInventory.vue";
@@ -16,12 +17,16 @@ const routes = [
     children: [
       { path: "users/view", component: ViewUsers },
       { path: "users/create", component: CreateUser },
-      { path: "users/update", component: UpdateUser },
-
-    //   { path: "inventory/view", component: ViewInventory },
-    //   { path: "inventory/create", component: CreateInventory },
-    //   { path: "inventory/update", component: UpdateInventory },
+      
+      //   { path: "inventory/view", component: ViewInventory },
+      //   { path: "inventory/create", component: CreateInventory },
+      //   { path: "inventory/update", component: UpdateInventory },
+      { path: "users/profile/:id", component: Profile, props: true },
     ],
+  },
+  {
+    path: "/",
+    component: LoginForm
   },
 ];
 

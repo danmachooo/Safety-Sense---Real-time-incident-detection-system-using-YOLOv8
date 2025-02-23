@@ -30,6 +30,10 @@ const User = sequelize.define('Users', {
   resetPasswordToken: {
     type: DataTypes.STRING,
     allowNull: true, // Stores the token for resetting passwords
+  }, 
+  sessionToken: {
+    type: DataTypes.TEXT,
+    allowNull: true, // Stores the token for resetting passwords
   },
   resetPasswordExpires: {
     type: DataTypes.DATE,
@@ -69,7 +73,6 @@ const User = sequelize.define('Users', {
   },
 }, {
   timestamps: true, 
-  underscored: true, 
   paranoid: true,
   tableName: 'users', 
   indexes: [

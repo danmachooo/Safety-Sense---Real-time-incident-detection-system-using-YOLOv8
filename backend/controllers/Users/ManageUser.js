@@ -4,6 +4,7 @@ const { BadRequestError, NotFoundError  } = require('../../utils/Error');
 const { StatusCodes } = require('http-status-codes') ;
 const bcrypt = require('bcryptjs');
 const { get, search } = require('../../routes/InventoryRoutes');
+const {logUserCreation} = require('../Notification/Notification');
 
 const createUser = async (req, res, next) => {
     try {
@@ -19,15 +20,16 @@ const createUser = async (req, res, next) => {
     
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        await User.create({
+        const user = await User.create({
             firstname,
             lastname,
             email,
             contact,
             password: hashedPassword,
-            is_verified: true
+            isVerified: true
         });
-    
+        await logUserCreation(req.user.id, user.id)
+
         return res.status(StatusCodes.CREATED).json({
             success: true,
             message: 'User has been registered!',
@@ -198,61 +200,65 @@ const restoreUser = async (req, res, next) => {
 };
 
 
-// const searchUsers = async (req, res, next) => {
-//     try {
-//         const { query, role, page, limit } = req.query;
-
-//         const whereCondition = {};
-//         if (query) {
-//             whereCondition[Op.or] = [
-//                 { firstname: { [Op.like]: `%${query}%` } },
-//                 { lastname: { [Op.like]: `%${query}%` } },
-//                 { email: { [Op.like]: `%${query}%` } },
-//             ];
-//         }
-
-//         if (role) whereCondition.role = role;
-
-//         // Pagination handling
-//         const pageNumber = parseInt(page) || 1;
-//         const limitNumber = parseInt(limit) || 10;
-//         const offset = (pageNumber - 1) * limitNumber;
-
-//         const { count, rows } = await User.findAndCountAll({
-//             where: whereCondition,
-//             offset,
-//             limit: limitNumber,
-//         });
-
-//         return res.status(StatusCodes.OK).json({
-//             success: true,
-//             message: "Users retrieved successfully.",
-//             totalUsers: count,
-//             totalPages: Math.ceil(count / limitNumber),
-//             currentPage: pageNumber,
-//             data: rows,
-//         });
-
-//     } catch (error) {
-//         console.error("An error occurred: " + error);
-//         next(error);
-//     }
-// };
-
-
 const getDeletedUsers = async (req, res, next) => {
     try {
-        const users = await User.findAll({ where: { deletedAt: { [Op.ne]: null } }, paranoid: false });
+        let { search, role, page, limit, sortBy, sortOrder } = req.query;
+
+        const whereCondition = {
+            deletedAt: { [Op.ne]: null }, // ✅ Fetch only soft-deleted users
+        };
+
+        if (search) {
+            whereCondition[Op.or] = [
+                { firstname: { [Op.like]: `%${search}%` } },
+                { lastname: { [Op.like]: `%${search}%` } },
+                { email: { [Op.like]: `%${search}%` } },
+            ];
+        }
+
+        if (role) whereCondition.role = role; 
+
+        // ✅ Pagination
+        const pageNumber = parseInt(page) || 1;
+        const limitNumber = parseInt(limit) || 10;
+        const offset = (pageNumber - 1) * limitNumber;
+
+        // ✅ Sorting
+        const validSortColumns = ["firstname", "lastname", "email", "role", "createdAt"];
+        const validSortOrders = ["asc", "desc"];
+
+        let order = [["createdAt", "desc"]]; // Default sorting by newest users
+
+        if (sortBy && validSortColumns.includes(sortBy)) {
+            const direction = validSortOrders.includes(sortOrder) ? sortOrder : "asc";
+            order = [[sortBy, direction]];
+        }
+
+        // ✅ Fetch deleted users
+        const { count, rows } = await User.findAndCountAll({
+            where: whereCondition,
+            paranoid: false, // ✅ Fetch soft-deleted records
+            offset,
+            limit: limitNumber,
+            order,
+        });
 
         return res.status(StatusCodes.OK).json({
             success: true,
-            users
+            message: "Deleted users retrieved successfully.",
+            totalUsers: count,
+            totalPages: Math.ceil(count / limitNumber),
+            currentPage: pageNumber,
+            data: rows,
         });
+
     } catch (error) {
-        console.error('getDeletedUsers Function error: ' + error);
+        console.error("An error occurred: " + error);
         next(error);
     }
-}
+};
+
+
 module.exports = {
     getUser,
     getUsers,

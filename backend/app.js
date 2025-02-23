@@ -1,6 +1,7 @@
 const errorHandlerMiddleware = require('./middlewares/ErrorHandlerMiddleware');
 const express = require('express');
 const cors = require('cors');
+const setupCronJobs = require('./cron')
 const app = express();
 
 const apiRouter = require('./routes/api');
@@ -17,6 +18,8 @@ app.use('/api', apiRouter);
 
 // Error handler 
 app.use(errorHandlerMiddleware); 
+
+setupCronJobs();
 
 // Start backend
 const PORT = process.env.PORT || 3000;

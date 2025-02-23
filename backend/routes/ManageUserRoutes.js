@@ -5,11 +5,11 @@ const { getUser, getUsers, updateUser, softDeleteUser, restoreUser, getDeletedUs
 const adminMiddleware = require('../middlewares/adminMiddleware');
 
 router.post('/create',authMiddleware, adminMiddleware, createUser); //ok
-router.get('/get/:id', authMiddleware, getUser); //ok
-router.get('/get-all',   getUsers); //ok
+router.get('/get/:id', authMiddleware, adminMiddleware, getUser); //ok
+router.get('/get-all',  authMiddleware, adminMiddleware, getUsers); //ok
 router.get('/get-deleted', authMiddleware, adminMiddleware, getDeletedUsers); //not yet
 router.put('/update/:id', authMiddleware, updateUser) // ok
-router.patch('/soft-delete/:id', authMiddleware, adminMiddleware, softDeleteUser); // not yet
+router.delete('/soft-delete/:id', authMiddleware, adminMiddleware, softDeleteUser); // not yet
 router.patch('/restore/:id', authMiddleware, adminMiddleware, restoreUser); // not yet
 // router.get('/search', authMiddleware, adminMiddleware, searchUsers);
 

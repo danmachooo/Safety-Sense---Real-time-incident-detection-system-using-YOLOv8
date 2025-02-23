@@ -67,4 +67,23 @@ const sendPasswordResetEmail = async (email, token) => {
     await sendEmail(email, 'Reset Your Password', htmlContent);
 };
 
-module.exports = { sendVerificationEmail, sendPasswordResetEmail };
+const sendRoleChangeEmail = async (email, role) => {
+    const htmlContent = `
+        <h2>Your role has been change</h2>
+        <p>Your role has been set to ${role} by the admin</p>
+    `;
+
+    await sendEmail(email, 'Role Change', htmlContent);
+}
+
+const sendAccountStatusEmail = async (email, isBlocked) => {
+
+    const htmlContent = `
+        <h2>Account Status</h2>
+        <p>Your account has been ${isBlocked ? "Blocked" : "Unblocked"} by the admin</p>
+    `;
+
+    await sendEmail(email, 'Account Status Change', htmlContent);
+}
+
+module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendAccountStatusEmail, sendRoleChangeEmail };

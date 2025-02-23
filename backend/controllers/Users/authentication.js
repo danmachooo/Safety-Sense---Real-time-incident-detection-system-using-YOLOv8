@@ -1,4 +1,4 @@
-const { BadRequestError, NotFoundError, ForbiddenError  } = require('../../utils/Error');
+const { BadRequestError, NotFoundError, ForbiddenError, UnauthorizedError  } = require('../../utils/Error');
 const User = require('../../models/Users/User');
 const jwt = require('jsonwebtoken');    
 const bcrypt = require('bcryptjs');
@@ -6,7 +6,9 @@ const crypto = require('crypto');
 const { sendVerificationEmail, sendPasswordResetEmail } = require('../../services/emailService');
 const { Op } = require('sequelize');
 const { StatusCodes } = require('http-status-codes')
+const { logUserLogin, logUserLogout } = require('./LoginHistory');
 
+const {logUserCreation} = require('../Notification/Notification');
 require('dotenv').config();
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -25,7 +27,7 @@ const loginUser = async (req, res, next) => {
             where: {email}
         });
         
-        if(!user) throw new NotFoundError('User not found! Invalid credentials.');
+        if(!user || user.isSoftDeleted()) throw new NotFoundError('User not found! Invalid credentials.');
 
         if(user.isBlocked) throw new ForbiddenError('User is blocked and cannot go any further');
 
@@ -34,18 +36,24 @@ const loginUser = async (req, res, next) => {
         const isMatch = await bcrypt.compare(password, user.password);
     
         if(!isMatch) throw new NotFoundError('User not found! Invalid credentials.');
-    
+
+        if (user.sessionToken)  throw new UnauthorizedError("Another session is already active. Please log out first.");
+
         const token = jwt.sign({
             userId: user.id,
             role: user.role,
-            isBlocked: user.isBlocked
+            isBlocked: user.isBlocked,
+            sessionToken: user.sessionToken
         },
             JWT_SECRET, 
             {
                 expiresIn: '1h'
             }        
         );
-    
+
+        await user.update({ sessionToken: token });
+        await logUserLogin(user.id);
+
         return res.status(StatusCodes.OK).json({
             success: true,
             message: 'You are logged in!',
@@ -56,6 +64,24 @@ const loginUser = async (req, res, next) => {
         });
     } catch(error) {
         console.error('An error occured!');
+        next(error);
+    }
+}
+
+const logoutUser = async (req, res, next) => {
+    try {
+        const user = await User.findByPk(req.user.id);
+        console.log(user.id);
+        if(!user) throw new NotFoundError('User not found!.');
+        await user.update({ sessionToken: null });  
+        await logUserLogout(user.id);
+
+        return res.status(StatusCodes.OK).json({
+            success: true,
+            message: 'You are logged out!',
+        });
+    } catch (error) {
+        console.error('An error occured.');
         next(error);
     }
 }
@@ -75,7 +101,7 @@ const registerUser = async (req, res, next) => {
         const hashedPassword = await bcrypt.hash(password, 10);
         const verificationToken = crypto.randomBytes(32).toString('hex');
 
-        await User.create({
+        const user = await User.create({
             firstname,
             lastname,
             email,
@@ -85,7 +111,7 @@ const registerUser = async (req, res, next) => {
         });
 
         await sendVerificationEmail(email, verificationToken);
-    
+        await logUserCreation(null, user.id)
         return res.status(StatusCodes.CREATED).json({
             success: true,
             message: 'User has been registered! Please verify your email',
@@ -175,13 +201,40 @@ const resetPassword = async (req, res, next) => {
     }
 };
 
+const changePassword = async (req, res, next) => {
+    try {
+        const { newPassword } = req.body;
+        const adminId = req.user.id;
+
+        const user = await User.findByPk(adminId);
+
+        if(!user) throw new NotFoundError("User not found!");
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        user.password = hashedPassword;
+        await user.save();
+
+        return res.status(StatusCodes.OK).json({
+            success: true,
+            message: "Password has been updated successfully.",
+        });
+
+    } catch(error) {
+        console.error("An error occured: ", error)
+    }
+}
+
 
 
 module.exports = {
     loginUser, 
+    logoutUser,
     registerUser,
     verifyEmail,
     requestPasswordReset,
-    resetPassword   
+    resetPassword,
+
+    changePassword
 }
 

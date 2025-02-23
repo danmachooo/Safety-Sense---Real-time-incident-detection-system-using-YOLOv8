@@ -1,12 +1,22 @@
-const Incident = require('./models/Incidents/Incident'); 
-const Camera = require('./models/Incidents/Camera'); 
-const InventoryItem = require('./models/Inventory/InventoryItem');
-const ActionLog = require('./models/Inventory/ActionLog');
+const sequelize = require('./config/database'); // Import Sequelize instance
+
+// Import Models
 const User = require('./models/Users/User');
+const LoginHistory = require('./models/Users/LoginHistory');
+const Camera = require('./models/Incidents/Camera'); // ✅ Camera Model
+const CameraStatus = require('./models/Incidents/CameraHealthCheck'); // ✅ Camera Status
+const CameraLog = require('./models/Incidents/CameraLog'); // ✅ Camera Status
+const Incident = require('./models/Incidents/Incident');
+const Notification = require('./models/Notification/Notification');
 
-const sequelize = require('./config/database');
 
-// Sync models with the database
-sequelize.sync({ force: true }) // Use { force: true } to drop and recreate tables (dev only!)
-  .then(() => console.log('Database synced'))
-  .catch(err => console.error('Sync error:', err))
+const InventoryItem = require('./models/Inventory/InventoryItem');
+const Batch = require('./models/Inventory/Batch');
+const Category = require('./models/Inventory/Category');
+const Deployment = require('./models/Inventory/Deployment');
+const invNotification = require('./models/Inventory/InventoryNotification');
+
+// Sync models with database
+sequelize.sync({ alter: true }) // Use { force: true } in development only!
+  .then(() => console.log('✅ Database synced successfully.'))
+  .catch(err => console.error('❌ Sync error:', err));

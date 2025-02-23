@@ -4,7 +4,6 @@ require('dotenv').config();
 
 const authMiddleware = async (req, res, next) => {
   const authHeader = req.headers.authorization;
-  console.log(authHeader);
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return next(new UnauthorizedError('No token provided.'));
   }
@@ -29,9 +28,6 @@ const authMiddleware = async (req, res, next) => {
     next();
   } catch (error) {
     console.error("Auth middleware error: " + error)
-    if (process.env.NODE_ENV !== 'production') {
-      console.error('JWT Verification Error:', error);
-    }
     return next(new UnauthorizedError('Invalid or expired token.'));
   }
 };

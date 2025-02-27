@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Active Incidents</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom Scrollbar Styling */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Firefox scrollbar styling */
+        .custom-scrollbar {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+        }
+    </style>
+</head>
+<body class="bg-black min-h-screen">
+    <!-- Mobile container -->
+    <div class="max-w-[375px] mx-auto min-h-screen bg-black text-white">
+
+
+        <!-- Header with menu and logo -->
+        <div class="flex justify-between items-center px-4 py-3">
+            <button class="text-2xl">☰</button>
+            <div class="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-green-500 flex items-center justify-center overflow-hidden">
+                <div class="w-6 h-6 bg-white/20 rounded-full"></div>
+            </div>
+        </div>
+        
+        <!-- Tabs -->
+        <div class="px-4 pt-4 flex gap-4 items-center">
+            <button class="px-4 py-1.5 bg-green-500 rounded-full text-sm font-medium">
+                Active
+            </button>
+            <button class="px-4 py-1.5 text-sm font-medium text-gray-400">
+                History
+            </button>
+        </div>
+
+        <!-- Title -->
+        <h1 class="px-4 pt-4 pb-2 text-xl font-bold">Active Incidents</h1>
+
+        <!-- Incidents List -->
+        <div class="px-4 custom-scrollbar overflow-auto" style="height: calc(100vh - 180px);">
+            <div class="space-y-2">
+                <!-- Incident Items -->
+                <div id="incidents-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Generate incident items
+        const incidentsContainer = document.getElementById('incidents-container');
+        const incidents = Array(9).fill().map((_, i) => `
+            <div class="flex items-center gap-3 bg-gray-800/50 rounded-lg p-3 mb-2">
+                <div class="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
+                    <img src="/placeholder.svg?height=40&width=40" alt="Incident icon" 
+                         class="w-full h-full object-cover"/>
+                </div>
+                <div class="flex-grow min-w-0">
+                    <p class="text-sm text-gray-300 truncate">
+                        On October 5, 2023, a min-floor...
+                    </p>
+                </div>
+                <button class="text-sm text-white bg-transparent px-2 py-1 rounded">
+                    View
+                </button>
+            </div>
+        `).join('');
+
+        incidentsContainer.innerHTML = incidents;
+    </script>
+</body>
+</html>

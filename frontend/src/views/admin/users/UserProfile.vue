@@ -22,6 +22,9 @@ const router = useRouter();
 const route = useRoute();
 const showEditModal = ref(false);
 const userId = route.params.id; 
+const isLoading = ref(false);
+const isRoleLoading = ref(false);
+const isStatusLoading = ref(false); // Rename existing isLoading to isStatusLoading
 
 const user = ref({
   firstname: '',
@@ -36,8 +39,11 @@ const editForm = ref({
   contact: ''
 });
 
+
 const toggleRole = async () => {
   try {
+    if(isRoleLoading.value) return;
+    isRoleLoading.value = true;
     const newRole = user.value.role === 'admin' ? 'rescuer' : 'admin';
     const response = await api.patch(`authorization/change-role/${userId}`, {
       role: newRole
@@ -48,11 +54,16 @@ const toggleRole = async () => {
     }
   } catch (error) {
     console.error('Error toggling role:', error);
+  } finally {
+    isRoleLoading.value = false;
   }
 };
 
 const toggleStatus = async () => {
   try {
+    if(isStatusLoading.value) return;
+    isStatusLoading.value = true;
+
     const response = await api.patch(`authorization/change-access/${userId}`, {
       isBlocked: !user.value.isBlocked
     });
@@ -62,6 +73,8 @@ const toggleStatus = async () => {
     }
   } catch (error) {
     console.error('Error toggling status:', error);
+  } finally {
+    isStatusLoading.value = false;  
   }
 };
 
@@ -256,30 +269,53 @@ const goBack = () => {
             <!-- Role Toggle Button -->
             <button
                 @click="toggleRole"
-                class="inline-flex items-center px-4 py-2 rounded-lg transition-all duration-200 ease-in-out"
+                class="inline-flex items-center px-4 py-2 rounded-lg transition-all duration-200 ease-in-out relative"
+                :disabled="isRoleLoading"
                 :class="[
-                user.role === 'admin' 
-                    ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' 
-                    : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                    isRoleLoading ? 'cursor-not-allowed opacity-50' : '',
+                    user.role === 'admin' 
+                        ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' 
+                        : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
                 ]"
             >
-                <UserCog class="w-5 h-5 mr-2" />
-                Switch to {{ user.role === 'admin' ? 'rescuer' : 'Admin' }}
+                <span v-if="isRoleLoading" class="absolute left-1 animate-spin">
+                    <svg class="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                            d="M12 4v4m0 8v4m8-8h-4M4 12H0m19.07-7.07l-2.83 2.83M4.93 4.93l2.83 2.83m10.24 10.24l-2.83-2.83m-10.24 0l2.83 2.83">
+                        </path>
+                    </svg>
+                </span>
+                <UserCog v-if="!isRoleLoading" class="w-5 h-5 mr-2" />
+                <span class="ml-2">
+                    {{ isRoleLoading ? 'Processing...' : `Switch to ${user.role === 'admin' ? 'rescuer' : 'Admin'}` }}
+                </span>
             </button>
 
             <!-- Status Toggle Button -->
             <button
                 @click="toggleStatus"
-                class="inline-flex items-center px-4 py-2 rounded-lg transition-all duration-200 ease-in-out"
+                class="inline-flex items-center px-4 py-2 rounded-lg transition-all duration-200 ease-in-out relative"
+                :disabled="isStatusLoading"
                 :class="[
-                user.isBlocked
-                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                    : 'bg-red-100 text-red-700 hover:bg-red-200'
+                    isStatusLoading ? 'cursor-not-allowed opacity-50' : '',
+                    user.isBlocked
+                        ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                        : 'bg-red-100 text-red-700 hover:bg-red-200'
                 ]"
             >
-                <ShieldAlert class="w-5 h-5 mr-2" />
-                {{ user.isBlocked ? 'Unblock User' : 'Block User' }}
+                <span v-if="isStatusLoading" class="absolute left-1 animate-spin">
+                    <svg class="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                            d="M12 4v4m0 8v4m8-8h-4M4 12H0m19.07-7.07l-2.83 2.83M4.93 4.93l2.83 2.83m10.24 10.24l-2.83-2.83m-10.24 0l2.83 2.83">
+                        </path>
+                    </svg>
+                </span>
+                <ShieldAlert v-if="!isStatusLoading" class="w-5 h-5 mr-2" />
+                <span class="ml-2">
+                    {{ isStatusLoading ? 'Processing...' : user.isBlocked ? 'Unblock User' : 'Block User' }}
+                </span>
             </button>
+
             </div>
         </div>
 
@@ -352,3 +388,4 @@ const goBack = () => {
     </div>
   </div>
 </template>
+

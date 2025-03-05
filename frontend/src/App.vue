@@ -6,12 +6,16 @@
 </template>
 
 <script setup>
-import { useAuthStore } from "./stores/authStore"; // Import Pinia store
+import { useAuthStore } from "./stores/authStore";
 import LoginForm from "./components/LoginForm.vue";
 
-const authStore = useAuthStore(); // Use Pinia store
+const authStore = useAuthStore(); // ✅ Use Pinia store
 
 const handleLoginSuccess = () => {
-  authStore.isAuthenticated = true; // Set authentication status
+  if (authStore.isAuthenticated) { // ✅ Check if store updated successfully
+    console.log("User authenticated:", authStore.isAuthenticated);
+  } else {
+    console.error("Login failed: User does not exist.");
+  }
 };
 </script>

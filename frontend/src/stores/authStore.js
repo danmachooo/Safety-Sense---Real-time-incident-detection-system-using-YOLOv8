@@ -27,32 +27,44 @@ export const useAuthStore = defineStore("auth", () => {
     try {
       const response = await api.post("/authentication/login", { email, password });
 
-      // Store user and token
-      user.value = response.data.data.user;
-      token.value = response.data.data.token;
-      isAuthenticated.value = true;
 
-      // Save to localStorage for persistence
-      localStorage.setItem("authToken", token.value);
-      localStorage.setItem("authUser", JSON.stringify(user.value));
-
-      console.log("Login Successful!");
+      if(response.data.success) {
+        // Store user and token
+        user.value = response.data.data.user;
+        token.value = response.data.data.token;
+        isAuthenticated.value = true;
+  
+        // Save to localStorage for persistence
+        localStorage.setItem("authToken", token.value);
+        localStorage.setItem("authUser", JSON.stringify(user.value));
+        console.log("Login Successful!");
+      } 
     } catch (error) {
       console.error("Login failed:", error.response?.data?.message || error.message);
     }
   };
 
   // Logout function
-  const logout = () => {
-    user.value = null;
-    isAuthenticated.value = false;
-    token.value = null;
+  const logout = async () => {
+    try {
+      const response = await api.get('/authentication/logout');
 
-    // Remove from localStorage
-    localStorage.removeItem("authToken");
-    localStorage.removeItem("authUser");
+      if(response.data.success) {
+        user.value = null;
+        isAuthenticated.value = false;
+        token.value = null;
+    
+        // Remove from localStorage
+        localStorage.removeItem("authToken");
+        localStorage.removeItem("authUser");
+    
+        console.log("Logged Out!");
 
-    console.log("Logged Out!");
+      }
+
+    } catch (error) {
+      console.error("Login failed:", error.response?.data?.message || error.message);
+    }
   };
 
   return { user, isAuthenticated, token, login, logout };

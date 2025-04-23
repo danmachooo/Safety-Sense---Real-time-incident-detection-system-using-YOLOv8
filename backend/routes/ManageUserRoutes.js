@@ -5,7 +5,7 @@ const { getUser, getUsers, updateUser, softDeleteUser, restoreUser, getDeletedUs
 const adminMiddleware = require('../middlewares/adminMiddleware');
 
 router.post('/create', createUser); //ok
-router.get('/get/:id', authMiddleware, adminMiddleware, getUser); //ok
+router.get('/get/:id', authMiddleware, getUser); //ok
 router.get('/get-all',  authMiddleware, adminMiddleware, getUsers); //ok
 router.get('/get-deleted', authMiddleware, adminMiddleware, getDeletedUsers); //not yet
 router.put('/update/:id', authMiddleware, updateUser) // ok

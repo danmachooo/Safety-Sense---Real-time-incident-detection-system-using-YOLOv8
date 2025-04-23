@@ -5,9 +5,9 @@
 **/node_modules/
 
 # Backend-specific (Express.js)
-/backend/.env
+# /backend/.env
 
 # Frontend-specific (Vue.js)
-/frontend/.env
+# /frontend/.env
 /frontend/node_modules/
 

@@ -4,7 +4,7 @@ const authMiddleware = require('../middlewares/authMiddleware');
 const { getUser, getUsers, updateUser, softDeleteUser, restoreUser, getDeletedUsers, createUser } = require('../controllers/Users/ManageUser');
 const adminMiddleware = require('../middlewares/adminMiddleware');
 
-router.post('/create',authMiddleware, adminMiddleware, createUser); //ok
+router.post('/create', createUser); //ok
 router.get('/get/:id', authMiddleware, adminMiddleware, getUser); //ok
 router.get('/get-all',  authMiddleware, adminMiddleware, getUsers); //ok
 router.get('/get-deleted', authMiddleware, adminMiddleware, getDeletedUsers); //not yet

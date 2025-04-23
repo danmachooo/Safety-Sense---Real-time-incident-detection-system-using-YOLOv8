@@ -96,8 +96,7 @@ const navigateTo = (route) => {
             <ul v-if="inventoryDropdown" class="mt-2 space-y-1">
               <li v-for="(item, index) in [
                 { icon: Eye, text: 'View Inventory', route: '/admin/inventory/items' },
-                { icon: PlusCircle, text: 'Add Inventory', route: '/admin/inventory/add' },
-                { icon: Edit, text: 'Update Inventory', route: '/admin/inventory/update' },
+
                 { icon: Boxes, text: 'Batches', route: '/admin/inventory/batches' },
                 { icon: Truck, text: 'Deployments', route: '/admin/inventory/deployments' },
               ]" :key="index">

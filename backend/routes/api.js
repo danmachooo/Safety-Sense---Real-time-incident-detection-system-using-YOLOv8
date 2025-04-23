@@ -7,10 +7,13 @@ const authorizationRouter = require('./AuthorizationRoutes');
 const manageUserRouter = require('./ManageUserRoutes');
 const systemRouter = require('./SystemRoutes');
 const cameraRouter = require('./CameraRoutes');
+const incidents = require('./IncidentRoutes');
+
 
 router.use('/authentication', authenticationRouter);
 router.use('/authorization', authorizationRouter);
 router.use('/manage-user', manageUserRouter);
+router.use('/incidents', incidents);
 router.use('/inventory', inventoryRouter);
 router.use('/camera', cameraRouter);
 router.use('/system', systemRouter);

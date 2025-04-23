@@ -13,11 +13,11 @@ const User = sequelize.define('Users', {
   },
   isVerified: {
     type: DataTypes.BOOLEAN,
-    defaultValue: false, // Initially false until verified
+    defaultValue: false,
   },
   verificationToken: {
     type: DataTypes.STRING,
-    allowNull: true, // Stores the token for email verification
+    allowNull: true,
   },
   password: {
     type: DataTypes.STRING,
@@ -29,15 +29,15 @@ const User = sequelize.define('Users', {
   },
   resetPasswordToken: {
     type: DataTypes.STRING,
-    allowNull: true, // Stores the token for resetting passwords
+    allowNull: true,
   }, 
   sessionToken: {
     type: DataTypes.TEXT,
-    allowNull: true, // Stores the token for resetting passwords
+    allowNull: true,
   },
   resetPasswordExpires: {
     type: DataTypes.DATE,
-    allowNull: true, // Expiration date for password reset token
+    allowNull: true,
   },
   firstname: {
     type: DataTypes.STRING,
@@ -95,4 +95,5 @@ const User = sequelize.define('Users', {
   ]
 });
 
+// We'll set up associations in the models/index.js file instead of here
 module.exports = User;

@@ -11,46 +11,46 @@ const Camera = sequelize.define('Camera', {
         type: DataTypes.STRING,
         allowNull: false,
     },
-    ipAddress: { // ✅ Ensure correct IP format
+    ipAddress: {
         type: DataTypes.STRING,
         allowNull: false,
         validate: {
             isIP: true,
         }
     },
-    rtspUrl: { // ✅ Unique RTSP URL for camera
+    rtspUrl: {
         type: DataTypes.STRING,
         allowNull: false,
         unique: true,
     },
-    location: { // ✅ Physical location of the camera
+    location: {
         type: DataTypes.STRING,
         allowNull: true,
     },
-    model: { // ✅ Physical location of the camera
+    model: {
         type: DataTypes.STRING,
         allowNull: true,
     },
-    description: { // ✅ Physical location of the camera
+    description: {
         type: DataTypes.TEXT,
         allowNull: true,
     },
-    status: { // ✅ Camera status tracking
+    status: {
         type: DataTypes.ENUM('online', 'offline', 'unknown'),
         defaultValue: 'unknown',
     },
-    lastCheckedAt: { // ✅ Last status check timestamp
+    lastCheckedAt: {
         type: DataTypes.DATE,
         allowNull: true,
     },
-    lastOnlineAt: {  // ✅ NEW FIELD: Stores the last known online time
+    lastOnlineAt: {
         type: DataTypes.DATE,
         allowNull: true,
     }
 }, {
     tableName: 'Cameras',
     timestamps: true,
-    paranoid: true, // ✅ Enables soft deletion
+    paranoid: true,
     indexes: [
         { unique: true, fields: ['rtspUrl'] },
         { fields: ['ipAddress'] },
@@ -58,4 +58,5 @@ const Camera = sequelize.define('Camera', {
     ],
 });
 
+// Export the model
 module.exports = Camera;

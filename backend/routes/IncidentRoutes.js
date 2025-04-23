@@ -48,7 +48,8 @@ router.post("/camera-detection", authMiddleware, createCameraDetection)
 
 // Accept an incident
 router.post("/:incidentId/accept", authMiddleware, acceptIncident)
-
+// Resolve an incident
+router.put("/:id/resolve", authMiddleware, resolveIncident)
 // Update incident - admin only
 router.put("/:id", authMiddleware, adminMiddleware, updateIncident)
 

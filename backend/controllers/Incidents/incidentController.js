@@ -681,6 +681,73 @@ const acceptIncident = async (req, res, next) => {
 }
 
 /**
+ * Resolve an incident
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+const resolveIncident = async (req, res, next) => {
+  let transaction
+
+  try {
+    transaction = await sequelize.transaction()
+
+    const { id } = req.params
+    const { resolutionNotes } = req.body
+
+    if (!id) throw new BadRequestError("Incident ID is required")
+
+    const incident = await Incident.findByPk(id)
+
+    if (!incident) {
+      throw new NotFoundError("Incident not found")
+    }
+
+    // Update incident status to resolved
+    await incident.update(
+      {
+        status: "resolved",
+        description: resolutionNotes ? 
+          `${incident.description || ''}\n\nResolution Notes: ${resolutionNotes}` : 
+          incident.description
+      },
+      { transaction }
+    )
+
+    await transaction.commit()
+    transaction = null
+
+    // Fetch updated incident with associations
+    const resolvedIncident = await Incident.findByPk(id, {
+      include: [
+        {
+          model: Camera,
+          as: "camera",
+          attributes: ["id", "name", "location", "status"],
+          required: false,
+        },
+        {
+          model: User,
+          as: "accepters",
+          attributes: ["id", "firstname", "lastname", "email"],
+          through: { attributes: ["acceptedAt"] },
+        },
+      ],
+    })
+
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Incident resolved successfully",
+      data: resolvedIncident,
+    })
+  } catch (error) {
+    if (transaction) await transaction.rollback()
+    console.error("An error occurred: " + error)
+    next(error)
+  }
+}
+
+/**
  * Get incidents accepted by a user
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
@@ -892,6 +959,7 @@ module.exports = {
   restoreIncident,
   getDeletedIncidents,
   acceptIncident,
+  resolveIncident,
   getIncidentsByUser,
   getUsersByIncident,
   getIncidentStats,

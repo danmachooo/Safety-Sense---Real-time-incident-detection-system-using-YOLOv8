@@ -14,6 +14,7 @@ const {
   restoreIncident,
   getDeletedIncidents,
   acceptIncident,
+  resolveIncident,
   getIncidentsByUser,
   getUsersByIncident,
   getIncidentStats,

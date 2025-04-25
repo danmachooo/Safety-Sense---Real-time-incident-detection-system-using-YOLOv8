@@ -25,45 +25,48 @@ export const useAuthStore = defineStore("auth", () => {
   // Login function
   const login = async (email, password) => {
     try {
-      const response = await api.post("/authentication/login", { email, password });
+      const response = await api.post("/auth/login", { email, password });
 
-
-      if(response.data.success) {
+      if (response.data.success) {
         // Store user and token
         user.value = response.data.data.user;
         token.value = response.data.data.token;
         isAuthenticated.value = true;
-  
+
         // Save to localStorage for persistence
         localStorage.setItem("authToken", token.value);
         localStorage.setItem("authUser", JSON.stringify(user.value));
         console.log("Login Successful!");
-      } 
+      }
     } catch (error) {
-      console.error("Login failed:", error.response?.data?.message || error.message);
+      console.error(
+        "Login failed:",
+        error.response?.data?.message || error.message
+      );
     }
   };
 
   // Logout function
   const logout = async () => {
     try {
-      const response = await api.get('/authentication/logout');
+      const response = await api.get("/auth/logout");
 
-      if(response.data.success) {
+      if (response.data.success) {
         user.value = null;
         isAuthenticated.value = false;
         token.value = null;
-    
+
         // Remove from localStorage
         localStorage.removeItem("authToken");
         localStorage.removeItem("authUser");
-    
+
         console.log("Logged Out!");
-
       }
-
     } catch (error) {
-      console.error("Login failed:", error.response?.data?.message || error.message);
+      console.error(
+        "Login failed:",
+        error.response?.data?.message || error.message
+      );
     }
   };
 

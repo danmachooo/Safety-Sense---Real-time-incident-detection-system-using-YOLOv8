@@ -8,6 +8,7 @@ const manageUserRouter = require("./ManageUserRoutes");
 const systemRouter = require("./SystemRoutes");
 const cameraRouter = require("./CameraRoutes");
 const incidents = require("./IncidentRoutes");
+const fcmRouter = require("./FcmRoutes");
 
 router.use("/auth", authenticationRouter);
 router.use("/authorization", authorizationRouter);
@@ -16,5 +17,6 @@ router.use("/incidents", incidents);
 router.use("/inventory", inventoryRouter);
 router.use("/camera", cameraRouter);
 router.use("/system", systemRouter);
+router.use("/fcm", fcmRouter);
 
 module.exports = router;

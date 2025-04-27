@@ -1,7 +1,7 @@
-const express = require("express")
-const router = express.Router()
-const authMiddleware = require("../middlewares/authMiddleware")
-const adminMiddleware = require("../middlewares/adminMiddleware")
+const express = require("express");
+const router = express.Router();
+const authMiddleware = require("../middlewares/authMiddleware");
+const adminMiddleware = require("../middlewares/adminMiddleware");
 
 const {
   createIncident,
@@ -15,49 +15,85 @@ const {
   getDeletedIncidents,
   acceptIncident,
   resolveIncident,
+  dismissIncident,
+  globalDismissIncident,
   getIncidentsByUser,
   getUsersByIncident,
+  getDismissedIncidentsByUser,
+  getUsersByDismissedIncident,
   getIncidentStats,
-} = require("../controllers/Incidents/incidentController")
+} = require("../controllers/Incidents/incidentController");
+const { upload } = require("../config/multer");
+const {
+  uploadIncidentImage,
+} = require("../controllers/Incidents/uploadController");
 
 // Get all incidents with filtering
-router.get("/", authMiddleware, getIncidents)
+router.get("/", authMiddleware, getIncidents);
 
 // Get incident statistics
-router.get("/stats", authMiddleware, getIncidentStats)
+router.get("/stats", authMiddleware, getIncidentStats);
 
 // Get deleted incidents - admin only
-router.get("/deleted", authMiddleware, adminMiddleware, getDeletedIncidents)
+router.get("/deleted", authMiddleware, adminMiddleware, getDeletedIncidents);
 
 // Get specific incident by ID
-router.get("/:id", authMiddleware, getIncident)
+router.get("/:id", authMiddleware, getIncident);
 
 // Get users who accepted an incident
-router.get("/:incidentId/users", authMiddleware, getUsersByIncident)
+router.get("/:incidentId/users", authMiddleware, getUsersByIncident);
+
+// Get users who dismissed an incident
+router.get(
+  "/:incidentId/dismissers",
+  authMiddleware,
+  getUsersByDismissedIncident
+);
 
 // Get incidents accepted by a user
-router.get("/user/:userId", authMiddleware, getIncidentsByUser)
+router.get("/user/:userId", authMiddleware, getIncidentsByUser);
+
+// Get incidents dismissed by a user
+router.get(
+  "/user/:userId/dismissed",
+  authMiddleware,
+  getDismissedIncidentsByUser
+);
 
 // Create new incident (general purpose) - kept for backward compatibility
-router.post("/", createIncident)
+router.post("/", createIncident);
 
 // Create new incident from citizen report - public endpoint, no auth required
-router.post("/citizen-report", createCitizenReport)
+router.post("/citizen-report", createCitizenReport);
+router.post("/upload-image", upload.single("image"), uploadIncidentImage);
 
 // Create new incident from camera detection - requires authentication
-router.post("/camera-detection", authMiddleware, createCameraDetection)
+router.post("/camera-detection", authMiddleware, createCameraDetection);
 
 // Accept an incident
-router.post("/:incidentId/accept", authMiddleware, acceptIncident)
+router.post("/:incidentId/accept", authMiddleware, acceptIncident);
+
+// Dismiss an incident for a specific user
+router.post("/:incidentId/dismiss", authMiddleware, dismissIncident);
+
+// Globally dismiss an incident - admin only
+router.post(
+  "/:id/global-dismiss",
+  authMiddleware,
+  adminMiddleware,
+  globalDismissIncident
+);
+
 // Resolve an incident
-router.put("/:id/resolve", authMiddleware, resolveIncident)
+router.put("/:id/resolve", authMiddleware, resolveIncident);
+
 // Update incident - admin only
-router.put("/:id", authMiddleware, adminMiddleware, updateIncident)
+router.put("/:id", authMiddleware, adminMiddleware, updateIncident);
 
 // Restore soft deleted incident - admin only
-router.put("/:id/restore", authMiddleware, adminMiddleware, restoreIncident)
+router.put("/:id/restore", authMiddleware, adminMiddleware, restoreIncident);
 
 // Delete incident (soft delete) - admin only
-router.delete("/:id", authMiddleware, adminMiddleware, softDeleteIncident)
+router.delete("/:id", authMiddleware, adminMiddleware, softDeleteIncident);
 
-module.exports = router
+module.exports = router;

@@ -18,34 +18,39 @@ import Notifications from "../views/admin/inventory/Notifications.vue";
 import ManageCamera from "../views/admin/camera/ManageCamera.vue";
 import CameraDetail from "../views/admin/camera/CameraDetail.vue";
 import ArchivedCamera from "../views/admin/camera/ArchivedCamera.vue";
+
+import ViewDashboard from "../views/admin/dashboard/dashboard.vue";
+
 const routes = [
   {
     path: "/admin",
     component: AdminLayout,
     children: [
+      // Default route for /admin should show the dashboard
+      { path: "", component: ViewDashboard },
+      { path: "dashboard/view", component: ViewDashboard },
+
       { path: "users/view", component: ViewUsers },
       { path: "users/create", component: CreateUser },
       { path: "users/archived", component: ArchivedUsers },
       { path: "users/login-history", component: LoginHistory },
-      
+      { path: "users/profile/:id", component: Profile, props: true },
+      { path: "users/profile/me", component: AdminProfile, props: true },
+
       { path: "inventory/items", component: InventoryItems },
       { path: "inventory/categories", component: Categories },
       { path: "inventory/batches", component: Batches },
       { path: "inventory/deployments", component: Deployments },
       { path: "inventory/notifications", component: Notifications },
 
-      { path: "users/profile/:id", component: Profile, props: true },
-      { path: "users/profile/me", component: AdminProfile, props: true },
-
       { path: "camera/manage", component: ManageCamera },
       { path: "camera/detail/:id", component: CameraDetail, props: true },
       { path: "camera/archived", component: ArchivedCamera },
-
     ],
   },
   {
     path: "/",
-    component: LoginForm
+    component: LoginForm,
   },
 ];
 

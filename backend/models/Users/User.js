@@ -33,9 +33,15 @@ const User = sequelize.define(
       type: DataTypes.STRING,
       allowNull: true,
     },
-    sessionToken: {
+    accessToken: {
       type: DataTypes.TEXT,
       allowNull: true,
+    },
+    refreshToken: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      unique: true,
+      unique: true,
     },
     resetPasswordExpires: {
       type: DataTypes.DATE,

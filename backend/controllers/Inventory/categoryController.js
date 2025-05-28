@@ -105,7 +105,7 @@ const updateCategory = async (req, res, next) => {
     }
 
     await category.update({ name, description, type });
-    
+
     return res.status(StatusCodes.OK).json({
       success: true,
       data: category,
@@ -120,7 +120,7 @@ const updateCategory = async (req, res, next) => {
 const deleteCategory = async (req, res, next) => {
   try {
     const category = await Category.findByPk(req.params.id);
-    
+
     if (!category)  if (!category) throw new NotFoundError('Category Not Found.')
 
 

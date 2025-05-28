@@ -17,9 +17,14 @@ const { StatusCodes } = require("http-status-codes");
 const { logUserLogin, logUserLogout } = require("./LoginHistory");
 
 const { logUserCreation } = require("../Notification/Notification");
+const { ref } = require("process");
 require("dotenv").config();
 
 const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_EXPIRATION = process.env.JWT_EXPIRES_IN;
+const REFRESH_SECRET = process.env.REFRESH_SECRET;
+const REFRESH_EXPIRATION = process.env.REFRESH_EXPIRES_IN;
+
 if (!JWT_SECRET) {
   throw new Error("JWT_SECRET is not defined in environment variables");
 }
@@ -53,22 +58,27 @@ const loginUser = async (req, res, next) => {
     if (!isMatch)
       throw new NotFoundError("User not found! Invalid credentials.");
 
-    if (user.sessionToken)
+    if (user.accessToken)
       throw new UnauthorizedError(
         "Another session is already active. Please log out first."
       );
 
-    const token = jwt.sign(
+    const accessToken = jwt.sign(
       {
         userId: user.id,
         role: user.role,
         isBlocked: user.isBlocked,
       },
       JWT_SECRET,
-      { expiresIn: "1h" }
+      { expiresIn: JWT_EXPIRATION || "1m" }
     );
 
-    await user.update({ sessionToken: token });
+    const refreshToken = jwt.sign({ userId: user.id }, REFRESH_SECRET, {
+      expiresIn: REFRESH_EXPIRATION,
+    });
+
+    await user.update({ accessToken: accessToken });
+    await user.update({ refreshToken: refreshToken });
     await user.update({ fcmToken: fcmToken });
     await logUserLogin(user.id);
 
@@ -88,7 +98,8 @@ const loginUser = async (req, res, next) => {
       success: true,
       message: "You are logged in!",
       data: {
-        token,
+        refresh: refreshToken,
+        access: accessToken,
         user: sanitizedUser,
       },
     });
@@ -130,7 +141,8 @@ const logoutUser = async (req, res, next) => {
     const user = await User.findByPk(req.user.id);
     console.log(user.id);
     if (!user) throw new NotFoundError("User not found!.");
-    await user.update({ sessionToken: null });
+    await user.update({ accessToken: null });
+    await user.update({ refreshToken: null });
 
     if (fcmToken === user.fcmToken) {
       console.log("FCM Token is removed from the user");
@@ -273,6 +285,46 @@ const resetPassword = async (req, res, next) => {
   }
 };
 
+const refreshToken = async (req, res, next) => {
+  const { refreshToken } = req.body;
+
+  if (!refreshToken) {
+    throw new BadRequestError("No token provided.");
+  }
+
+  try {
+    const payload = jwt.verify(refreshToken, REFRESH_SECRET);
+    const user = await User.findOne({ where: { id: payload.userId } });
+
+    if (!user || user.refreshToken !== refreshToken) {
+      throw new ForbiddenError("Invalid Token!");
+    }
+
+    const newAccessToken = jwt.sign(
+      {
+        userId: user.id,
+        role: user.role,
+        isBlocked: user.isBlocked,
+      },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRATION }
+    );
+
+    user.accessToken = newAccessToken;
+    await user.save();
+
+    console.log("Token has been refreshed!", newAccessToken);
+
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Token has been refreshed",
+      token: newAccessToken,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const changePassword = async (req, res, next) => {
   try {
     const { newPassword } = req.body;
@@ -305,4 +357,5 @@ module.exports = {
   resetPassword,
   updateFcmToken,
   changePassword,
+  refreshToken,
 };

@@ -17,7 +17,6 @@ const { StatusCodes } = require("http-status-codes");
 const { logUserLogin, logUserLogout } = require("./LoginHistory");
 
 const { logUserCreation } = require("../Notification/Notification");
-const { ref } = require("process");
 require("dotenv").config();
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -33,56 +32,50 @@ const loginUser = async (req, res, next) => {
   try {
     const { email, password, fcmToken } = req.body;
 
-    if (!fcmToken) {
-      console.log("Not FCM token provided.");
-    }
-
-    if (!email || !password)
+    if (!email || !password) {
       throw new BadRequestError("Invalid email and password");
+    }
 
     const user = await User.findOne({ where: { email } });
 
-    if (!user || user.isSoftDeleted())
+    if (!user || user.isSoftDeleted()) {
       throw new NotFoundError("User not found! Invalid credentials.");
+    }
 
-    if (user.isBlocked)
+    if (user.isBlocked) {
       throw new ForbiddenError("User is blocked and cannot go any further");
+    }
 
-    if (!user.isVerified)
+    if (!user.isVerified) {
       throw new ForbiddenError(
         "User is not yet verified and cannot go any further"
       );
+    }
 
     const isMatch = await bcrypt.compare(password, user.password);
-
-    if (!isMatch)
+    if (!isMatch) {
       throw new NotFoundError("User not found! Invalid credentials.");
+    }
 
-    if (user.accessToken)
+    if (user.accessToken) {
       throw new UnauthorizedError(
         "Another session is already active. Please log out first."
       );
+    }
 
     const accessToken = jwt.sign(
-      {
-        userId: user.id,
-        role: user.role,
-        isBlocked: user.isBlocked,
-      },
+      { userId: user.id, role: user.role, isBlocked: user.isBlocked },
       JWT_SECRET,
-      { expiresIn: JWT_EXPIRATION || "1m" }
+      { expiresIn: JWT_EXPIRATION || "15m" }
     );
 
     const refreshToken = jwt.sign({ userId: user.id }, REFRESH_SECRET, {
       expiresIn: REFRESH_EXPIRATION,
     });
 
-    await user.update({ accessToken: accessToken });
-    await user.update({ refreshToken: refreshToken });
-    await user.update({ fcmToken: fcmToken });
+    await user.update({ accessToken, refreshToken, fcmToken });
     await logUserLogin(user.id);
 
-    // Sanitize user data to only return essentials
     const sanitizedUser = {
       id: user.id,
       firstname: user.firstname,
@@ -94,11 +87,17 @@ const loginUser = async (req, res, next) => {
       isVerified: user.isVerified,
     };
 
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "Strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
+
     return res.status(StatusCodes.OK).json({
       success: true,
       message: "You are logged in!",
       data: {
-        refresh: refreshToken,
         access: accessToken,
         user: sanitizedUser,
       },
@@ -285,11 +284,11 @@ const resetPassword = async (req, res, next) => {
   }
 };
 
-const refreshToken = async (req, res, next) => {
-  const { refreshToken } = req.body;
-
+const refreshAccessToken = async (req, res, next) => {
+  const refreshToken = req.cookies.refreshToken;
+  console.log("Cookies: ", refreshToken);
   if (!refreshToken) {
-    throw new BadRequestError("No token provided.");
+    throw new BadRequestError("No token provided...");
   }
 
   try {
@@ -313,7 +312,7 @@ const refreshToken = async (req, res, next) => {
     user.accessToken = newAccessToken;
     await user.save();
 
-    console.log("Token has been refreshed!", newAccessToken);
+    console.log("Token has been refreshed! \nNew Token: ", newAccessToken);
 
     return res.status(StatusCodes.OK).json({
       success: true,
@@ -357,5 +356,5 @@ module.exports = {
   resetPassword,
   updateFcmToken,
   changePassword,
-  refreshToken,
+  refreshAccessToken,
 };

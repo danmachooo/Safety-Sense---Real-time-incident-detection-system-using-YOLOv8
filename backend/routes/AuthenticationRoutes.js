@@ -12,7 +12,8 @@ const {
   requestPasswordReset,
   changePassword,
   updateFcmToken,
-  refreshToken,
+
+  refreshAccessToken,
 } = require("../controllers/Users/authentication");
 const { getLoginHistory } = require("../controllers/Users/LoginHistory");
 
@@ -25,5 +26,5 @@ router.get("/verify-email", authMiddleware, verifyEmail); //ok
 router.post("/request-password-reset", authMiddleware, requestPasswordReset); //ok
 router.post("/reset-password", authMiddleware, resetPassword); //ok
 router.patch("/change-password", authMiddleware, changePassword); //ok
-router.post("/refresh", refreshToken);
+router.post("/refresh", refreshAccessToken);
 module.exports = router;

@@ -16,6 +16,8 @@ const createUser = async (req, res, next) => {
       },
     });
 
+    console.log("Current logged in: ", req.user);
+
     if (existingUser) throw new BadRequestError("User or Email already Exist!");
 
     const hashedPassword = await bcrypt.hash(password, 10);

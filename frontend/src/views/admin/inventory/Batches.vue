@@ -1,7 +1,26 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue';
-import { PlusCircle, Pencil, Trash2, Eye, Search, Filter, ChevronLeft, ChevronRight, ArrowUpDown, X, AlertCircle, CheckCircle } from 'lucide-vue-next';
-import api from '../../../utils/axios';
+import { ref, onMounted, computed } from "vue";
+import {
+  PlusCircle,
+  Pencil,
+  Trash2,
+  Eye,
+  Search,
+  Filter,
+  ChevronLeft,
+  ChevronRight,
+  ArrowUpDown,
+  X,
+  AlertCircle,
+  CheckCircle,
+  Package2,
+  Calendar,
+  Clock,
+  DollarSign,
+  TrendingDown,
+  AlertTriangle,
+} from "lucide-vue-next";
+import api from "../../../utils/axios";
 
 // Reactive state
 const batches = ref([]);
@@ -9,29 +28,29 @@ const categories = ref([]);
 const loading = ref(true);
 const error = ref(null);
 const showModal = ref(false);
-const notification = ref({ show: false, type: '', message: '' });
-const searchQuery = ref('');
+const notification = ref({ show: false, type: "", message: "" });
+const searchQuery = ref("");
 const currentPage = ref(1);
 const itemsPerPage = ref(10);
 const totalItems = ref(0);
 const totalPages = ref(0);
 const filters = ref({
-  supplier: '',
+  supplier: "",
   expiringSoon: false,
-  isActive: true
+  isActive: true,
 });
 
 // Form state
 const currentBatch = ref({
   id: null,
-  inventory_item_id: '',
+  inventory_item_id: "",
   quantity: 0,
-  expiry_date: '',
-  supplier: '',
-  funding_source: '',
+  expiry_date: "",
+  supplier: "",
+  funding_source: "",
   cost: 0,
-  notes: '',
-  is_active: true
+  notes: "",
+  is_active: true,
 });
 
 // Fetch data
@@ -41,32 +60,32 @@ onMounted(async () => {
 
 const fetchInventoryItems = async () => {
   try {
-    const response = await api.get('inventory/items');
+    const response = await api.get("inventory/items");
     categories.value = response.data.data;
   } catch (err) {
-    showNotification('Failed to fetch inventory items', 'error');
+    showNotification("Failed to fetch inventory items", "error");
   }
 };
 
 const fetchBatches = async () => {
   try {
     loading.value = true;
-    const response = await api.get('inventory/batches', {
+    const response = await api.get("inventory/batches", {
       params: {
         page: currentPage.value,
         limit: itemsPerPage.value,
         search: searchQuery.value,
         supplier: filters.value.supplier,
         expiring_soon: filters.value.expiringSoon,
-        is_active: filters.value.isActive
-      }
+        is_active: filters.value.isActive,
+      },
     });
-    
+
     batches.value = response.data.data;
     totalItems.value = response.data.meta.total;
     totalPages.value = response.data.meta.pages;
   } catch (err) {
-    showNotification('Failed to fetch batches', 'error');
+    showNotification("Failed to fetch batches", "error");
   } finally {
     loading.value = false;
   }
@@ -74,181 +93,504 @@ const fetchBatches = async () => {
 
 // CRUD Operations
 const openBatchModal = (batch = null) => {
-  currentBatch.value = batch ? { ...batch } : {
-    id: null,
-    inventory_item_id: '',
-    quantity: 0,
-    expiry_date: '',
-    supplier: '',
-    funding_source: '',
-    cost: 0,
-    notes: '',
-    is_active: true
-  };
+  currentBatch.value = batch
+    ? { ...batch }
+    : {
+        id: null,
+        inventory_item_id: "",
+        quantity: 0,
+        expiry_date: "",
+        supplier: "",
+        funding_source: "",
+        cost: 0,
+        notes: "",
+        is_active: true,
+      };
   showModal.value = true;
 };
 
 const saveBatch = async () => {
   try {
-    const method = currentBatch.value.id ? 'put' : 'post';
-    const url = currentBatch.value.id ? `inventory/batches/${currentBatch.value.id}` : 'inventory/batches';
-    
+    const method = currentBatch.value.id ? "put" : "post";
+    const url = currentBatch.value.id
+      ? `inventory/batches/${currentBatch.value.id}`
+      : "inventory/batches";
+
     await api[method](url, currentBatch.value);
-    showNotification(`Batch ${currentBatch.value.id ? 'updated' : 'created'} successfully`, 'success');
+    showNotification(
+      `Batch ${currentBatch.value.id ? "updated" : "created"} successfully`,
+      "success"
+    );
     showModal.value = false;
     await fetchBatches();
   } catch (err) {
-    showNotification(err.response?.data?.message || 'Operation failed', 'error');
+    showNotification(
+      err.response?.data?.message || "Operation failed",
+      "error"
+    );
   }
 };
 
 const deleteBatch = async (id) => {
-  if (!confirm('Are you sure you want to delete this batch?')) return;
+  if (!confirm("Are you sure you want to delete this batch?")) return;
   try {
     await api.delete(`inventory/batches/${id}`);
-    showNotification('Batch deleted successfully', 'success');
+    showNotification("Batch deleted successfully", "success");
     await fetchBatches();
   } catch (err) {
-    showNotification('Deletion failed', 'error');
+    showNotification("Deletion failed", "error");
   }
 };
 
 // Helpers
 const showNotification = (message, type) => {
   notification.value = { show: true, type, message };
-  setTimeout(() => notification.value.show = false, 3000);
+  setTimeout(() => (notification.value.show = false), 3000);
 };
 
 const statusBadge = (batch) => {
-  if (!batch.expiry_date) return 'bg-gray-100 text-gray-800';
+  if (!batch.expiry_date)
+    return {
+      bg: "bg-gray-50",
+      text: "text-gray-700",
+      border: "border-gray-200",
+    };
   const expiryDate = new Date(batch.expiry_date);
   const today = new Date();
   const diffDays = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
-  
-  if (diffDays < 0) return 'bg-red-100 text-red-800';
-  if (diffDays <= 30) return 'bg-yellow-100 text-yellow-800';
-  return 'bg-green-100 text-green-800';
+
+  if (diffDays < 0)
+    return { bg: "bg-red-50", text: "text-red-700", border: "border-red-200" };
+  if (diffDays <= 30)
+    return {
+      bg: "bg-amber-50",
+      text: "text-amber-700",
+      border: "border-amber-200",
+    };
+  return {
+    bg: "bg-emerald-50",
+    text: "text-emerald-700",
+    border: "border-emerald-200",
+  };
 };
 
 const expiryProgress = (batch) => {
-  if (!batch.expiry_date) return 0;
+  if (!batch.expiry_date || !batch.received_date) return 0;
   const created = new Date(batch.received_date);
   const expiry = new Date(batch.expiry_date);
+  const now = new Date();
+
   const total = expiry - created;
-  const elapsed = Date.now() - created;
+  const elapsed = now - created;
+
+  if (total <= 0) return 100;
   return Math.min((elapsed / total) * 100, 100);
+};
+
+const getStatusText = (batch) => {
+  if (!batch.expiry_date) return "No Expiry";
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const expiry = new Date(batch.expiry_date);
+  expiry.setHours(0, 0, 0, 0);
+  const diffDays = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) return "Expired";
+  if (diffDays <= 30) return "Expiring Soon";
+  return "Active";
+};
+
+// Computed stats
+const expiringBatches = computed(() => {
+  return batches.value.filter((batch) => {
+    if (!batch.expiry_date) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const expiry = new Date(batch.expiry_date);
+    expiry.setHours(0, 0, 0, 0);
+    const diffDays = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
+    return diffDays > 0 && diffDays <= 30;
+  }).length;
+});
+
+const expiredBatches = computed(() => {
+  return batches.value.filter((batch) => {
+    if (!batch.expiry_date) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const expiry = new Date(batch.expiry_date);
+    expiry.setHours(0, 0, 0, 0);
+    return expiry < today;
+  }).length;
+});
+
+const totalValue = computed(() => {
+  return batches.value.reduce((sum, batch) => sum + (batch.cost || 0), 0);
+});
+
+// Visible pages for pagination
+const visiblePages = computed(() => {
+  const range = 2;
+  let start = Math.max(1, currentPage.value - range);
+  let end = Math.min(totalPages.value, currentPage.value + range);
+
+  if (end - start < range * 2) {
+    start = Math.max(1, end - range * 2);
+    end = Math.min(totalPages.value, start + range * 2);
+  }
+
+  return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+});
+
+const goToPage = (page) => {
+  if (page >= 1 && page <= totalPages.value) {
+    currentPage.value = page;
+    fetchBatches();
+  }
 };
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
-    <!-- Notification -->
-    <div v-if="notification.show" class="fixed top-4 right-4 z-50">
-      <div :class="['flex items-center p-4 rounded-lg shadow-lg transform transition-all duration-300',
-        notification.type === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800']">
-        <component :is="notification.type === 'success' ? CheckCircle : AlertCircle" class="w-5 h-5 mr-2" />
-        <span class="text-sm font-medium">{{ notification.message }}</span>
-        <button @click="notification.show = false" class="ml-4">
-          <X class="w-4 h-4 hover:opacity-75" />
-        </button>
-      </div>
-    </div>
-
-    <!-- Main Content -->
-    <div class="max-w-7xl mx-auto">
-      <!-- Header -->
-      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
-        <div class="mb-4 sm:mb-0">
-          <h1 class="text-3xl font-bold text-gray-900">Batch Management</h1>
-          <p class="text-gray-500 mt-1">Manage inventory batches and expiration</p>
+  <div
+    class="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50"
+  >
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <!-- Notification Toast -->
+      <div
+        v-if="notification.show"
+        class="fixed top-6 right-6 z-50 animate-slide-in"
+      >
+        <div
+          :class="[
+            'flex items-center p-4 rounded-xl shadow-lg backdrop-blur-sm border transform transition-all duration-300',
+            notification.type === 'success'
+              ? 'bg-emerald-50/90 text-emerald-800 border-emerald-200'
+              : 'bg-red-50/90 text-red-800 border-red-200',
+          ]"
+        >
+          <component
+            :is="notification.type === 'success' ? CheckCircle : AlertCircle"
+            class="w-5 h-5 mr-3"
+          />
+          <span class="text-sm font-medium">{{ notification.message }}</span>
+          <button
+            @click="notification.show = false"
+            class="ml-4 hover:opacity-70 transition-opacity"
+          >
+            <X class="w-4 h-4" />
+          </button>
         </div>
-        <button @click="openBatchModal" class="btn-primary">
-          <PlusCircle class="w-5 h-5 mr-2" />
+      </div>
+
+      <!-- Header -->
+      <div
+        class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8"
+      >
+        <div class="mb-6 lg:mb-0">
+          <div class="flex items-center mb-2">
+            <div
+              class="p-2 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl mr-4"
+            >
+              <Package2 class="w-8 h-8 text-white" />
+            </div>
+            <div>
+              <h1
+                class="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent"
+              >
+                Batch Management
+              </h1>
+              <p class="text-gray-600 mt-1 text-lg">
+                Track inventory batches and expiration dates
+              </p>
+            </div>
+          </div>
+        </div>
+        <button @click="openBatchModal" class="btn-primary group">
+          <PlusCircle
+            class="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform duration-200"
+          />
           New Batch
         </button>
       </div>
 
+      <!-- Stats Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div
+          class="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg"
+        >
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium text-gray-600">Total Batches</p>
+              <p class="text-3xl font-bold text-gray-900">{{ totalItems }}</p>
+            </div>
+            <div class="p-3 bg-blue-100 rounded-xl">
+              <Package2 class="w-6 h-6 text-blue-600" />
+            </div>
+          </div>
+        </div>
+        <div
+          class="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg"
+        >
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium text-gray-600">Expiring Soon</p>
+              <p class="text-3xl font-bold text-amber-600">
+                {{ expiringBatches }}
+              </p>
+            </div>
+            <div class="p-3 bg-amber-100 rounded-xl">
+              <Clock class="w-6 h-6 text-amber-600" />
+            </div>
+          </div>
+        </div>
+        <div
+          class="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg"
+        >
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium text-gray-600">Expired</p>
+              <p class="text-3xl font-bold text-red-600">
+                {{ expiredBatches }}
+              </p>
+            </div>
+            <div class="p-3 bg-red-100 rounded-xl">
+              <AlertTriangle class="w-6 h-6 text-red-600" />
+            </div>
+          </div>
+        </div>
+        <div
+          class="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg"
+        >
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium text-gray-600">Total Value</p>
+              <p class="text-3xl font-bold text-emerald-600">
+                {{
+                  new Intl.NumberFormat("en-US", {
+                    style: "currency",
+                    currency: "PHP",
+                  }).format(totalValue)
+                }}
+              </p>
+            </div>
+            <div class="p-3 bg-emerald-100 rounded-xl">
+              <DollarSign class="w-6 h-6 text-emerald-600" />
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Filters -->
-      <div class="bg-white rounded-lg shadow-sm p-4 mb-6">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div
+        class="bg-white/70 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6 mb-8"
+      >
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div class="relative">
-            <Search class="absolute left-3 top-3.5 w-5 h-5 text-gray-400" />
-            <input v-model="searchQuery" @input="fetchBatches" type="text" placeholder="Search batches..."
-              class="pl-10 w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+            <Search
+              class="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400"
+            />
+            <input
+              v-model="searchQuery"
+              @input="fetchBatches"
+              type="text"
+              placeholder="Search batches..."
+              class="pl-12 w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white/50 backdrop-blur-sm transition-all duration-200"
+            />
           </div>
           <div class="relative">
-            <Filter class="absolute left-3 top-3.5 w-5 h-5 text-gray-400" />
-            <select v-model="filters.supplier" @change="fetchBatches"
-              class="pl-10 w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+            <Filter
+              class="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400"
+            />
+            <select
+              v-model="filters.supplier"
+              @change="fetchBatches"
+              class="pl-12 w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white/50 backdrop-blur-sm transition-all duration-200"
+            >
               <option value="">All Suppliers</option>
-              <option v-for="supplier in [...new Set(batches.map(b => b.supplier))]" :key="supplier" :value="supplier">
+              <option
+                v-for="supplier in [...new Set(batches.map((b) => b.supplier))]"
+                :key="supplier"
+                :value="supplier"
+              >
                 {{ supplier }}
               </option>
             </select>
           </div>
-          <div class="flex items-center space-x-4">
+          <div class="flex items-center space-x-6">
             <label class="flex items-center space-x-2">
-              <input v-model="filters.expiringSoon" type="checkbox" @change="fetchBatches"
-                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-              <span class="text-sm text-gray-700">Expiring Soon</span>
+              <input
+                v-model="filters.expiringSoon"
+                type="checkbox"
+                @change="fetchBatches"
+                class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span class="text-sm font-medium text-gray-700"
+                >Expiring Soon</span
+              >
             </label>
             <label class="flex items-center space-x-2">
-              <input v-model="filters.isActive" type="checkbox" @change="fetchBatches"
-                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-              <span class="text-sm text-gray-700">Active Only</span>
+              <input
+                v-model="filters.isActive"
+                type="checkbox"
+                @change="fetchBatches"
+                class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span class="text-sm font-medium text-gray-700">Active Only</span>
             </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Loading State -->
+      <div v-if="loading" class="flex justify-center items-center h-64">
+        <div class="relative">
+          <div
+            class="animate-spin rounded-full h-16 w-16 border-4 border-blue-200"
+          ></div>
+          <div
+            class="animate-spin rounded-full h-16 w-16 border-4 border-blue-600 border-t-transparent absolute top-0 left-0"
+          ></div>
+        </div>
+      </div>
+
+      <!-- Error State -->
+      <div
+        v-else-if="error"
+        class="bg-red-50/80 backdrop-blur-sm border border-red-200 p-6 rounded-2xl text-red-700"
+      >
+        <div class="flex items-center">
+          <AlertCircle class="w-6 h-6 mr-3" />
+          <div>
+            <p class="font-semibold">Error loading data:</p>
+            <p>{{ error }}</p>
           </div>
         </div>
       </div>
 
       <!-- Table -->
-      <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+      <div
+        v-else
+        class="bg-white/70 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 overflow-hidden"
+      >
         <div class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
+          <table class="min-w-full">
+            <thead class="bg-gradient-to-r from-gray-50 to-gray-100">
               <tr>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expiration Progress</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                <th
+                  class="px-6 py-4 text-left text-sm font-semibold text-gray-700"
+                >
+                  Item
+                </th>
+                <th
+                  class="px-6 py-4 text-left text-sm font-semibold text-gray-700"
+                >
+                  Quantity
+                </th>
+                <th
+                  class="px-6 py-4 text-left text-sm font-semibold text-gray-700"
+                >
+                  Expiration Progress
+                </th>
+                <th
+                  class="px-6 py-4 text-left text-sm font-semibold text-gray-700"
+                >
+                  Status
+                </th>
+                <th
+                  class="px-6 py-4 text-right text-sm font-semibold text-gray-700"
+                >
+                  Actions
+                </th>
               </tr>
             </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-              <tr v-for="batch in batches" :key="batch.id" class="hover:bg-gray-50 transition-colors">
-                <td class="px-6 py-4 whitespace-nowrap">
+            <tbody class="divide-y divide-gray-100">
+              <tr
+                v-for="batch in batches"
+                :key="batch.id"
+                class="hover:bg-blue-50/50 transition-colors duration-200"
+              >
+                <td class="px-6 py-4">
                   <div class="flex items-center">
+                    <div
+                      class="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center mr-4"
+                    >
+                      <Package2 class="w-5 h-5 text-white" />
+                    </div>
                     <div>
-                      <div class="font-medium text-gray-900">{{ batch.inventoryBatchItem?.name }}</div>
-                      <div class="text-sm text-gray-500">{{ batch.supplier }}</div>
+                      <div class="font-semibold text-gray-900">
+                        {{ batch.inventoryBatchItem?.name || "Unknown Item" }}
+                      </div>
+                      <div class="text-sm text-gray-500">
+                        {{ batch.supplier || "No supplier" }}
+                      </div>
                     </div>
                   </div>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {{ batch.quantity }} {{ batch.inventoryBatchItem?.unit_of_measure }}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap">
+                <td class="px-6 py-4">
                   <div class="flex items-center">
-                    <div class="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div class="h-full bg-blue-500" :style="{ width: `${expiryProgress(batch)}%` }"></div>
+                    <span class="font-semibold text-gray-900">{{
+                      batch.quantity
+                    }}</span>
+                    <span class="text-sm text-gray-500 ml-1">{{
+                      batch.inventoryBatchItem?.unit_of_measure || "units"
+                    }}</span>
+                  </div>
+                </td>
+                <td class="px-6 py-4">
+                  <div class="flex items-center">
+                    <div
+                      class="w-32 h-3 bg-gray-200 rounded-full overflow-hidden mr-3"
+                    >
+                      <div
+                        class="h-full rounded-full transition-all duration-300"
+                        :class="
+                          batch.expiry_date &&
+                          new Date(batch.expiry_date) < new Date()
+                            ? 'bg-red-500'
+                            : batch.expiry_date &&
+                              (new Date(batch.expiry_date) - new Date()) /
+                                (1000 * 3600 * 24) <=
+                                30
+                            ? 'bg-amber-500'
+                            : 'bg-emerald-500'
+                        "
+                        :style="{ width: `${expiryProgress(batch)}%` }"
+                      ></div>
                     </div>
-                    <span class="ml-2 text-sm text-gray-500">
-                      {{ batch.expiry_date ? new Date(batch.expiry_date).toLocaleDateString() : 'No expiry' }}
+                    <span class="text-sm text-gray-600 font-medium">
+                      {{
+                        batch.expiry_date
+                          ? new Date(batch.expiry_date).toLocaleDateString()
+                          : "No expiry"
+                      }}
                     </span>
                   </div>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                  <span :class="['px-2 py-1 text-xs font-medium rounded-full', statusBadge(batch)]">
-                    {{ batch.expiry_date && new Date(batch.expiry_date) < new Date() ? 'Expired' : 
-                       batch.expiry_date && (new Date(batch.expiry_date) - new Date()) / (1000 * 3600 * 24) <= 30 ? 'Expiring Soon' : 'Active' }}
+                <td class="px-6 py-4">
+                  <span
+                    :class="[
+                      'px-3 py-1 text-sm font-medium rounded-full border',
+                      statusBadge(batch).bg,
+                      statusBadge(batch).text,
+                      statusBadge(batch).border,
+                    ]"
+                  >
+                    {{ getStatusText(batch) }}
                   </span>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <div class="flex items-center justify-end space-x-3">
-                    <button @click="openBatchModal(batch)" class="text-blue-600 hover:text-blue-900">
+                <td class="px-6 py-4">
+                  <div class="flex items-center justify-end space-x-2">
+                    <button
+                      @click="openBatchModal(batch)"
+                      class="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all duration-200"
+                    >
                       <Pencil class="w-5 h-5" />
                     </button>
-                    <button @click="deleteBatch(batch.id)" class="text-red-600 hover:text-red-900">
+                    <button
+                      @click="deleteBatch(batch.id)"
+                      class="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all duration-200"
+                    >
                       <Trash2 class="w-5 h-5" />
                     </button>
                   </div>
@@ -259,119 +601,220 @@ const expiryProgress = (batch) => {
         </div>
 
         <!-- Pagination -->
-        <div class="px-6 py-4 border-t border-gray-200">
+        <div class="px-6 py-4 border-t border-gray-100 bg-gray-50/50">
           <div class="flex flex-col md:flex-row items-center justify-between">
-            <div class="mb-4 md:mb-0 text-sm text-gray-700">
-              Showing {{ (currentPage - 1) * itemsPerPage + 1 }} to 
-              {{ Math.min(currentPage * itemsPerPage, totalItems) }} of 
+            <div class="mb-4 md:mb-0 text-sm text-gray-600 font-medium">
+              Showing {{ (currentPage - 1) * itemsPerPage + 1 }} to
+              {{ Math.min(currentPage * itemsPerPage, totalItems) }} of
               {{ totalItems }} results
             </div>
-            <nav class="relative z-0 inline-flex rounded-md shadow-sm">
-              <button @click="currentPage--; fetchBatches()" :disabled="currentPage === 1"
-                class="btn-pagination rounded-l-md">
+            <nav class="flex items-center space-x-1">
+              <button
+                @click="goToPage(currentPage - 1)"
+                :disabled="currentPage === 1"
+                class="btn-pagination rounded-l-xl"
+              >
                 <ChevronLeft class="w-5 h-5" />
               </button>
-              <button v-for="page in totalPages" :key="page" @click="currentPage = page; fetchBatches()"
-                :class="['btn-pagination', page === currentPage ? 'bg-blue-50 text-blue-600' : '']">
+              <button
+                v-for="page in visiblePages"
+                :key="page"
+                @click="goToPage(page)"
+                :class="[
+                  'btn-pagination',
+                  page === currentPage
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : '',
+                ]"
+              >
                 {{ page }}
               </button>
-              <button @click="currentPage++; fetchBatches()" :disabled="currentPage === totalPages"
-                class="btn-pagination rounded-r-md">
+              <button
+                @click="goToPage(currentPage + 1)"
+                :disabled="currentPage === totalPages"
+                class="btn-pagination rounded-r-xl"
+              >
                 <ChevronRight class="w-5 h-5" />
               </button>
             </nav>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Batch Modal -->
-    <div v-if="showModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl">
-        <div class="p-6 border-b border-gray-200 flex justify-between items-center">
-          <h3 class="text-lg font-semibold">{{ currentBatch.id ? 'Edit' : 'New' }} Batch</h3>
-          <button @click="showModal = false" class="text-gray-500 hover:text-gray-700">
-            <X class="w-6 h-6" />
-          </button>
+      <!-- Batch Modal -->
+      <div
+        v-if="showModal"
+        class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+      >
+        <div
+          class="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto"
+        >
+          <div
+            class="p-8 border-b border-gray-100 flex justify-between items-center"
+          >
+            <div class="flex items-center">
+              <div
+                class="p-3 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl mr-4"
+              >
+                <Package2 class="w-6 h-6 text-white" />
+              </div>
+              <h3 class="text-2xl font-bold text-gray-900">
+                {{ currentBatch.id ? "Edit" : "New" }} Batch
+              </h3>
+            </div>
+            <button
+              @click="showModal = false"
+              class="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-xl transition-all duration-200"
+            >
+              <X class="w-6 h-6" />
+            </button>
+          </div>
+          <form @submit.prevent="saveBatch" class="p-8">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-3"
+                  >Inventory Item *</label
+                >
+                <select
+                  v-model="currentBatch.inventory_item_id"
+                  required
+                  class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                >
+                  <option value="" disabled>Select an item</option>
+                  <option
+                    v-for="item in categories"
+                    :key="item.id"
+                    :value="item.id"
+                  >
+                    {{ item.name }}
+                  </option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-3"
+                  >Quantity *</label
+                >
+                <input
+                  v-model.number="currentBatch.quantity"
+                  type="number"
+                  min="0"
+                  required
+                  class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-3"
+                  >Expiry Date</label
+                >
+                <input
+                  v-model="currentBatch.expiry_date"
+                  type="date"
+                  class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-3"
+                  >Supplier</label
+                >
+                <input
+                  v-model="currentBatch.supplier"
+                  type="text"
+                  class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-3"
+                  >Funding Source</label
+                >
+                <input
+                  v-model="currentBatch.funding_source"
+                  type="text"
+                  class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-3"
+                  >Cost</label
+                >
+                <input
+                  v-model.number="currentBatch.cost"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                />
+              </div>
+              <div class="lg:col-span-2">
+                <label class="block text-sm font-semibold text-gray-700 mb-3"
+                  >Notes</label
+                >
+                <textarea
+                  v-model="currentBatch.notes"
+                  rows="3"
+                  class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                ></textarea>
+              </div>
+              <div class="flex items-center">
+                <input
+                  v-model="currentBatch.is_active"
+                  type="checkbox"
+                  class="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                />
+                <label class="text-sm font-semibold text-gray-700"
+                  >Active Batch</label
+                >
+              </div>
+            </div>
+            <div
+              class="flex justify-end space-x-4 mt-8 pt-6 border-t border-gray-100"
+            >
+              <button
+                type="button"
+                @click="showModal = false"
+                class="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button type="submit" class="btn-primary">
+                {{ currentBatch.id ? "Update" : "Create" }} Batch
+              </button>
+            </div>
+          </form>
         </div>
-        <form @submit.prevent="saveBatch" class="p-6 space-y-6">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">Inventory Item</label>
-              <select v-model="currentBatch.inventory_item_id" required
-                class="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500">
-                <option v-for="item in categories" :key="item.id" :value="item.id">
-                  {{ item.name }}
-                </option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">Quantity</label>
-              <input v-model.number="currentBatch.quantity" type="number" min="0" required
-                class="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500" />
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">Expiry Date</label>
-              <input v-model="currentBatch.expiry_date" type="date"
-                class="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500" />
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">Supplier</label>
-              <input v-model="currentBatch.supplier"
-                class="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500" />
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">Funding Source</label>
-              <input v-model="currentBatch.funding_source"
-                class="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500" />
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">Cost</label>
-              <input v-model.number="currentBatch.cost" type="number" step="0.01"
-                class="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500" />
-            </div>
-            <div class="md:col-span-2">
-              <label class="block text-sm font-medium text-gray-700 mb-2">Notes</label>
-              <textarea v-model="currentBatch.notes" rows="3"
-                class="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"></textarea>
-            </div>
-            <div>
-              <label class="flex items-center space-x-2">
-                <input v-model="currentBatch.is_active" type="checkbox"
-                  class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                <span class="text-sm text-gray-700">Active Batch</span>
-              </label>
-            </div>
-          </div>
-          <div class="flex justify-end space-x-3">
-            <button type="button" @click="showModal = false" class="btn-secondary">
-              Cancel
-            </button>
-            <button type="submit" class="btn-primary">
-              {{ currentBatch.id ? 'Update' : 'Create' }} Batch
-            </button>
-          </div>
-        </form>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.3s ease-out;
+}
+
 .btn-primary {
-  @apply bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center justify-center transition-all duration-200;
+  @apply bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-3 rounded-xl flex items-center justify-center font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-0.5;
 }
 
 .btn-secondary {
-  @apply bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg transition-all duration-200;
+  @apply bg-gray-100 hover:bg-gray-200 text-gray-700 px-6 py-3 rounded-xl font-semibold transition-all duration-200;
 }
 
 .btn-pagination {
-  @apply relative inline-flex items-center px-4 py-2 border border-gray-200 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed;
+  @apply relative inline-flex items-center px-4 py-2 border border-gray-200 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200;
 }
 
 .btn-pagination:not(:last-child) {
   @apply border-r-0;
 }
 </style>
-

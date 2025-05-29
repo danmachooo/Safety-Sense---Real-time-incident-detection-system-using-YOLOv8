@@ -1,23 +1,29 @@
 <template>
-  <div class="min-h-screen bg-gray-900">
-    <LoginForm v-if="!isAuthenticated" @login-success="handleLoginSuccess" />
+  <div>
+    <LoginForm
+      v-if="!authReady || !authStore.isAuthenticated"
+      @login-success="onLoginSuccess"
+    />
     <router-view v-else />
   </div>
 </template>
 
-<script setup>
-import { storeToRefs } from "pinia"; // ✅ Missing import added
+<script setup lang="ts">
+import { ref, onMounted } from "vue";
 import { useAuthStore } from "./stores/authStore";
 import LoginForm from "./components/LoginForm.vue";
 
 const authStore = useAuthStore();
-const { isAuthenticated } = storeToRefs(authStore);
+const authReady = ref(false);
 
-const handleLoginSuccess = () => {
-  if (isAuthenticated.value) {
-    console.log("User authenticated:", authStore.isAuthenticated);
-  } else {
-    console.error("Login failed: User does not exist.");
-  }
+const onLoginSuccess = () => {
+  authReady.value = true;
 };
+
+onMounted(() => {
+  // Give Pinia time to hydrate token state from localStorage
+  setTimeout(() => {
+    authReady.value = true;
+  }, 200);
+});
 </script>

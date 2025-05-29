@@ -7,9 +7,12 @@ export const useAuthStore = defineStore("auth", () => {
   const user = ref(null);
   const accessToken = ref(null);
   const refreshToken = ref(null);
-  const isAuthenticated = computed(
-    () => !!accessToken.value || !!refreshToken.value
-  );
+  const isRefreshing = ref(false);
+
+  // Fixed: Keep user authenticated while refreshing if they have a refresh token
+  const isAuthenticated = computed(() => {
+    return !!(user.value && (accessToken.value || refreshToken.value));
+  });
 
   let refreshTimeoutId = null;
 
@@ -18,69 +21,144 @@ export const useAuthStore = defineStore("auth", () => {
     const savedRefresh = localStorage.getItem("refreshToken");
     const savedUser = localStorage.getItem("authUser");
 
-    if ((savedToken || savedRefresh) && savedUser) {
+    if (savedUser && (savedToken || savedRefresh)) {
       accessToken.value = savedToken;
       refreshToken.value = savedRefresh;
       user.value = JSON.parse(savedUser);
-      startRefreshTimer();
+
+      // If we have a refresh token but no access token, try to refresh immediately
+      if (!savedToken && savedRefresh) {
+        attemptTokenRefresh();
+      } else if (savedToken) {
+        startRefreshTimer();
+      }
     }
   };
 
-  // Start the refresh timer based on token expiration
-  function startRefreshTimer() {
+  const startRefreshTimer = () => {
     if (!accessToken.value) return;
 
-    // Decode JWT payload to get expiration time (exp)
-    const payload = JSON.parse(atob(accessToken.value.split(".")[1]));
-    const exp = payload.exp * 1000; // convert to ms
-    const now = Date.now();
+    try {
+      const payload = JSON.parse(atob(accessToken.value.split(".")[1]));
+      const exp = payload.exp * 1000;
+      const now = Date.now();
+      // Refresh 30 seconds before expiry, or 5 seconds for short-lived tokens
+      const refreshBuffer = exp - now > 60000 ? 30000 : 5000;
+      let timeout = exp - now - refreshBuffer;
 
-    // Calculate timeout to refresh 30 seconds before expiry
-    const timeout = exp - now - 30000;
+      if (refreshTimeoutId) clearTimeout(refreshTimeoutId);
 
-    // Clear any existing timer
-    if (refreshTimeoutId) clearTimeout(refreshTimeoutId);
-
-    if (timeout > 0) {
-      refreshTimeoutId = setTimeout(async () => {
-        try {
-          const newToken = await refreshTokenApi();
-          updateToken(newToken);
-          startRefreshTimer(); // Schedule next refresh
-        } catch (error) {
-          console.error("Automatic token refresh failed:", error);
-          handleTokenExpired();
-          window.location.href = "/";
-        }
-      }, timeout);
-    } else {
-      // Token already expired, logout immediately or try refresh manually
-      handleTokenExpired();
-      window.location.href = "/";
+      if (timeout > 0) {
+        console.log(`Scheduling token refresh in ${timeout}ms`);
+        refreshTimeoutId = setTimeout(() => {
+          attemptTokenRefresh();
+        }, timeout);
+      } else {
+        // Token already expired or about to expire
+        console.log("Token expired or about to expire, refreshing immediately");
+        attemptTokenRefresh();
+      }
+    } catch (err) {
+      console.error("Failed to decode token:", err);
+      // If we can't decode the token but have a refresh token, try to refresh
+      if (refreshToken.value) {
+        attemptTokenRefresh();
+      } else {
+        handleTokenExpired();
+      }
     }
-  }
+  };
 
-  function stopRefreshTimer() {
-    if (refreshTimeoutId) clearTimeout(refreshTimeoutId);
-  }
+  const attemptTokenRefresh = async () => {
+    if (isRefreshing.value) {
+      console.log("Refresh already in progress, skipping");
+      return;
+    }
+
+    if (!refreshToken.value) {
+      console.log("No refresh token available");
+      handleTokenExpired();
+      return;
+    }
+
+    isRefreshing.value = true;
+    console.log("Attempting to refresh token...");
+
+    try {
+      const newToken = await refreshTokenApi(useAuthStore());
+
+      if (newToken && typeof newToken === "string") {
+        console.log("Token refreshed successfully");
+        updateToken(newToken);
+        startRefreshTimer();
+      } else {
+        console.error("Invalid token received from refresh");
+        handleTokenExpired();
+      }
+    } catch (err) {
+      console.error("Token refresh failed:", err);
+
+      // Check if it's a network error vs auth error
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        // Refresh token is invalid/expired
+        console.log("Refresh token expired, logging out");
+        handleTokenExpired();
+      } else {
+        // Network error or other issue - keep trying
+        console.log("Network error during refresh, will retry");
+        // Retry after a short delay
+        setTimeout(() => {
+          if (refreshToken.value) {
+            attemptTokenRefresh();
+          }
+        }, 5000);
+      }
+    } finally {
+      isRefreshing.value = false;
+    }
+  };
+
+  const stopRefreshTimer = () => {
+    if (refreshTimeoutId) {
+      clearTimeout(refreshTimeoutId);
+      refreshTimeoutId = null;
+    }
+  };
 
   const updateToken = (newAccessToken) => {
+    if (!newAccessToken || typeof newAccessToken !== "string") {
+      console.error("updateToken called with invalid token:", newAccessToken);
+      return;
+    }
+
+    console.log("Updating access token");
     accessToken.value = newAccessToken;
     localStorage.setItem("accessToken", newAccessToken);
   };
 
   const handleTokenExpired = () => {
+    console.log("Handling token expiration - clearing auth state");
+
     user.value = null;
     accessToken.value = null;
     refreshToken.value = null;
-    localStorage.clear();
+
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
+    localStorage.removeItem("authUser");
+
     stopRefreshTimer();
+
+    // Only redirect if we're not already on the login page
+    if (
+      window.location.pathname !== "/" &&
+      window.location.pathname !== "/login"
+    ) {
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 100);
+    }
   };
-
-  // Call loadAuthState once when store initializes
-  loadAuthState();
-
-  // Your login and logout methods (unchanged) but start/stop timer accordingly
 
   const login = async (email, password) => {
     try {
@@ -91,37 +169,47 @@ export const useAuthStore = defineStore("auth", () => {
         user.value = userData;
         updateToken(access);
         refreshToken.value = refresh;
+
         localStorage.setItem("refreshToken", refresh);
-        localStorage.setItem("authUser", JSON.stringify(user.value));
+        localStorage.setItem("authUser", JSON.stringify(userData));
 
         startRefreshTimer();
-
-        console.log("Login Successful!");
+        return true;
       }
-    } catch (error) {
+      return false;
+    } catch (err) {
+      console.error("Login failed:", err.response?.data?.message || err);
       handleTokenExpired();
-      console.error("Login failed:", error.response?.data?.message || error);
+      throw err;
     }
   };
 
   const logout = async () => {
     try {
-      const response = await api.post("/auth/logout");
-      if (response.data.success) {
-        handleTokenExpired();
-        console.log("Logged Out!");
-      }
-    } catch (error) {
-      console.error("Logout failed:", error.response?.data?.message || error);
+      // Try to logout on server, but don't wait too long
+      const logoutPromise = api.post("/auth/logout");
+      await Promise.race([
+        logoutPromise,
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Logout timeout")), 5000)
+        ),
+      ]);
+    } catch (err) {
+      console.error("Logout failed:", err.response?.data?.message || err);
+    } finally {
       handleTokenExpired();
     }
   };
+
+  // Load auth state on store initialization
+  loadAuthState();
 
   return {
     user,
     accessToken,
     refreshToken,
     isAuthenticated,
+    isRefreshing,
     login,
     logout,
     updateToken,

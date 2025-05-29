@@ -5,7 +5,7 @@ require("dotenv").config();
 const authMiddleware = async (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    next(new UnauthorizedError("No token provided."));
+    return next(new UnauthorizedError("No token provided."));
   }
 
   const token = authHeader.split(" ")[1];
@@ -15,7 +15,7 @@ const authMiddleware = async (req, res, next) => {
 
     // Prevent blocked users from proceeding
     if (decoded.isBlocked) {
-      next(new UnauthorizedError("User is blocked and cannot proceed."));
+      return next(new UnauthorizedError("User is blocked and cannot proceed."));
     }
 
     // Store user data for use in protected routes

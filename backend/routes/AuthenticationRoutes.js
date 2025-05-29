@@ -25,5 +25,5 @@ router.get("/verify-email", authMiddleware, verifyEmail); //ok
 router.post("/request-password-reset", authMiddleware, requestPasswordReset); //ok
 router.post("/reset-password", authMiddleware, resetPassword); //ok
 router.patch("/change-password", authMiddleware, changePassword); //ok
-router.post("/auth/refresh", authMiddleware, refreshToken);
+router.post("/refresh", refreshToken);
 module.exports = router;

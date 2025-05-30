@@ -31,11 +31,11 @@ const Camera = sequelize.define(
     },
     longitude: {
       type: DataTypes.STRING,
-      allowNull: false,
+      allowNull: true,
     },
     latitude: {
       type: DataTypes.STRING,
-      allowNull: false,
+      allowNull: true,
     },
     model: {
       type: DataTypes.STRING,

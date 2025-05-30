@@ -3,6 +3,8 @@ const express = require("express");
 const cors = require("cors");
 const path = require("path"); // Added for path handling
 const setupCronJobs = require("./cron");
+const cookieParser = require("cookie-parser");
+
 const app = express();
 
 const apiRouter = require("./routes/api");
@@ -10,7 +12,14 @@ const apiRouter = require("./routes/api");
 require("dotenv").config();
 
 // Middlewares
-app.use(cors());
+app.use(
+  cors({
+    origin: process.env.FRONTEND_DOMAIN || "http://localhost:5173",
+    credentials: true,
+  })
+);
+app.use(cookieParser());
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

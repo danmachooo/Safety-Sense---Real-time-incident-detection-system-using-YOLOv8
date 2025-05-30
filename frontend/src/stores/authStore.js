@@ -44,7 +44,13 @@ export const useAuthStore = defineStore("auth", () => {
       const now = Date.now();
       // Refresh 30 seconds before expiry, or 5 seconds for short-lived tokens
       const refreshBuffer = exp - now > 60000 ? 30000 : 5000;
+
       let timeout = exp - now - refreshBuffer;
+
+      console.log("EXP: ", exp);
+      console.log("NOW: ", now);
+      console.log("REFRESH: ", refreshBuffer);
+      console.log("TIMEOUT: ", timeout);
 
       if (refreshTimeoutId) clearTimeout(refreshTimeoutId);
 

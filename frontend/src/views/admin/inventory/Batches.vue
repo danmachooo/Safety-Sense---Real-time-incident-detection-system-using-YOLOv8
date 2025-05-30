@@ -226,7 +226,12 @@ const expiredBatches = computed(() => {
 });
 
 const totalValue = computed(() => {
-  return batches.value.reduce((sum, batch) => sum + (batch.cost || 0), 0);
+  const val = batches.value.reduce((sum, batch) => {
+    const cost = parseFloat(batch.cost) || 0; // 👈 convert to number safely
+    return sum + cost;
+  }, 0);
+  console.log("VAL: ", val);
+  return val;
 });
 
 // Visible pages for pagination

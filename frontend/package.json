@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@heroicons/vue": "^1.0.6",
+    "@tanstack/vue-query": "^5.79.0",
     "axios": "^1.7.9",
     "frontend": "file:",
     "lucide-vue-next": "^0.475.0",

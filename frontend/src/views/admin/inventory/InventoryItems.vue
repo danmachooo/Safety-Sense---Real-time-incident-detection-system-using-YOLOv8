@@ -1,10 +1,9 @@
 <script setup>
-import { ref, onMounted, computed } from "vue";
+import { ref, computed, watch } from "vue";
 import {
   PlusCircle,
   Pencil,
   Trash2,
-  Eye,
   Search,
   Filter,
   ChevronLeft,
@@ -17,28 +16,59 @@ import {
   X,
   Truck,
   Package,
-  TrendingUp,
   AlertTriangle,
   ChartBarStackedIcon,
 } from "lucide-vue-next";
-import api from "../../../utils/axios";
 
-// Reactive state
-const items = ref([]);
-const categories = ref([]);
-const loading = ref(true);
-const error = ref(null);
-const showModal = ref(false);
-const showDeployModal = ref(false);
-const notification = ref({ show: false, type: "", message: "" });
+// Composables
+import { useItems } from "../../../utils/composables/inventory/useItems";
+import { useDeployment } from "../../../utils/composables/inventory/useDeployments";
+import { useCategories } from "../../../utils/composables/inventory/useCategories";
+import { usePagination } from "../../../utils/composables/inventory/usePagination";
+import { useNotifications } from "../../../utils/composables/inventory/useNotifications";
+// Reactive state for filters and pagination
 const searchQuery = ref("");
 const categoryFilter = ref("all");
-const currentPage = ref(1);
+const currentPageRef = ref(1);
 const itemsPerPage = ref(10);
-const totalItems = ref(0);
-const totalPages = ref(0);
 const sortField = ref("name");
 const sortOrder = ref("asc");
+
+// Use composables
+const { categories } = useCategories();
+
+// Create reactive params object for the items query
+const itemsParams = computed(() => ({
+  page: currentPageRef.value,
+  limit: itemsPerPage.value,
+  search: searchQuery.value,
+  category: categoryFilter.value,
+  sortBy: sortField.value,
+  sortOrder: sortOrder.value,
+}));
+
+const {
+  items,
+  totalItems,
+  totalPages,
+  currentPage,
+  loading,
+  error,
+  createItem,
+  updateItem,
+  deleteItem,
+  isCreating,
+  isUpdating,
+  isDeleting,
+} = useItems(itemsParams);
+
+const { deployItem, isDeploying } = useDeployment();
+const { notification, showNotification, hideNotification } = useNotifications();
+const { visiblePages } = usePagination(totalPages, currentPage);
+
+// Modal state
+const showModal = ref(false);
+const showDeployModal = ref(false);
 
 // Form state
 const newItem = ref({
@@ -55,7 +85,6 @@ const newItem = ref({
   notes: "",
 });
 
-// Updated deployment state
 const deploymentDetails = ref({
   inventory_item_id: null,
   deployment_type: "EMERGENCY",
@@ -77,46 +106,17 @@ const columns = [
   { key: "actions", label: "Actions", sortable: false, width: "18%" },
 ];
 
-// Fetch initial data
-onMounted(async () => {
-  await Promise.all([fetchItems(), fetchCategories()]);
+// Watch for filter changes and reset to first page
+watch([searchQuery, categoryFilter, itemsPerPage], () => {
+  currentPageRef.value = 1;
 });
 
-// Data fetching
-const fetchCategories = async () => {
-  try {
-    const response = await api.get("inventory/categories");
-    categories.value = response.data.data;
-  } catch (err) {
-    showNotification("Failed to fetch categories", "error");
-  }
-};
-
-const fetchItems = async () => {
-  try {
-    loading.value = true;
-    const response = await api.get("inventory/items", {
-      params: {
-        page: currentPage.value,
-        limit: itemsPerPage.value,
-        search: searchQuery.value,
-        category:
-          categoryFilter.value !== "all" ? categoryFilter.value : undefined,
-        sortBy: sortField.value,
-        sortOrder: sortOrder.value,
-      },
-    });
-
-    items.value = response.data.data;
-    totalItems.value = response.data.meta.total;
-    totalPages.value = response.data.meta.pages;
-    currentPage.value = response.data.meta.currentPage;
-  } catch (err) {
-    showNotification("Failed to fetch items", "error");
-  } finally {
-    loading.value = false;
-  }
-};
+// Computed values
+const lowStockItems = computed(
+  () =>
+    items.value.filter((item) => item.quantity_in_stock <= item.min_stock_level)
+      .length
+);
 
 // Sorting
 const handleSort = (column) => {
@@ -128,7 +128,6 @@ const handleSort = (column) => {
         : "asc"
       : "asc";
   sortField.value = column.key;
-  fetchItems();
 };
 
 const getSortIcon = (column) => {
@@ -159,18 +158,14 @@ const openEditModal = (item = null) => {
 
 const saveItem = async () => {
   try {
-    const method = newItem.value.id ? "put" : "post";
-    const url = newItem.value.id
-      ? `inventory/items/${newItem.value.id}`
-      : "inventory/items";
-
-    await api[method](url, newItem.value);
-    showNotification(
-      `Item ${newItem.value.id ? "updated" : "added"} successfully`,
-      "success"
-    );
+    if (newItem.value.id) {
+      await updateItem(newItem.value);
+      showNotification("Item updated successfully", "success");
+    } else {
+      await createItem(newItem.value);
+      showNotification("Item added successfully", "success");
+    }
     showModal.value = false;
-    await fetchItems();
   } catch (err) {
     showNotification(
       err.response?.data?.message || "Operation failed",
@@ -179,12 +174,11 @@ const saveItem = async () => {
   }
 };
 
-const deleteItem = async (id) => {
+const handleDeleteItem = async (id) => {
   if (!confirm("Are you sure you want to delete this item?")) return;
   try {
-    await api.delete(`inventory/items/${id}`);
+    await deleteItem(id);
     showNotification("Item deleted successfully", "success");
-    await fetchItems();
   } catch (err) {
     showNotification("Deletion failed", "error");
   }
@@ -205,12 +199,11 @@ const openDeployModal = (item) => {
   showDeployModal.value = true;
 };
 
-const deployItem = async () => {
+const handleDeployItem = async () => {
   try {
-    await api.post("inventory/deployment", deploymentDetails.value);
+    await deployItem(deploymentDetails.value);
     showNotification("Item deployed successfully", "success");
     showDeployModal.value = false;
-    await fetchItems();
   } catch (err) {
     showNotification(
       err.response?.data?.message || "Deployment failed",
@@ -220,30 +213,10 @@ const deployItem = async () => {
 };
 
 // Pagination
-const visiblePages = computed(() => {
-  const range = 2;
-  let start = Math.max(1, currentPage.value - range);
-  let end = Math.min(totalPages.value, currentPage.value + range);
-
-  if (end - start < range * 2) {
-    start = Math.max(1, end - range * 2);
-    end = Math.min(totalPages.value, start + range * 2);
-  }
-
-  return Array.from({ length: end - start + 1 }, (_, i) => start + i);
-});
-
 const goToPage = (page) => {
   if (page >= 1 && page <= totalPages.value) {
-    currentPage.value = page;
-    fetchItems();
+    currentPageRef.value = page;
   }
-};
-
-// Notifications
-const showNotification = (message, type) => {
-  notification.value = { show: true, type, message };
-  setTimeout(() => (notification.value.show = false), 3000);
 };
 </script>
 
@@ -270,7 +243,7 @@ const showNotification = (message, type) => {
         />
         <span class="text-sm font-medium">{{ notification.message }}</span>
         <button
-          @click="notification.show = false"
+          @click="hideNotification"
           class="ml-4 hover:opacity-70 transition-opacity"
         >
           <X class="w-4 h-4" />
@@ -298,16 +271,20 @@ const showNotification = (message, type) => {
                 Inventory Management
               </h1>
               <p class="text-gray-600 mt-1 text-lg">
-                Manage your inventory items and stock levels
+                Manage your inventory items and stock levels with smart caching
               </p>
             </div>
           </div>
         </div>
-        <button @click="openEditModal()" class="btn-primary group">
+        <button
+          @click="openEditModal()"
+          class="btn-primary group"
+          :disabled="isCreating"
+        >
           <PlusCircle
             class="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform duration-200"
           />
-          Add New Item
+          {{ isCreating ? "Adding..." : "Add New Item" }}
         </button>
       </div>
 
@@ -333,7 +310,7 @@ const showNotification = (message, type) => {
             <div>
               <p class="text-sm font-medium text-gray-600">Categories</p>
               <p class="text-3xl font-bold text-gray-900">
-                {{ categories.length }}
+                {{ categories?.length || 0 }}
               </p>
             </div>
             <div class="p-3 bg-emerald-100 rounded-xl">
@@ -348,11 +325,7 @@ const showNotification = (message, type) => {
             <div>
               <p class="text-sm font-medium text-gray-600">Low Stock</p>
               <p class="text-3xl font-bold text-gray-900">
-                {{
-                  items.filter(
-                    (item) => item.quantity_in_stock <= item.min_stock_level
-                  ).length
-                }}
+                {{ lowStockItems }}
               </p>
             </div>
             <div class="p-3 bg-amber-100 rounded-xl">
@@ -373,7 +346,6 @@ const showNotification = (message, type) => {
             />
             <input
               v-model="searchQuery"
-              @input="fetchItems"
               type="text"
               placeholder="Search items..."
               class="pl-12 w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white/50 backdrop-blur-sm transition-all duration-200"
@@ -385,7 +357,6 @@ const showNotification = (message, type) => {
             />
             <select
               v-model="categoryFilter"
-              @change="fetchItems"
               class="pl-12 w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white/50 backdrop-blur-sm transition-all duration-200"
             >
               <option value="all">All Categories</option>
@@ -404,12 +375,11 @@ const showNotification = (message, type) => {
             >
             <select
               v-model="itemsPerPage"
-              @change="fetchItems"
               class="px-3 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white/50 backdrop-blur-sm transition-all duration-200"
             >
-              <option>10</option>
-              <option>25</option>
-              <option>50</option>
+              <option :value="10">10</option>
+              <option :value="25">25</option>
+              <option :value="50">50</option>
             </select>
           </div>
         </div>
@@ -436,7 +406,7 @@ const showNotification = (message, type) => {
           <AlertCircle class="w-6 h-6 mr-3" />
           <div>
             <p class="font-semibold">Error loading data:</p>
-            <p>{{ error }}</p>
+            <p>{{ error.message }}</p>
           </div>
         </div>
       </div>
@@ -562,19 +532,22 @@ const showNotification = (message, type) => {
                     <button
                       @click="openDeployModal(item)"
                       v-if="item.is_deployable"
-                      class="p-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-all duration-200"
+                      :disabled="isDeploying"
+                      class="p-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-all duration-200 disabled:opacity-50"
                     >
                       <Truck class="w-5 h-5" />
                     </button>
                     <button
                       @click="openEditModal(item)"
-                      class="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all duration-200"
+                      :disabled="isUpdating"
+                      class="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all duration-200 disabled:opacity-50"
                     >
                       <Pencil class="w-5 h-5" />
                     </button>
                     <button
-                      @click="deleteItem(item.id)"
-                      class="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all duration-200"
+                      @click="handleDeleteItem(item.id)"
+                      :disabled="isDeleting"
+                      class="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all duration-200 disabled:opacity-50"
                     >
                       <Trash2 class="w-5 h-5" />
                     </button>
@@ -812,8 +785,19 @@ const showNotification = (message, type) => {
             >
               Cancel
             </button>
-            <button type="submit" class="btn-primary">
-              {{ newItem.id ? "Update" : "Create" }} Item
+            <button
+              type="submit"
+              class="btn-primary"
+              :disabled="isCreating || isUpdating"
+            >
+              {{
+                isCreating || isUpdating
+                  ? "Saving..."
+                  : newItem.id
+                  ? "Update"
+                  : "Create"
+              }}
+              Item
             </button>
           </div>
         </form>
@@ -844,7 +828,7 @@ const showNotification = (message, type) => {
             <X class="w-6 h-6" />
           </button>
         </div>
-        <form @submit.prevent="deployItem" class="p-8 space-y-6">
+        <form @submit.prevent="handleDeployItem" class="p-8 space-y-6">
           <div>
             <label class="block text-sm font-semibold text-gray-700 mb-3"
               >Deployment Type</label
@@ -930,7 +914,9 @@ const showNotification = (message, type) => {
             >
               Cancel
             </button>
-            <button type="submit" class="btn-deploy">Deploy Item</button>
+            <button type="submit" class="btn-deploy" :disabled="isDeploying">
+              {{ isDeploying ? "Deploying..." : "Deploy Item" }}
+            </button>
           </div>
         </form>
       </div>
@@ -955,7 +941,7 @@ const showNotification = (message, type) => {
 }
 
 .btn-primary {
-  @apply bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-3 rounded-xl flex items-center justify-center font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-0.5;
+  @apply bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-3 rounded-xl flex items-center justify-center font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none;
 }
 
 .btn-secondary {
@@ -963,7 +949,7 @@ const showNotification = (message, type) => {
 }
 
 .btn-deploy {
-  @apply bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-6 py-3 rounded-xl flex items-center justify-center font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-0.5;
+  @apply bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-6 py-3 rounded-xl flex items-center justify-center font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none;
 }
 
 .btn-pagination {

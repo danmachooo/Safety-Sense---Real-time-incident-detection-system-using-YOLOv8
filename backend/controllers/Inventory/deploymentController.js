@@ -1,10 +1,15 @@
-const { Op } = require('sequelize');
+const { Op } = require("sequelize");
 
-const Deployment = require('../../models/Inventory/Deployment');
-const {InventoryItem, User} = require('../../models/Inventory');
-const Notification = require('../../models/Inventory/InventoryNotification');
-const { BadRequestError, NotFoundError, ForbiddenError, UnauthorizedError  } = require('../../utils/Error');
-const { StatusCodes } = require('http-status-codes');
+const Deployment = require("../../models/Inventory/Deployment");
+const { InventoryItem, User } = require("../../models/Inventory");
+const Notification = require("../../models/Inventory/InventoryNotification");
+const {
+  BadRequestError,
+  NotFoundError,
+  ForbiddenError,
+  UnauthorizedError,
+} = require("../../utils/Error");
+const { StatusCodes } = require("http-status-codes");
 
 const createDeployment = async (req, res, next) => {
   try {
@@ -16,23 +21,30 @@ const createDeployment = async (req, res, next) => {
       deployment_date,
       expected_return_date,
       incident_type,
-      notes
+      notes,
     } = req.body;
 
     // Assuming user ID is available in req.user.id from auth middleware
     const deployed_by = req.user.id;
 
-    if (!inventory_item_id || !deployment_type || !quantity_deployed || !deployment_location) {
-      throw new BadRequestError('Required fields are missing');
+    if (
+      !inventory_item_id ||
+      !deployment_type ||
+      !quantity_deployed ||
+      !deployment_location
+    ) {
+      throw new BadRequestError("Required fields are missing");
     }
 
     // Check if item exists and has sufficient quantity
     const item = await InventoryItem.findByPk(inventory_item_id);
-    if (!item) throw new NotFoundError('Item not found')
+    if (!item) throw new NotFoundError("Item not found");
 
-    if (!item.is_deployable) throw new BadRequestError('Item is not deployable');
+    if (!item.is_deployable)
+      throw new BadRequestError("Item is not deployable");
 
-    if (item.quantity_in_stock < quantity_deployed) throw new BadRequestError('Insufficient Stock');
+    if (item.quantity_in_stock < quantity_deployed)
+      throw new BadRequestError("Insufficient Stock");
 
     const deployment = await Deployment.create({
       inventory_item_id,
@@ -42,57 +54,70 @@ const createDeployment = async (req, res, next) => {
       deployment_location,
       deployment_date: deployment_date || new Date(),
       expected_return_date,
-      status: 'DEPLOYED',
+      status: "DEPLOYED",
       incident_type,
-      notes
+      notes,
     });
 
     // Update inventory quantity
     await item.update({
-      quantity_in_stock: item.quantity_in_stock - quantity_deployed
+      quantity_in_stock: item.quantity_in_stock - quantity_deployed,
     });
 
     // Create notification for deployment
     await Notification.create({
-      notification_type: 'EQUIPMENT_ISSUE',
+      notification_type: "EQUIPMENT_ISSUE",
       inventory_item_id,
       user_id: deployed_by,
-      title: 'Equipment Deployed',
+      title: "Equipment Deployed",
       message: `${item.name} (${quantity_deployed} ${item.unit_of_measure}) deployed to ${deployment_location}`,
-      priority: 'MEDIUM'
+      priority: "MEDIUM",
     });
 
     return res.status(StatusCodes.CREATED).json({
       success: true,
       message: "Deployment Created",
-      data: deployment
+      data: deployment,
     });
   } catch (error) {
-    console.error('Create deployment error: ', error.message);
+    console.error("Create deployment error: ", error.message);
     next(error);
   }
 };
 
 const getAllDeployments = async (req, res, next) => {
   try {
-    const { 
-      status, 
-      type, 
-      start_date, 
-      end_date, 
-      page = 1, 
-      limit = 10 
+    const {
+      status,
+      type,
+      start_date,
+      end_date,
+      search,
+      page = 1,
+      limit = 10,
     } = req.query;
-    
+
     const offset = (page - 1) * limit;
     const whereClause = {};
 
     if (status) whereClause.status = status;
     if (type) whereClause.deployment_type = type;
+
     if (start_date && end_date) {
       whereClause.deployment_date = {
-        [Op.between]: [new Date(start_date), new Date(end_date)]
+        [Op.between]: [new Date(start_date), new Date(end_date)],
       };
+    }
+
+    if (search) {
+      whereClause[Op.or] = [
+        { id: { [Op.like]: `%${search}%` } },
+        { status: { [Op.like]: `%${search}%` } },
+        { "$inventoryDeploymentItem.name$": { [Op.like]: `%${search}%` } },
+        { "$deployer.firstname$": { [Op.like]: `%${search}%` } },
+        { "$deployer.lastname$": { [Op.like]: `%${search}%` } },
+        ,
+      ];
     }
 
     const { count, rows: deployments } = await Deployment.findAndCountAll({
@@ -100,32 +125,32 @@ const getAllDeployments = async (req, res, next) => {
       include: [
         {
           model: InventoryItem,
-          as: 'inventoryDeploymentItem',
-          attributes: ['id', 'name', 'unit_of_measure']
+          as: "inventoryDeploymentItem",
+          attributes: ["id", "name", "unit_of_measure"],
         },
         {
           model: User,
-          as: 'deployer',
-          attributes: ['id', 'firstname', 'lastname']
-        }
+          as: "deployer",
+          attributes: ["id", "firstname", "lastname"],
+        },
       ],
       limit: parseInt(limit),
       offset: parseInt(offset),
-      order: [['deployment_date', 'DESC']]
+      order: [["deployment_date", "DESC"]],
     });
 
     return res.status(StatusCodes.OK).json({
       success: true,
-      message: 'Fetching deployments',
+      message: "Fetching deployments",
       data: deployments,
       meta: {
         total: count,
         pages: Math.ceil(count / limit),
-        currentPage: parseInt(page)
-      }
+        currentPage: parseInt(page),
+      },
     });
   } catch (error) {
-    console.error('Fetch deployments error: ', error.message);
+    console.error("Fetch deployments error: ", error.message);
     next(error);
   }
 };
@@ -136,26 +161,26 @@ const getDeploymentById = async (req, res, next) => {
       include: [
         {
           model: InventoryItem,
-          as: 'inventoryDeploymentItem',
-          attributes: ['id', 'name', 'unit_of_measure']
+          as: "inventoryDeploymentItem",
+          attributes: ["id", "name", "unit_of_measure"],
         },
         {
           model: User,
-          as: 'deployer',
-          attributes: ['id', 'firstname', 'lastname']
-        }
-      ]
+          as: "deployer",
+          attributes: ["id", "firstname", "lastname"],
+        },
+      ],
     });
 
-    if (!deployment) throw new NotFoundError('Deployment not found');
+    if (!deployment) throw new NotFoundError("Deployment not found");
 
     return res.status(StatusCodes.OK).json({
       success: true,
-      message: 'Fetching a deployment',
-      data: deployment
+      message: "Fetching a deployment",
+      data: deployment,
     });
   } catch (error) {
-    console.error('Fetch deployment error: ', error.message);
+    console.error("Fetch deployment error: ", error.message);
     next(error);
   }
 };
@@ -164,45 +189,46 @@ const updateDeploymentStatus = async (req, res, next) => {
   try {
     const { status, actual_return_date, notes } = req.body;
     const deployment = await Deployment.findByPk(req.params.id, {
-      include: [{ model: InventoryItem, as: 'inventoryDeploymentItem' }]
+      include: [{ model: InventoryItem, as: "inventoryDeploymentItem" }],
     });
 
-    if (!deployment) throw new NotFoundError('Deployment not found');
+    if (!deployment) throw new NotFoundError("Deployment not found");
 
-
-    if (deployment.status === 'RETURNED') throw new BadRequestError('Deployment already marked as RETURNED');
+    if (deployment.status === "RETURNED")
+      throw new BadRequestError("Deployment already marked as RETURNED");
 
     const oldStatus = deployment.status;
     await deployment.update({
       status,
-      actual_return_date: status === 'RETURNED' ? (actual_return_date || new Date()) : null,
-      notes: notes ? `${deployment.notes}\n${notes}` : deployment.notes
+      actual_return_date:
+        status === "RETURNED" ? actual_return_date || new Date() : null,
+      notes: notes ? `${deployment.notes}\n${notes}` : deployment.notes,
     });
 
     // If item is returned, update inventory quantity
-    if (status === 'RETURNED' && oldStatus === 'DEPLOYED') {
-      await deployment.inventoryDeploymentItem.increment('quantity_in_stock', {
-        by: deployment.quantity_deployed
+    if (status === "RETURNED" && oldStatus === "DEPLOYED") {
+      await deployment.inventoryDeploymentItem.increment("quantity_in_stock", {
+        by: deployment.quantity_deployed,
       });
 
       // Create notification for return
       await Notification.create({
-        notification_type: 'EQUIPMENT_ISSUE',
+        notification_type: "EQUIPMENT_ISSUE",
         inventory_item_id: deployment.inventory_item_id,
         user_id: req.user.id,
-        title: 'Equipment Returned',
+        title: "Equipment Returned",
         message: `${deployment.inventoryDeploymentItem.name} returned from ${deployment.deployment_location}`,
-        priority: 'LOW'
+        priority: "LOW",
       });
     }
 
     return res.status(StatusCodes.OK).json({
       success: true,
       data: deployment,
-      message: 'Deployment status updated successfully'
+      message: "Deployment status updated successfully",
     });
   } catch (error) {
-    console.error('Deployment status updated error: ', error.message);
+    console.error("Deployment status updated error: ", error.message);
     next(error);
   }
 };
@@ -212,42 +238,43 @@ const getOverdueDeployments = async (req, res, next) => {
     const { page = 1, limit = 10 } = req.query;
     const offset = (page - 1) * limit;
 
-    const { count, rows: overdueDeployments } = await Deployment.findAndCountAll({
-      where: {
-        status: 'DEPLOYED',
-        expected_return_date: {
-          [Op.lt]: new Date()
-        }
-      },
-      include: [
-        {
-          model: InventoryItem,
-          as: 'inventoryDeploymentItem',
-          attributes: ['id', 'name', 'unit_of_measure']
+    const { count, rows: overdueDeployments } =
+      await Deployment.findAndCountAll({
+        where: {
+          status: "DEPLOYED",
+          expected_return_date: {
+            [Op.lt]: new Date(),
+          },
         },
-        {
-          model: User,
-          as: 'deployer',
-          attributes: ['id', 'firstname', 'lastname']
-        }
-      ],
-      limit: parseInt(limit),
-      offset: parseInt(offset),
-      order: [['expected_return_date', 'ASC']]
-    });
+        include: [
+          {
+            model: InventoryItem,
+            as: "inventoryDeploymentItem",
+            attributes: ["id", "name", "unit_of_measure"],
+          },
+          {
+            model: User,
+            as: "deployer",
+            attributes: ["id", "firstname", "lastname"],
+          },
+        ],
+        limit: parseInt(limit),
+        offset: parseInt(offset),
+        order: [["expected_return_date", "ASC"]],
+      });
 
     return res.status(StatusCodes.OK).json({
       success: true,
       data: overdueDeployments,
-      message: 'Fetching overdue deployments',
+      message: "Fetching overdue deployments",
       meta: {
         total: count,
         pages: Math.ceil(count / limit),
-        currentPage: parseInt(page)
-      }
+        currentPage: parseInt(page),
+      },
     });
   } catch (error) {
-    console.error('Fetch overdue deployment error: ', error.message);
+    console.error("Fetch overdue deployment error: ", error.message);
     next(error);
   }
 };
@@ -257,5 +284,5 @@ module.exports = {
   getAllDeployments,
   getDeploymentById,
   updateDeploymentStatus,
-  getOverdueDeployments
+  getOverdueDeployments,
 };

@@ -1,5 +1,9 @@
 const { Op } = require("sequelize");
-
+const {
+  getCached,
+  setCache,
+  invalidateCache,
+} = require("../../services/redis/cache");
 const User = require("../../models/Users/User");
 const InventoryItem = require("../../models/Inventory/InventoryItem");
 const Category = require("../../models/Inventory/Category");
@@ -52,6 +56,11 @@ const createItem = async (req, res, next) => {
         priority: "HIGH",
       });
     }
+    const result = await invalidateCache("items");
+
+    if (!result) {
+      console.log("Failed to invalidate cache");
+    }
 
     return res.status(StatusCodes.CREATED).json({
       success: true,
@@ -65,27 +74,34 @@ const createItem = async (req, res, next) => {
 };
 
 const getAllItems = async (req, res, next) => {
+  const {
+    category_id,
+    search,
+    condition,
+    is_deployable,
+    page = 1,
+    limit = 10,
+  } = req.query;
+
+  const offset = (page - 1) * limit;
+  const whereClause = {};
+
+  if (category_id) whereClause.category_id = category_id;
+  if (condition) whereClause.condition = condition;
+  if (is_deployable !== undefined) whereClause.is_deployable = is_deployable;
+  if (search) {
+    whereClause[Op.or] = [
+      { name: { [Op.like]: `%${search}%` } },
+      { description: { [Op.like]: `%${search}%` } },
+    ];
+  }
+  const cacheKey = `items:all:${JSON.stringify(req.query)}`;
+
   try {
-    const {
-      category_id,
-      search,
-      condition,
-      is_deployable,
-      page = 1,
-      limit = 10,
-    } = req.query;
-
-    const offset = (page - 1) * limit;
-    const whereClause = {};
-
-    if (category_id) whereClause.category_id = category_id;
-    if (condition) whereClause.condition = condition;
-    if (is_deployable !== undefined) whereClause.is_deployable = is_deployable;
-    if (search) {
-      whereClause[Op.or] = [
-        { name: { [Op.like]: `%${search}%` } },
-        { description: { [Op.like]: `%${search}%` } },
-      ];
+    const cached = await getCached(cacheKey);
+    if (cached) {
+      console.log("Serving items from redis...");
+      return res.status(StatusCodes.OK).json(cached);
     }
 
     const { count, rows: items } = await InventoryItem.findAndCountAll({
@@ -102,18 +118,20 @@ const getAllItems = async (req, res, next) => {
       order: [["name", "ASC"]],
     });
 
-    return res.status(StatusCodes.OK).json({
+    const response = {
       success: true,
-      message: "Items has been fetched",
+      message: "Items has been returned successfully",
       data: items,
       meta: {
         total: count,
         pages: Math.ceil(count / limit),
         currentPage: parseInt(page),
       },
-    });
+    };
+    await setCache(cacheKey, response, 60);
+    return res.status(StatusCodes.OK).json(response);
   } catch (error) {
-    console.error("Fetching items error: ", error.message);
+    console.error("Fetching items error: ", error);
     next(error);
   }
 };
@@ -197,7 +215,11 @@ const updateItem = async (req, res, next) => {
         });
       }
     }
+    const result = await invalidateCache("items");
 
+    if (!result) {
+      console.log("Failed to invalidate cache");
+    }
     return res.status(StatusCodes.OK).json({
       success: true,
       data: item,
@@ -221,6 +243,10 @@ const deleteItem = async (req, res, next) => {
 
     await item.destroy();
     console.log("Item has been deleted");
+    const result = await invalidateCache("items");
+    if (!result) {
+      console.log("Failed to invalidate cache");
+    }
     return res.status(StatusCodes.OK).json({
       success: true,
       message: "Inventory item deleted successfully",
@@ -239,7 +265,11 @@ const restoreItem = async (req, res, next) => {
     if (!item) throw new NotFoundError("Item not found.");
 
     await item.restore();
+    const result = await invalidateCache("items");
 
+    if (!result) {
+      console.log("Failed to invalidate cache");
+    }
     return res.status(StatusCodes.OK).json({
       success: true,
       message: "Inventory item restored successfully",

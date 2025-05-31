@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const authMiddleware = require("../middlewares/authMiddleware");
 const adminMiddleware = require("../middlewares/adminMiddleware");
+const loginRateLimiter = require("../middlewares/loginRateLimiter");
 
 const {
   loginUser,
@@ -17,7 +18,7 @@ const {
 } = require("../controllers/Users/authentication");
 const { getLoginHistory } = require("../controllers/Users/LoginHistory");
 
-router.post("/login", loginUser); //ok
+router.post("/login", loginRateLimiter, loginUser); //ok
 router.patch("/update-fcm-token", authMiddleware, updateFcmToken);
 router.post("/logout", authMiddleware, logoutUser); //ok
 router.get("/login-history", authMiddleware, getLoginHistory); //ok

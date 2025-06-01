@@ -1,39 +1,63 @@
-const InventoryItem = require('../models/InventoryItem');
-const Category = require('../models/Category');
-const Batch = require('../models/Batch');
-const Transaction = require('../models/Transaction');
-const Notification = require('../models/Notification');
-const { Op, Sequelize } = require('sequelize');
-const logTransaction = require('../utils/transactionLogger');
-const xlsx = require('xlsx');
-
+const InventoryItem = require("../models/InventoryItem");
+const Category = require("../models/Category");
+const Batch = require("../models/Batch");
+const Transaction = require("../models/Transaction");
+const Notification = require("../models/Notification");
+const { Op, Sequelize } = require("sequelize");
+const logTransaction = require("../utils/transactionLogger");
+const xlsx = require("xlsx");
 
 const inventoryService = {
   // Add a new inventory item
   async addInventoryItem(itemData) {
     const newItem = await InventoryItem.create(itemData);
-    await logTransaction(newItem.id, null, 'ADD', newItem.quantity_in_stock, 'New item added');
-    return newItem;  },
+    await logTransaction(
+      newItem.id,
+      null,
+      "ADD",
+      newItem.quantity_in_stock,
+      "New item added"
+    );
+    return newItem;
+  },
 
   // Get all inventory items
   async getAllInventoryItems() {
     try {
       return await InventoryItem.findAll({
-        attributes: ['id', 'name', 'category_id', 'description', 'quantity_in_stock', 'min_stock_level', 'unit_price', 'reorder_level'],
-        include: [{
-          model: Batch,
-          as: 'batches', // Make sure this alias matches the one in your InventoryItem model
-          attributes: ['id', 'batch_number', 'quantity', 'expiry_date', 'supplier', 'received_date'],
-          where: { is_active: true },  // Ordering by 'created_at' in descending order
+        attributes: [
+          "id",
+          "name",
+          "category_id",
+          "description",
+          "quantity_in_stock",
+          "min_stock_level",
+          "unit_price",
+          "reorder_level",
+        ],
+        include: [
+          {
+            model: Batch,
+            as: "batches", // Make sure this alias matches the one in your InventoryItem model
+            attributes: [
+              "id",
+              "batch_number",
+              "quantity",
+              "expiry_date",
+              "supplier",
+              "received_date",
+            ],
+            where: { is_active: true }, // Ordering by 'created_at' in descending order
 
-          required: false
-        }],
-        where: { is_active: true }, order: [['id', 'DESC']],
-
+            required: false,
+          },
+        ],
+        where: { is_active: true },
+        order: [["id", "DESC"]],
       });
     } catch (error) {
-      console.error('Error in getAllInventoryItems:', error);
-      throw error;  
+      console.error("Error in getAllInventoryItems:", error);
+      throw error;
     }
   },
 
@@ -41,23 +65,25 @@ const inventoryService = {
     try {
       const distinctItems = await InventoryItem.findAll({
         attributes: [
-          [Sequelize.fn('DISTINCT', Sequelize.col('name')), 'name'], // Use DISTINCT for unique item names
-          'id', 
-          'category_id'
+          [Sequelize.fn("DISTINCT", Sequelize.col("name")), "name"], // Use DISTINCT for unique item names
+          "id",
+          "category_id",
         ],
         where: { is_active: true },
-        include: [{
-          model: Batch,
-          as: 'batches',
-          attributes: ['id', 'batch_number'],
-          where: { is_active: true },
-          required: false
-        }]
+        include: [
+          {
+            model: Batch,
+            as: "batches",
+            attributes: ["id", "batch_number"],
+            where: { is_active: true },
+            required: false,
+          },
+        ],
       });
-  
+
       return distinctItems;
     } catch (error) {
-      console.error('Error in getAllDistinctItems:', error);
+      console.error("Error in getAllDistinctItems:", error);
       throw error;
     }
   },
@@ -65,7 +91,7 @@ const inventoryService = {
   // Get inventory item by ID
   async getInventoryItemById(id) {
     return await InventoryItem.findByPk(id, {
-        include: [{ model: Batch, where: { is_active: true }, required: false }],
+      include: [{ model: Batch, where: { is_active: true }, required: false }],
     });
   },
 
@@ -76,7 +102,7 @@ const inventoryService = {
       const oldQuantity = item.quantity_in_stock;
       await item.update(updateData);
       const quantityChange = item.quantity_in_stock - oldQuantity;
-      await logTransaction(id, null, 'UPDATE', quantityChange, 'Item updated');
+      await logTransaction(id, null, "UPDATE", quantityChange, "Item updated");
       return item;
     }
     return null;
@@ -87,7 +113,13 @@ const inventoryService = {
     const item = await InventoryItem.findByPk(id);
     if (item) {
       await item.update({ is_active: false });
-      await logTransaction(id, null, 'DELETE', -item.quantity_in_stock, 'Item soft deleted');
+      await logTransaction(
+        id,
+        null,
+        "DELETE",
+        -item.quantity_in_stock,
+        "Item soft deleted"
+      );
       return item;
     }
     return null;
@@ -98,18 +130,24 @@ const inventoryService = {
     // Generate the batch number
     const item = await InventoryItem.findByPk(batchData.inventory_item_id);
     const batchNumber = this.generateBatchNumber(item.name);
-    
+
     const batch = await Batch.create({
       ...batchData,
-      batch_number: batchNumber
+      batch_number: batchNumber,
     });
-    await logTransaction(batch.inventory_item_id, batch.id, 'ADD', batch.quantity, 'New batch added');
+    await logTransaction(
+      batch.inventory_item_id,
+      batch.id,
+      "ADD",
+      batch.quantity,
+      "New batch added"
+    );
     await this.updateInventoryQuantity(batch.inventory_item_id);
     return batch;
   },
   generateBatchNumber(itemName) {
     const first4Letters = itemName.substring(0, 4).toUpperCase();
-    const dateTime = new Date().toISOString().replace(/[-:]/g, '').slice(0, 12);
+    const dateTime = new Date().toISOString().replace(/[-:]/g, "").slice(0, 12);
     return `BATCH-${first4Letters}-${dateTime}`;
   },
   // Edit a batch
@@ -119,7 +157,13 @@ const inventoryService = {
       const oldQuantity = batch.quantity;
       await batch.update(updateData);
       const quantityChange = batch.quantity - oldQuantity;
-      await logTransaction(batch.inventory_item_id, id, 'UPDATE', quantityChange, 'Batch updated');
+      await logTransaction(
+        batch.inventory_item_id,
+        id,
+        "UPDATE",
+        quantityChange,
+        "Batch updated"
+      );
       await this.updateInventoryQuantity(batch.inventory_item_id);
       return batch;
     }
@@ -129,9 +173,11 @@ const inventoryService = {
     const batch = await Batch.findByPk(id);
     if (batch) {
       await batch.update({ is_active: false });
-      
+
       // Update the inventory item quantity
-      const inventoryItem = await InventoryItem.findByPk(batch.inventory_item_id);
+      const inventoryItem = await InventoryItem.findByPk(
+        batch.inventory_item_id
+      );
       if (inventoryItem) {
         const newQuantity = inventoryItem.quantity_in_stock - batch.quantity;
         await inventoryItem.update({ quantity_in_stock: newQuantity });
@@ -141,9 +187,9 @@ const inventoryService = {
       await Transaction.create({
         inventory_item_id: batch.inventory_item_id,
         batch_id: batch.id,
-        transaction_type: 'DISPOSE',
+        transaction_type: "DISPOSE",
         quantity_change: -batch.quantity,
-        remarks: `Batch ${batch.batch_number} disposed`
+        remarks: `Batch ${batch.batch_number} disposed`,
       });
 
       return batch;
@@ -151,12 +197,10 @@ const inventoryService = {
     return null;
   },
 
-
-  
   // Update inventory quantity
   async updateInventoryQuantity(inventoryItemId) {
-    const totalQuantity = await Batch.sum('quantity', {
-      where: { inventory_item_id: inventoryItemId, is_active: true }
+    const totalQuantity = await Batch.sum("quantity", {
+      where: { inventory_item_id: inventoryItemId, is_active: true },
     });
     await InventoryItem.update(
       { quantity_in_stock: totalQuantity },
@@ -184,51 +228,54 @@ const inventoryService = {
           date: { [Op.between]: [startDate, endDate] },
         },
         include: [
-          { 
-            model: InventoryItem, 
-            attributes: ['name'],
-            required: true
+          {
+            model: InventoryItem,
+            attributes: ["name"],
+            required: true,
           },
-          { 
-            model: Batch, 
-            attributes: ['batch_number'],
-            required: false
+          {
+            model: Batch,
+            attributes: ["batch_number"],
+            required: false,
           },
         ],
-        order: [['date', 'ASC']],
+        order: [["date", "ASC"]],
       });
 
       const reportData = transactions.reduce((acc, transaction) => {
-        const key = `${transaction.inventory_item_id}-${transaction.batch_id || 'no-batch'}`;
+        const key = `${transaction.inventory_item_id}-${
+          transaction.batch_id || "no-batch"
+        }`;
         if (!acc[key]) {
           acc[key] = {
             itemName: transaction.InventoryItem.name,
-            batchName: transaction.Batch ? transaction.Batch.batch_number : 'N/A',
+            batchName: transaction.Batch
+              ? transaction.Batch.batch_number
+              : "N/A",
             batchQuantity: 0,
             totalDisbursed: 0,
             totalRemaining: 0,
           };
         }
 
-        if (transaction.transaction_type === 'ADD') {
+        if (transaction.transaction_type === "ADD") {
           acc[key].batchQuantity += transaction.quantity_change;
-        } else if (transaction.transaction_type === 'REMOVE') {
+        } else if (transaction.transaction_type === "REMOVE") {
           acc[key].totalDisbursed += Math.abs(transaction.quantity_change);
         }
 
-        acc[key].totalRemaining = acc[key].batchQuantity - acc[key].totalDisbursed;
+        acc[key].totalRemaining =
+          acc[key].batchQuantity - acc[key].totalDisbursed;
 
         return acc;
       }, {});
 
       return Object.values(reportData);
     } catch (error) {
-      console.error('Error generating report data:', error);
-      throw new Error('Failed to generate report data');
+      console.error("Error generating report data:", error);
+      throw new Error("Failed to generate report data");
     }
   },
-
-
 
   // Get low stock items
   async getLowStockItems() {
@@ -236,20 +283,22 @@ const inventoryService = {
       return await InventoryItem.findAll({
         where: {
           [Op.and]: [
-            Sequelize.literal('quantity_in_stock <= min_stock_level'),
-            { is_active: true }
-          ]
+            Sequelize.literal("quantity_in_stock <= min_stock_level"),
+            { is_active: true },
+          ],
         },
-        include: [{ 
-          model: Batch, 
-          as: 'batches',  // Add this line to specify the alias
-          where: { is_active: true }, 
-          required: false 
-        }],
+        include: [
+          {
+            model: Batch,
+            as: "batches", // Add this line to specify the alias
+            where: { is_active: true },
+            required: false,
+          },
+        ],
       });
     } catch (error) {
-      console.error('Error fetching low stock items:', error);
-      throw new Error('Failed to fetch low stock items');
+      console.error("Error fetching low stock items:", error);
+      throw new Error("Failed to fetch low stock items");
     }
   },
 
@@ -257,19 +306,19 @@ const inventoryService = {
   async getExpiringBatches(daysThreshold) {
     const expiryDate = new Date();
     expiryDate.setDate(expiryDate.getDate() + daysThreshold);
-    
+
     return await Batch.findAll({
       where: {
         expiry_date: { [Op.lte]: expiryDate },
-        is_active: true
+        is_active: true,
       },
       include: [
-        { 
+        {
           model: InventoryItem,
-          as: 'inventoryItem',
-          attributes: ['id', 'name', 'description']
-        }
-      ]
+          as: "inventoryItem",
+          attributes: ["id", "name", "description"],
+        },
+      ],
     });
   },
 
@@ -284,20 +333,24 @@ const inventoryService = {
   },
   async getNotifications() {
     return await Notification.findAll({
-      include: [{ 
-        model: Batch, 
-        as: 'batch',
-        attributes: ['batch_number'], 
-        include: [{
-          model: InventoryItem,
-          as: 'inventoryItem',
-          attributes: ['name']
-        }]
-      }],
-      order: [['created_at', 'DESC']],
+      include: [
+        {
+          model: Batch,
+          as: "batch",
+          attributes: ["batch_number"],
+          include: [
+            {
+              model: InventoryItem,
+              as: "inventoryItem",
+              attributes: ["name"],
+            },
+          ],
+        },
+      ],
+      order: [["created_at", "DESC"]],
       where: {
-        seen: false
-      }
+        seen: false,
+      },
     });
   },
 
@@ -312,35 +365,36 @@ const inventoryService = {
   },
   async markAllNotificationsAsSeen(type) {
     try {
-      const whereClause = type && type !== 'ALL' ? { notification_type: type, seen: false } : { seen: false };
-      
+      const whereClause =
+        type && type !== "ALL"
+          ? { notification_type: type, seen: false }
+          : { seen: false };
+
       const [updatedCount] = await Notification.update(
         { seen: true },
         { where: whereClause }
       );
-  
+
       return updatedCount;
     } catch (error) {
-      console.error('Error marking all notifications as seen:', error);
+      console.error("Error marking all notifications as seen:", error);
       throw error;
     }
   },
-  
-  
 
   async createLowStockNotification(batchId, quantityLeft) {
     return await Notification.create({
-      notification_type: 'LOW_STOCK',
+      notification_type: "LOW_STOCK",
       batch_id: batchId,
-      quantity_left: quantityLeft
+      quantity_left: quantityLeft,
     });
   },
 
   async createExpiredNotification(batchId, expiryDate) {
     return await Notification.create({
-      notification_type: 'EXPIRED',
+      notification_type: "EXPIRED",
       batch_id: batchId,
-      expiry_date: expiryDate
+      expiry_date: expiryDate,
     });
   },
 
@@ -350,44 +404,46 @@ const inventoryService = {
       const itemsToReorder = await InventoryItem.findAll({
         where: {
           quantity_in_stock: {
-            [Op.lte]: sequelize.col('reorder_level')
+            [Op.lte]: sequelize.col("reorder_level"),
           },
-          is_active: true
-        }
+          is_active: true,
+        },
       });
-  
-      console.log('Items to reorder:', itemsToReorder.length);
-  
+
+      console.log("Items to reorder:", itemsToReorder.length);
+
       for (const item of itemsToReorder) {
         // Check if a reorder notification already exists for this item
         const existingNotification = await Notification.findOne({
           where: {
-            notification_type: 'REORDER',
+            notification_type: "REORDER",
             inventory_item_id: item.id,
-            seen: false
-          }
+            seen: false,
+          },
         });
-  
+
         if (!existingNotification) {
           // Create a new reorder notification
           await Notification.create({
-            notification_type: 'REORDER',
+            notification_type: "REORDER",
             inventory_item_id: item.id,
             title: `Reorder Alert: ${item.name}`,
             message: `The stock level for ${item.name} (${item.quantity_in_stock} units) has reached or fallen below the reorder level (${item.reorder_level} units). Please reorder this item.`,
-            quantity_left: item.quantity_in_stock
+            quantity_left: item.quantity_in_stock,
           });
-  
+
           console.log(`Created reorder notification for item: ${item.name}`);
         }
       }
-  
-      console.log('Reorder notifications check completed.');
+
+      console.log("Reorder notifications check completed.");
     } catch (error) {
-      console.error('Error checking and creating reorder notifications:', error);
+      console.error(
+        "Error checking and creating reorder notifications:",
+        error
+      );
     }
   },
-  
 
   // Add a new category
   async addCategory(categoryData) {
@@ -404,14 +460,14 @@ const inventoryService = {
       include: [
         {
           model: InventoryItem,
-          attributes: ['id', 'name', 'quantity_in_stock'], // Only include `id` and `name` from InventoryItem
+          attributes: ["id", "name", "quantity_in_stock"], // Only include `id` and `name` from InventoryItem
         },
         {
           model: Batch,
-          attributes: ['id', 'batch_number'], // Only include `id` and `name` from Batch
+          attributes: ["id", "batch_number"], // Only include `id` and `name` from Batch
         },
       ],
-      order: [['date', 'DESC']], // Ordering by 'created_at' in descending order
+      order: [["date", "DESC"]], // Ordering by 'created_at' in descending order
     });
   },
   // Get category by ID
@@ -445,20 +501,26 @@ const inventoryService = {
 
     const results = {
       success: [],
-      errors: []
+      errors: [],
     };
 
     for (const row of data) {
       try {
         // Validate required fields
-          if (!row.name || !row.category || 
-            row.min_stock_level === undefined || row.unit_price === undefined || 
-            row.reorder_level === undefined) {
+        if (
+          !row.name ||
+          !row.category ||
+          row.min_stock_level === undefined ||
+          row.unit_price === undefined ||
+          row.reorder_level === undefined
+        ) {
           throw new Error(`Invalid data: ${JSON.stringify(row)}`);
         }
 
         // Find or create category
-        let category = await Category.findOne({ where: { name: row.category } });
+        let category = await Category.findOne({
+          where: { name: row.category },
+        });
         if (!category) {
           category = await Category.create({ name: row.category });
         }
@@ -469,12 +531,12 @@ const inventoryService = {
         if (!item) {
           item = await InventoryItem.create({
             name: row.name,
-            description: row.description || '',
+            description: row.description || "",
             category_id: category.id,
             quantity_in_stock: 0,
             min_stock_level: row.min_stock_level,
             unit_price: row.unit_price,
-            reorder_level: row.reorder_level
+            reorder_level: row.reorder_level,
           });
           isNewItem = true;
         } else {
@@ -484,7 +546,7 @@ const inventoryService = {
             category_id: category.id,
             min_stock_level: row.min_stock_level,
             unit_price: row.unit_price,
-            reorder_level: row.reorder_level
+            reorder_level: row.reorder_level,
           });
         }
 
@@ -494,13 +556,13 @@ const inventoryService = {
             inventory_item_id: item.id,
             quantity: row.quantity,
             expiry_date: row.expiry_date ? new Date(row.expiry_date) : null,
-            supplier: row.supplier || '',
-            received_date: new Date()
+            supplier: row.supplier || "",
+            received_date: new Date(),
           });
           await logTransaction(
             item.id,
             batch.id,
-            'ADD',
+            "ADD",
             row.quantity,
             `Batch added from Excel import: ${batch.batch_number}`
           );
@@ -509,9 +571,11 @@ const inventoryService = {
           await logTransaction(
             item.id,
             null,
-            isNewItem ? 'ADD' : 'UPDATE',
+            isNewItem ? "ADD" : "UPDATE",
             0,
-            `Item ${isNewItem ? 'added' : 'updated'} from Excel import (no batch)`
+            `Item ${
+              isNewItem ? "added" : "updated"
+            } from Excel import (no batch)`
           );
         }
         // Log transaction for item creation or update
@@ -519,24 +583,24 @@ const inventoryService = {
           await logTransaction(
             item.id,
             null,
-            'ADD',
+            "ADD",
             0,
-            'New item added from Excel import'
+            "New item added from Excel import"
           );
         } else {
           await logTransaction(
             item.id,
             null,
-            'UPDATE',
+            "UPDATE",
             0,
-            'Item updated from Excel import'
+            "Item updated from Excel import"
           );
         }
 
-        results.success.push({ 
-          name: row.name, 
-          message: 'Processed successfully', 
-          batchNumber: Batch.batch_number 
+        results.success.push({
+          name: row.name,
+          message: "Processed successfully",
+          batchNumber: Batch.batch_number,
         });
       } catch (error) {
         results.errors.push({ name: row.name, error: error.message });
@@ -551,7 +615,7 @@ const inventoryService = {
     }
 
     if (item.quantity_in_stock < quantity) {
-      throw new Error('Insufficient stock to reduce.');
+      throw new Error("Insufficient stock to reduce.");
     }
 
     const newQuantity = item.quantity_in_stock - quantity;
@@ -560,7 +624,7 @@ const inventoryService = {
     // Create a transaction record
     await Transaction.create({
       inventory_item_id: itemId,
-      transaction_type: 'REMOVE',
+      transaction_type: "REMOVE",
       quantity_change: quantity,
       patient_name: patientName,
       remarks: `Stock reduced. Disbursed to patient: ${patientName}`,
@@ -573,13 +637,12 @@ const inventoryService = {
     return await Transaction.findAll({
       where: {
         inventory_item_id: itemId,
-        transaction_type: 'REMOVE'
+        transaction_type: "REMOVE",
       },
-      attributes: ['id', 'date', 'quantity_change', 'patient_name'],
-      order: [['date', 'DESC']]
+      attributes: ["id", "date", "quantity_change", "patient_name"],
+      order: [["date", "DESC"]],
     });
-  }
-  
-}
+  },
+};
 
 module.exports = inventoryService;

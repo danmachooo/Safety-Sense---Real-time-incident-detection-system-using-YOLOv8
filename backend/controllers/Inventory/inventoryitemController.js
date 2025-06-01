@@ -1,16 +1,30 @@
-const { Op } = require("sequelize");
-const {
-  getCached,
+// const { Op } = require("sequelize");
+// const {
+//   getCached,
+//   setCache,
+//   invalidateCache,
+// } = require("../../services/redis/cache");
+// const User = require("../../models/Users/User");
+// const InventoryItem = require("../../models/Inventory/InventoryItem");
+// const Category = require("../../models/Inventory/Category");
+// const Notification = require("../../models/Inventory/InventoryNotification");
+// const { BadRequestError, NotFoundError } = require("../../utils/Error");
+// const { StatusCodes } = require("http-status-codes");
+// const { Batch } = require("../../models/Inventory");
+
+import { Op } from "sequelize";
+import {
   setCache,
+  getCached,
   invalidateCache,
-} = require("../../services/redis/cache");
-const User = require("../../models/Users/User");
-const InventoryItem = require("../../models/Inventory/InventoryItem");
-const Category = require("../../models/Inventory/Category");
-const Notification = require("../../models/Inventory/InventoryNotification");
-const { BadRequestError, NotFoundError } = require("../../utils/Error");
-const { StatusCodes } = require("http-status-codes");
-const { Batch } = require("../../models/Inventory");
+} from "../../services/redis/cache.js";
+import User from "../../models/Users/User.js";
+import InventoryItem from "../../models/Inventory/InventoryItem.js";
+import Category from "../../models/Inventory/Category.js";
+import Notification from "../../models/Notification/Notification.js";
+import { BadRequestError, NotFoundError } from "../../utils/Error.js";
+import { StatusCodes } from "http-status-codes";
+import Batch from "../../models/Inventory/Batch.js";
 
 const createItem = async (req, res, next) => {
   try {
@@ -280,7 +294,7 @@ const restoreItem = async (req, res, next) => {
   }
 };
 
-module.exports = {
+export {
   createItem,
   getAllItems,
   getItemById,

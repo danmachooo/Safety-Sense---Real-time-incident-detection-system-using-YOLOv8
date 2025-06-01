@@ -1,18 +1,33 @@
-const { StatusCodes } = require("http-status-codes");
-const { Category, InventoryItem } = require("../../models/Inventory");
-const {
+// const { StatusCodes } = require("http-status-codes");
+// const { Category, InventoryItem } = require("../../models/Inventory");
+// const {
+//   BadRequestError,
+//   NotFoundError,
+//   ForbiddenError,
+//   UnauthorizedError,
+// } = require("../../utils/Error");
+// const {
+//   getCached,
+//   setCache,
+//   invalidateCache,
+// } = require("../../services/redis/cache");
+// const { Op } = require("sequelize");
+
+import { StatusCodes } from "http-status-codes";
+import InventoryItem from "../../models/Inventory/InventoryItem.js";
+import Category from "../../models/Inventory/Category.js";
+import {
   BadRequestError,
   NotFoundError,
   ForbiddenError,
   UnauthorizedError,
-} = require("../../utils/Error");
-const {
-  getCached,
+} from "../../utils/Error.js";
+import {
   setCache,
+  getCached,
   invalidateCache,
-} = require("../../services/redis/cache");
-const { Op } = require("sequelize");
-
+} from "../../services/redis/cache.js";
+import { Op } from "sequelize";
 const createCategory = async (req, res, next) => {
   try {
     const { name, description, type } = req.body;
@@ -209,7 +224,7 @@ const restoreCategory = async (req, res, next) => {
   }
 };
 
-module.exports = {
+export {
   createCategory,
   getAllCategories,
   getCategoryById,

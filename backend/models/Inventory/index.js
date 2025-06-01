@@ -1,9 +1,16 @@
-const Category = require("./Category");
-const InventoryItem = require("./InventoryItem");
-const Batch = require("./Batch");
-const User = require("../Users/User");
-const Deployment = require("./Deployment");
-const Notification = require("./InventoryNotification"); // 🔹 Added Notification model
+// const Category = require("./Category");
+// const InventoryItem = require("./InventoryItem");
+// const Batch = require("./Batch");
+// const User = require("../Users/User");
+// const Deployment = require("./Deployment");
+// const Notification = require("./InventoryNotification"); // 🔹 Added Notification model
+
+import Category from "./Category.js";
+import InventoryItem from "./InventoryItem.js";
+import Batch from "./Batch.js";
+import User from "../Users/User.js";
+import Deployment from "./Deployment.js";
+import Notification from "./InventoryNotification.js";
 
 // ✅ Category & InventoryItem Relationship
 Category.hasMany(InventoryItem, {
@@ -82,7 +89,7 @@ Notification.belongsTo(User, {
   as: "user",
 });
 
-module.exports = {
+export default {
   Category,
   InventoryItem,
   Batch,

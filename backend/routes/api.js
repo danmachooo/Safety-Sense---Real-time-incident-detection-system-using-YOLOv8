@@ -1,15 +1,15 @@
-const express = require("express");
+import express from "express";
 const router = express.Router();
 
-const inventoryRouter = require("./InventoryRoutes");
-const authenticationRouter = require("./AuthenticationRoutes");
-const authorizationRouter = require("./AuthorizationRoutes");
-const manageUserRouter = require("./ManageUserRoutes");
-const systemRouter = require("./SystemRoutes");
-const cameraRouter = require("./CameraRoutes");
-const incidents = require("./IncidentRoutes");
-const fcmRouter = require("./FcmRoutes");
-const dashboardRouter = require("./dashboardRoutes");
+import inventoryRouter from "./InventoryRoutes.js";
+import authenticationRouter from "./AuthenticationRoutes.js";
+import authorizationRouter from "./AuthorizationRoutes.js";
+import manageUserRouter from "./ManageUserRoutes.js";
+import systemRouter from "./SystemRoutes.js";
+import cameraRouter from "./CameraRoutes.js";
+import incidents from "./IncidentRoutes.js";
+import fcmRouter from "./FcmRoutes.js";
+import dashboardRouter from "./dashboardRoutes.js";
 
 router.use("/auth", authenticationRouter);
 router.use("/authorization", authorizationRouter);
@@ -21,4 +21,4 @@ router.use("/system", systemRouter);
 router.use("/fcm", fcmRouter);
 router.use("/dashboard", dashboardRouter);
 
-module.exports = router;
+export default router;

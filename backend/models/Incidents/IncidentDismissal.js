@@ -1,5 +1,8 @@
-const { DataTypes } = require("sequelize");
-const sequelize = require("../../config/database");
+// const { DataTypes } = require("sequelize");
+// const sequelize = require("../../config/database");
+
+import { DataTypes } from "sequelize";
+import sequelize from "../../config/database.js";
 
 const IncidentDismissal = sequelize.define(
   "IncidentDismissal",
@@ -39,4 +42,4 @@ const IncidentDismissal = sequelize.define(
   }
 );
 
-module.exports = IncidentDismissal;
+export default IncidentDismissal;

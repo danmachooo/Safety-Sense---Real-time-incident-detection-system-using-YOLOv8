@@ -1,6 +1,8 @@
 const admin = require("./config/firebase/firebase");
 
-async function testTopicNotification() {
+import admin from "./config/firebase/firebase.js";
+
+export async function testTopicNotification() {
   try {
     // 1. Log the test start
     console.log("=== Starting topic notification test ===");
@@ -45,7 +47,7 @@ async function testTopicNotification() {
 }
 
 // Additional debug functions
-async function checkTokenSubscription(token) {
+export async function checkTokenSubscription(token) {
   try {
     // Note: This is a pseudo-check - actual implementation may vary
     const appInstance = await admin.instanceId().getAppInstance(token);
@@ -61,9 +63,3 @@ async function checkTokenSubscription(token) {
 testTopicNotification()
   .then((result) => console.log("Test result:", result))
   .catch((err) => console.error("Test failed:", err));
-
-// Export for manual testing via API
-module.exports = {
-  testTopicNotification,
-  checkTokenSubscription,
-};

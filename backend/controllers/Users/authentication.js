@@ -1,23 +1,41 @@
-const {
+// const {
+//   BadRequestError,
+//   NotFoundError,
+//   ForbiddenError,
+//   UnauthorizedError,
+// } = require("../../utils/Error");
+// const User = require("../../models/Users/User");
+// const jwt = require("jsonwebtoken");
+// const bcrypt = require("bcryptjs");
+// const crypto = require("crypto");
+// const {
+//   sendVerificationEmail,
+//   sendPasswordResetEmail,
+// } = require("../../services/emailService");
+// const { Op } = require("sequelize");
+// const { StatusCodes } = require("http-status-codes");
+// const { logUserLogin, logUserLogout } = require("./LoginHistory");
+
+// const { logUserCreation } = require("../Notification/Notification");
+
+import {
   BadRequestError,
   NotFoundError,
   ForbiddenError,
   UnauthorizedError,
-} = require("../../utils/Error");
-const User = require("../../models/Users/User");
-const jwt = require("jsonwebtoken");
-const bcrypt = require("bcryptjs");
-const crypto = require("crypto");
-const {
+} from "../../utils/Error.js";
+import User from "../../models/Users/User.js";
+import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
+import crypto from "crypto";
+import {
   sendVerificationEmail,
   sendPasswordResetEmail,
-} = require("../../services/emailService");
-const { Op } = require("sequelize");
-const { StatusCodes } = require("http-status-codes");
-const { logUserLogin, logUserLogout } = require("./LoginHistory");
-
-const { logUserCreation } = require("../Notification/Notification");
-require("dotenv").config();
+} from "../../services/emailService.js";
+import { Op } from "sequelize";
+import { StatusCodes } from "http-status-codes";
+import { logUserLogin, logUserLogout } from "./LoginHistory.js";
+import { logUserCreation } from "../Notification/Notification.js";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRATION = process.env.JWT_EXPIRES_IN;
@@ -347,7 +365,7 @@ const changePassword = async (req, res, next) => {
   }
 };
 
-module.exports = {
+export {
   loginUser,
   logoutUser,
   registerUser,

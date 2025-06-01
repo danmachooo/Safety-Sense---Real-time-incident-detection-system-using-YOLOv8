@@ -1,6 +1,12 @@
-const rateLimit = require("express-rate-limit");
-const { RedisStore } = require("rate-limit-redis");
-const { getRedisClient } = require("../config/redis");
+// const rateLimit = require("express-rate-limit");
+// const { RedisStore } = require("rate-limit-redis");
+// const { getRedisClient } = require("../config/redis");
+
+import rateLimit from "express-rate-limit";
+import { RedisStore } from "rate-limit-redis";
+import getRedisClient from "../config/redis.js";
+import dotenv from "dotenv";
+dotenv.config();
 
 let loginRateLimiter = null;
 
@@ -68,5 +74,4 @@ const rateLimiterMiddleware = (req, res, next) => {
   }
   return loginRateLimiter(req, res, next);
 };
-
-module.exports = rateLimiterMiddleware;
+export default rateLimiterMiddleware;

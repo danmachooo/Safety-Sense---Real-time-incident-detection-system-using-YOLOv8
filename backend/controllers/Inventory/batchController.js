@@ -1,19 +1,40 @@
-const { Op } = require("sequelize");
-const { InventoryItem, Batch } = require("../../models/Inventory");
-const User = require("../../models/Users/User");
-const Notification = require("../../models/Inventory/InventoryNotification");
-const {
+// const { Op } = require("sequelize");
+// const { InventoryItem, Batch } = require("../../models/Inventory");
+// const User = require("../../models/Users/User");
+// const Notification = require("../../models/Inventory/InventoryNotification");
+// const {
+//   BadRequestError,
+//   NotFoundError,
+//   ForbiddenError,
+//   UnauthorizedError,
+// } = require("../../utils/Error");
+// const { StatusCodes } = require("http-status-codes");
+// const {
+//   getCached,
+//   setCache,
+//   invalidateCache,
+// } = require("../../services/redis/cache");
+
+import { Op } from "sequelize";
+
+import InventoryItem from "../../models/Inventory/InventoryItem.js";
+import Batch from "../../models/Inventory/Batch.js";
+import User from "../../models/Users/User.js";
+import Notification from "../../models/Inventory/InventoryNotification.js";
+
+import {
   BadRequestError,
   NotFoundError,
   ForbiddenError,
   UnauthorizedError,
-} = require("../../utils/Error");
-const { StatusCodes } = require("http-status-codes");
-const {
+} from "../../utils/Error.js";
+import { StatusCodes } from "http-status-codes";
+import {
   getCached,
   setCache,
   invalidateCache,
-} = require("../../services/redis/cache");
+} from "../../services/redis/cache.js";
+
 const createBatch = async (req, res, next) => {
   try {
     const {
@@ -381,7 +402,7 @@ const getExpiringBatches = async (req, res, next) => {
   }
 };
 
-module.exports = {
+export {
   createBatch,
   getAllBatches,
   getBatchById,

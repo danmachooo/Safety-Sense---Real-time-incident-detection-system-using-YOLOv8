@@ -1,46 +1,59 @@
-const { DataTypes } = require('sequelize');
-const sequelize = require('../../config/database');
+// const { DataTypes } = require('sequelize');
+// const sequelize = require('../../config/database');
 
-const Category = sequelize.define('Category', {
-  id: {
-    type: DataTypes.INTEGER,
-    primaryKey: true,
-    autoIncrement: true,
-  },
-  name: {
-    type: DataTypes.STRING(255),
-    allowNull: false,
-    unique: true,
-    validate: {
-      notEmpty: true,
-    }
-  },
-  description: {
-    type: DataTypes.TEXT,
-  },
-  type: {
-    type: DataTypes.ENUM('EQUIPMENT', 'SUPPLIES', 'RELIEF_GOODS', 'VEHICLES', 'COMMUNICATION_DEVICES'),
-    allowNull: false,
-    validate: {
-      notEmpty: true,
-    }
-  }
-}, {
-  timestamps: true,
-  paranoid: true,
-  tableName: 'categories',
-  indexes: [
-    {
+import { DataTypes } from "sequelize";
+import sequelize from "../../config/database.js";
+
+const Category = sequelize.define(
+  "Category",
+  {
+    id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+    },
+    name: {
+      type: DataTypes.STRING(255),
+      allowNull: false,
       unique: true,
-      fields: ['name']
+      validate: {
+        notEmpty: true,
+      },
     },
-    {
-      fields: ['type']
+    description: {
+      type: DataTypes.TEXT,
     },
-    {
-      fields: ['deletedAt']
-    }
-  ]
-});
+    type: {
+      type: DataTypes.ENUM(
+        "EQUIPMENT",
+        "SUPPLIES",
+        "RELIEF_GOODS",
+        "VEHICLES",
+        "COMMUNICATION_DEVICES"
+      ),
+      allowNull: false,
+      validate: {
+        notEmpty: true,
+      },
+    },
+  },
+  {
+    timestamps: true,
+    paranoid: true,
+    tableName: "categories",
+    indexes: [
+      {
+        unique: true,
+        fields: ["name"],
+      },
+      {
+        fields: ["type"],
+      },
+      {
+        fields: ["deletedAt"],
+      },
+    ],
+  }
+);
 
-module.exports = Category;
+export default Category;

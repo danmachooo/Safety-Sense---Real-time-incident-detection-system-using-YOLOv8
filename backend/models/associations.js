@@ -1,11 +1,11 @@
-const setupAssociations = () => {
-  // Import models
-  const Camera = require("./Incidents/Camera");
-  const Incident = require("./Incidents/Incident");
-  const User = require("./Users/User");
-  const IncidentAcceptance = require("./Incidents/IncidentAcceptance");
-  const IncidentDismissal = require("./Incidents/IncidentDismissal");
+// Import models
+import Camera from "./Incidents/Camera.js";
+import Incident from "./Incidents/Incident.js";
+import User from "./Users/User.js";
+import IncidentAcceptance from "./Incidents/IncidentAcceptance.js";
+import IncidentDismissal from "./Incidents/IncidentDismissal.js";
 
+const setupAssociations = () => {
   // Define Camera <-> Incident association
   Camera.hasMany(Incident, {
     foreignKey: "cameraId",
@@ -51,4 +51,4 @@ const setupAssociations = () => {
   console.log("Model associations have been set up successfully");
 };
 
-module.exports = setupAssociations;
+export default setupAssociations;

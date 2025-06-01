@@ -1,9 +1,11 @@
-const express = require("express");
-const router = express.Router();
-const authMiddleware = require("../middlewares/authMiddleware");
-const adminMiddleware = require("../middlewares/adminMiddleware");
+import express from "express";
+import authMiddleware from "../middlewares/authMiddleware.js";
+import adminMiddleware from "../middlewares/adminMiddleware.js";
+import loginRateLimiter from "../middlewares/loginRateLimiter.js";
 
-const {
+const router = express.Router();
+
+import {
   getDashboardSummary,
   getIncidentStats,
   getInventoryStats,
@@ -11,7 +13,7 @@ const {
   getUserActivityStats,
   getActivityFeed,
   getMapData,
-} = require("../controllers/DashboardController");
+} from "../controllers/DashboardController.js";
 
 router.get("/summary", getDashboardSummary);
 router.get("/incidents", getIncidentStats);
@@ -21,4 +23,4 @@ router.get("/users", getUserActivityStats);
 router.get("/activity", getActivityFeed);
 router.get("/map", getMapData);
 
-module.exports = router;
+export default router;

@@ -1,6 +1,8 @@
-const jwt = require("jsonwebtoken");
-const { UnauthorizedError } = require("../utils/Error");
-require("dotenv").config();
+// const jwt = require("jsonwebtoken");
+// const { UnauthorizedError } = require("../utils/Error");
+
+import jwt from "jsonwebtoken";
+import { UnauthorizedError } from "../utils/Error.js";
 
 const authMiddleware = async (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -31,5 +33,4 @@ const authMiddleware = async (req, res, next) => {
     next(new UnauthorizedError("Invalid or expired token."));
   }
 };
-
-module.exports = authMiddleware;
+export default authMiddleware;

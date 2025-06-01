@@ -1,10 +1,22 @@
-const express = require("express");
-const router = express.Router();
-const authMiddleware = require("../middlewares/authMiddleware");
-const adminMiddleware = require("../middlewares/adminMiddleware");
-const loginRateLimiter = require("../middlewares/loginRateLimiter");
+// const express = require("express");
+// const authMiddleware = require("../middlewares/authMiddleware");
+// const adminMiddleware = require("../middlewares/adminMiddleware");
+// const loginRateLimiter = require("../middlewares/loginRateLimiter");
 
-const {
+// const {
+//   loginUser,
+//   logoutUser,
+//   registerUser,
+//   verifyEmail,
+//   resetPassword,
+//   requestPasswordReset,
+//   changePassword,
+//   updateFcmToken,
+
+//   refreshAccessToken,
+// } = require("../controllers/Users/authentication");
+// const { getLoginHistory } = require("../controllers/Users/LoginHistory");
+import {
   loginUser,
   logoutUser,
   registerUser,
@@ -13,10 +25,16 @@ const {
   requestPasswordReset,
   changePassword,
   updateFcmToken,
-
   refreshAccessToken,
-} = require("../controllers/Users/authentication");
-const { getLoginHistory } = require("../controllers/Users/LoginHistory");
+} from "../controllers/Users/authentication.js";
+import { getLoginHistory } from "../controllers/Users/LoginHistory.js";
+
+import express from "express";
+import authMiddleware from "../middlewares/authMiddleware.js";
+import adminMiddleware from "../middlewares/adminMiddleware.js";
+import loginRateLimiter from "../middlewares/loginRateLimiter.js";
+
+const router = express.Router();
 
 router.post("/login", loginRateLimiter, loginUser); //ok
 router.patch("/update-fcm-token", authMiddleware, updateFcmToken);
@@ -28,4 +46,4 @@ router.post("/request-password-reset", authMiddleware, requestPasswordReset); //
 router.post("/reset-password", authMiddleware, resetPassword); //ok
 router.patch("/change-password", authMiddleware, changePassword); //ok
 router.post("/refresh", refreshAccessToken);
-module.exports = router;
+export default router;

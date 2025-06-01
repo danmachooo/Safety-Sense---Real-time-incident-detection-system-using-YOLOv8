@@ -1,5 +1,6 @@
-const { createClient } = require("redis");
-
+import { createClient } from "redis";
+import dotenv from "dotenv";
+dotenv.config();
 let redis = null;
 
 const createRedisClient = async () => {
@@ -37,15 +38,15 @@ const createRedisClient = async () => {
   }
 };
 
+// Export the function directly as default
+const getRedisClient = async () => {
+  if (!redis) {
+    redis = await createRedisClient();
+  }
+  return redis;
+};
+
 // Initialize Redis connection
 createRedisClient().catch(console.error);
 
-module.exports = {
-  redis: null, // Will be set after connection
-  getRedisClient: async () => {
-    if (!redis) {
-      redis = await createRedisClient();
-    }
-    return redis;
-  },
-};
+export default getRedisClient;

@@ -1,4 +1,6 @@
-const { getRedisClient } = require("../../config/redis");
+// const { getRedisClient } = require("../../config/redis");
+
+import getRedisClient from "../../config/redis.js";
 
 const getCached = async (cachedKey) => {
   try {
@@ -70,8 +72,4 @@ const invalidateCachePattern = async (pattern) => {
   }
 };
 
-module.exports = {
-  getCached,
-  setCache,
-  invalidateCache,
-};
+export { getCached, setCache, invalidateCache };

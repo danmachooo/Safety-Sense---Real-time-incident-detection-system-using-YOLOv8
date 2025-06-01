@@ -1,15 +1,22 @@
-const { Op } = require("sequelize");
+// const { Op } = require("sequelize");
 
-const Deployment = require("../../models/Inventory/Deployment");
-const { InventoryItem, User } = require("../../models/Inventory");
-const Notification = require("../../models/Inventory/InventoryNotification");
-const {
-  BadRequestError,
-  NotFoundError,
-  ForbiddenError,
-  UnauthorizedError,
-} = require("../../utils/Error");
-const { StatusCodes } = require("http-status-codes");
+// const Deployment = require("../../models/Inventory/Deployment");
+// const { InventoryItem, User } = require("../../models/Inventory");
+// const Notification = require("../../models/Inventory/InventoryNotification");
+// const {
+//   BadRequestError,
+//   NotFoundError,
+//   ForbiddenError,
+//   UnauthorizedError,
+// } = require("../../utils/Error");
+// const { StatusCodes } = require("http-status-codes");
+
+import Op from "sequelize";
+import Deployment from "../../models/Inventory/Deployment.js";
+
+import InventoryItem from "../../models/Inventory/InventoryItem.js";
+import User from "../../models/Users/User.js";
+import Notification from "../../models/Inventory/InventoryNotification.js";
 
 const createDeployment = async (req, res, next) => {
   try {
@@ -279,7 +286,7 @@ const getOverdueDeployments = async (req, res, next) => {
   }
 };
 
-module.exports = {
+export {
   createDeployment,
   getAllDeployments,
   getDeploymentById,

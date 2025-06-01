@@ -1,15 +1,23 @@
-const errorHandlerMiddleware = require("./middlewares/ErrorHandlerMiddleware");
-const express = require("express");
-const cors = require("cors");
-const path = require("path"); // Added for path handling
-const setupCronJobs = require("./cron");
-const cookieParser = require("cookie-parser");
+import express from "express";
+import cors from "cors";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
+import { setupCronJobs } from "./cron.js";
+import errorHandlerMiddleware from "./middlewares/errorHandlerMiddleware.js";
+import cookieParser from "cookie-parser";
+import dotenv from "dotenv";
+
+// Load environment variables
+dotenv.config();
+
+// Get __dirname equivalent in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 
-const apiRouter = require("./routes/api");
-
-require("dotenv").config();
+import apiRouter from "./routes/api.js";
 
 // Middlewares
 app.use(
@@ -23,19 +31,7 @@ app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve static files from the uploads directory
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-
-// Routes
-app.use("/api", apiRouter);
-
-// Error handler
-app.use(errorHandlerMiddleware);
-
-setupCronJobs();
-
 // Create uploads directory if it doesn't exist
-const fs = require("fs");
 const uploadsDir = path.join(__dirname, "uploads");
 const incidentsDir = path.join(uploadsDir, "incidents");
 
@@ -48,6 +44,18 @@ if (!fs.existsSync(incidentsDir)) {
   fs.mkdirSync(incidentsDir, { recursive: true });
   console.log("Created incidents uploads directory");
 }
+
+// Serve static files from the uploads directory
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+// Routes
+app.use("/api", apiRouter);
+
+// Error handler
+app.use(errorHandlerMiddleware);
+
+// Setup cron jobs
+setupCronJobs();
 
 // Start backend
 const PORT = process.env.PORT || 3000;

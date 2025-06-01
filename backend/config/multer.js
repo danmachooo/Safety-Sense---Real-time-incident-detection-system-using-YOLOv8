@@ -1,8 +1,12 @@
-const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
-const { BadRequestError } = require("../utils/Error");
-require("dotenv").config(); // Make sure to load .env
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
+import { BadRequestError } from "../utils/Error.js";
+
+// Get __dirname equivalent in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Create uploads directory if it doesn't exist
 const createUploadsDir = () => {
@@ -95,11 +99,16 @@ const uploadMiddleware = (req, res, next) => {
 const getFilePath = (filename) => `uploads/incidents/${filename}`;
 const getFileUrl = (filename) => {
   const baseUrl =
-    process.env.BASE_URL || `http://localhost:${process.env.PORT}`;
+    process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
   return `${baseUrl}/uploads/incidents/${filename}`;
 };
 
-module.exports = {
+// Export individual functions and the upload middleware
+export const uploadSingle = uploadMiddleware;
+export { getFilePath, getFileUrl };
+
+// Default export for backward compatibility
+export default {
   upload: { single: () => uploadMiddleware },
   getFilePath,
   getFileUrl,

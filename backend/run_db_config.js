@@ -1,5 +1,8 @@
-const sequelize = require("./config/database");
-require("./models"); // Importing this will auto-associate models
+// const sequelize = require("./config/database");
+// require("./models"); // Importing this will auto-associate models
+
+import sequelize from "./config/database.js";
+import "./models";
 
 sequelize
   .sync({ alter: true })

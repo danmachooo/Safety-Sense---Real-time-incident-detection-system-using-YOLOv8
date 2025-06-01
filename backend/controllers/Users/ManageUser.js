@@ -1,10 +1,16 @@
-const { Op } = require("sequelize");
-const User = require("../../models/Users/User");
-const { BadRequestError, NotFoundError } = require("../../utils/Error");
-const { StatusCodes } = require("http-status-codes");
-const bcrypt = require("bcryptjs");
-const { get, search } = require("../../routes/InventoryRoutes");
-const { logUserCreation } = require("../Notification/Notification");
+// const { Op } = require("sequelize");
+// const User = require("../../models/Users/User");
+// const { BadRequestError, NotFoundError } = require("../../utils/Error");
+// const { StatusCodes } = require("http-status-codes");
+// const bcrypt = require("bcryptjs");
+// const { logUserCreation } = require("../Notification/Notification");
+
+import { Op } from "sequelize";
+import User from "../../models/Users/User.js";
+import { BadRequestError, NotFoundError } from "../../utils/Error.js";
+import { StatusCodes } from "http-status-codes";
+import bcrypt from "bcryptjs";
+import { logUserCreation } from "../Notification/Notification.js";
 
 const createUser = async (req, res, next) => {
   try {
@@ -266,7 +272,7 @@ const getDeletedUsers = async (req, res, next) => {
   }
 };
 
-module.exports = {
+export {
   getUser,
   getUsers,
   updateUser,

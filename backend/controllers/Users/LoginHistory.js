@@ -1,8 +1,15 @@
-const User = require("../../models/Users/User"); // ✅ Ensure correct import
-const LoginHistory = require("../../models/Users/LoginHistory");
-const { BadRequestError, NotFoundError } = require("../../utils/Error");
-const { Op } = require("sequelize");
-const { StatusCodes } = require("http-status-codes");
+// const User = require("../../models/Users/User"); // ✅ Ensure correct import
+// const LoginHistory = require("../../models/Users/LoginHistory");
+// const { BadRequestError, NotFoundError } = require("../../utils/Error");
+// const { Op } = require("sequelize");
+// const { StatusCodes } = require("http-status-codes");
+
+import User from "../../models/Users/User.js";
+import LoginHistory from "../../models/Users/LoginHistory.js";
+import { BadRequestError, NotFoundError } from "../../utils/Error.js";
+import { Op } from "sequelize";
+import { StatusCodes } from "http-status-codes";
+
 const logUserLogin = async (userId) => {
   if (!userId) throw new BadRequestError("UserId is required.");
 
@@ -106,8 +113,4 @@ const getLoginHistory = async (req, res, next) => {
   }
 };
 
-module.exports = {
-  logUserLogin,
-  logUserLogout,
-  getLoginHistory,
-};
+export { logUserLogin, logUserLogout, getLoginHistory };

@@ -1,4 +1,6 @@
-const nodemailer = require("nodemailer");
+// const nodemailer = require("nodemailer");
+
+import nodemailer from "nodemailer";
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
@@ -87,7 +89,7 @@ const sendAccountStatusEmail = async (email, isBlocked) => {
   await sendEmail(email, "Account Status Change", htmlContent);
 };
 
-module.exports = {
+export {
   sendVerificationEmail,
   sendPasswordResetEmail,
   sendAccountStatusEmail,

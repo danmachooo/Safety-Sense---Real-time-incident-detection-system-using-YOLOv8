@@ -1,5 +1,8 @@
-const { DataTypes } = require("sequelize");
-const sequelize = require("../../config/database");
+// const { DataTypes } = require("sequelize");
+// const sequelize = require("../../config/database");
+
+import { DataTypes } from "sequelize";
+import sequelize from "../../config/database.js";
 
 const Incident = sequelize.define(
   "Incident",
@@ -77,4 +80,4 @@ const Incident = sequelize.define(
   }
 );
 
-module.exports = Incident;
+export default Incident;

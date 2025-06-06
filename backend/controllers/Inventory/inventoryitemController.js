@@ -1,11 +1,35 @@
-const { Op } = require('sequelize');
+// const { Op } = require("sequelize");
+// const {
+//   getCached,
+//   setCache,
+//   invalidateCache,
+// } = require("../../services/redis/cache");
+// const User = require("../../models/Users/User");
+// const InventoryItem = require("../../models/Inventory/InventoryItem");
+// const Category = require("../../models/Inventory/Category");
+// const Notification = require("../../models/Inventory/InventoryNotification");
+// const { BadRequestError, NotFoundError } = require("../../utils/Error");
+// const { StatusCodes } = require("http-status-codes");
+// const { Batch } = require("../../models/Inventory");
 
-const User = require('../../models/Users/User');
-const InventoryItem = require('../../models/Inventory/InventoryItem');
-const Category = require('../../models/Inventory/Category');
-const Notification = require('../../models/Inventory/InventoryNotification');
-const { BadRequestError, NotFoundError } = require('../../utils/Error');
-const { StatusCodes } = require('http-status-codes');
+import { Op } from "sequelize";
+import {
+  setCache,
+  getCached,
+  invalidateCache,
+} from "../../services/redis/cache.js";
+
+// import User from "../../models/Users/User.js";
+// import InventoryItem from "../../models/Inventory/InventoryItem.js";
+// import Category from "../../models/Inventory/Category.js";
+// import Notification from "../../models/Notification/Notification.js";
+
+import models from "../../models/index.js";
+const { User, InventoryItem, Category, Notification } = models;
+
+import { BadRequestError, NotFoundError } from "../../utils/Error.js";
+import { StatusCodes } from "http-status-codes";
+import Batch from "../../models/Inventory/Batch.js";
 
 const createItem = async (req, res, next) => {
   try {
@@ -19,13 +43,14 @@ const createItem = async (req, res, next) => {
       condition,
       location,
       is_deployable,
-      notes
+      notes,
     } = req.body;
 
-    if (!name || !category_id || !unit_of_measure || !location) throw new BadRequestError('Required Fields are missing.');
+    if (!name || !category_id || !unit_of_measure || !location)
+      throw new BadRequestError("Required Fields are missing.");
 
     const category = await Category.findByPk(category_id);
-    if (!category) throw new BadRequestError('Invalid Category');
+    if (!category) throw new BadRequestError("Invalid Category");
 
     const item = await InventoryItem.create({
       name,
@@ -37,79 +62,95 @@ const createItem = async (req, res, next) => {
       condition,
       location,
       is_deployable,
-      notes
+      notes,
     });
 
     // Create notification if stock is below minimum
     if (quantity_in_stock <= min_stock_level) {
       await Notification.create({
-        notification_type: 'LOW_STOCK',
+        notification_type: "LOW_STOCK",
         inventory_item_id: item.id,
-        title: 'Low Stock Alert',
+        title: "Low Stock Alert",
         message: `${name} is below minimum stock level`,
-        priority: 'HIGH'
+        priority: "HIGH",
       });
+    }
+    const result = await invalidateCache("items");
+
+    if (!result) {
+      console.log("Failed to invalidate cache");
     }
 
     return res.status(StatusCodes.CREATED).json({
       success: true,
-      message: 'Item has been created.',
-      data: item
+      message: "Item has been created.",
+      data: item,
     });
   } catch (error) {
-    console.error('Item creation error: ', error.message);
+    console.error("Item creation error: ", error.message);
     next(error);
   }
 };
 
 const getAllItems = async (req, res, next) => {
-  try {
-    const { 
-      category_id, 
-      search, 
-      condition, 
-      is_deployable,
-      page = 1, 
-      limit = 10 
-    } = req.query;
-    
-    const offset = (page - 1) * limit;
-    const whereClause = {};
+  const {
+    category_id,
+    search,
+    condition,
+    is_deployable,
+    page = 1,
+    limit = 10,
+  } = req.query;
 
-    if (category_id) whereClause.category_id = category_id;
-    if (condition) whereClause.condition = condition;
-    if (is_deployable !== undefined) whereClause.is_deployable = is_deployable;
-    if (search) {
-      whereClause[Op.or] = [
-        { name: { [Op.like]: `%${search}%` } },
-        { description: { [Op.like]: `%${search}%` } }
-      ];
+  const offset = (page - 1) * limit;
+  const whereClause = {};
+
+  if (category_id) whereClause.category_id = category_id;
+  if (condition) whereClause.condition = condition;
+  if (is_deployable !== undefined) whereClause.is_deployable = is_deployable;
+  if (search) {
+    whereClause[Op.or] = [
+      { name: { [Op.like]: `%${search}%` } },
+      { description: { [Op.like]: `%${search}%` } },
+    ];
+  }
+  const cacheKey = `items:all:${JSON.stringify(req.query)}`;
+
+  try {
+    const cached = await getCached(cacheKey);
+    if (cached) {
+      console.log("Serving items from redis...");
+      return res.status(StatusCodes.OK).json(cached);
     }
 
     const { count, rows: items } = await InventoryItem.findAndCountAll({
       where: whereClause,
-      include: [{
-        model: Category,
-        as: 'category',
-        attributes: ['id', 'name', 'type']
-      }],
+      include: [
+        {
+          model: Category,
+          as: "category",
+          attributes: ["id", "name", "type"],
+        },
+      ],
       limit: parseInt(limit),
       offset: parseInt(offset),
-      order: [['name', 'ASC']]
+      order: [["name", "ASC"]],
     });
 
-    return res.status(StatusCodes.OK).json({
+    const response = {
       success: true,
-      message: 'Items has been fetched',
+      message: "Items has been returned successfully",
       data: items,
       meta: {
         total: count,
         pages: Math.ceil(count / limit),
-        currentPage: parseInt(page)
-      }
-    });
+        currentPage: parseInt(page),
+      },
+    };
+    await setCache(cacheKey, response, 60);
+    return res.status(StatusCodes.OK).json(response);
   } catch (error) {
-    console.error('Fetching items error: ', error.message);
+    console.error("Fetching items error: ", error);
     next(error);
   }
 };
@@ -117,23 +158,25 @@ const getAllItems = async (req, res, next) => {
 const getItemById = async (req, res, next) => {
   try {
     const item = await InventoryItem.findByPk(req.params.id, {
-      include: [{
-        model: Category,
-        as: 'category',
+      include: [
+        {
+          model: Category,
+          as: "category",
 
-        attributes: ['id', 'name', 'type']
-      }]
+          attributes: ["id", "name", "type"],
+        },
+      ],
     });
 
-    if (!item) throw new NotFoundError('Item not found.')
+    if (!item) throw new NotFoundError("Item not found.");
 
     return res.status(StatusCodes.OK).json({
       success: true,
-      message: 'Item has been fetched.',
-      data: item
+      message: "Item has been fetched.",
+      data: item,
     });
   } catch (error) {
-    console.error('Fetching item error: ', error);
+    console.error("Fetching item error: ", error);
     next(error);
   }
 };
@@ -141,7 +184,7 @@ const getItemById = async (req, res, next) => {
 const updateItem = async (req, res, next) => {
   try {
     const item = await InventoryItem.findByPk(req.params.id);
-    if (!item) throw new NotFoundError('Item not found.');
+    if (!item) throw new NotFoundError("Item not found.");
 
     const {
       name,
@@ -155,7 +198,7 @@ const updateItem = async (req, res, next) => {
       next_maintenance_date,
       location,
       is_deployable,
-      notes
+      notes,
     } = req.body;
 
     await item.update({
@@ -170,33 +213,39 @@ const updateItem = async (req, res, next) => {
       next_maintenance_date,
       location,
       is_deployable,
-      notes
+      notes,
     });
 
     // Check for maintenance notification
     if (next_maintenance_date) {
       const today = new Date();
       const maintenanceDate = new Date(next_maintenance_date);
-      const daysUntilMaintenance = Math.ceil((maintenanceDate - today) / (1000 * 60 * 60 * 24));
+      const daysUntilMaintenance = Math.ceil(
+        (maintenanceDate - today) / (1000 * 60 * 60 * 24)
+      );
 
       if (daysUntilMaintenance <= 7) {
         await Notification.create({
-          notification_type: 'MAINTENANCE_DUE',
+          notification_type: "MAINTENANCE_DUE",
           inventory_item_id: item.id,
-          title: 'Maintenance Due Soon',
+          title: "Maintenance Due Soon",
           message: `Maintenance due for ${name} in ${daysUntilMaintenance} days`,
-          priority: 'MEDIUM'
+          priority: "MEDIUM",
         });
       }
     }
+    const result = await invalidateCache("items");
 
+    if (!result) {
+      console.log("Failed to invalidate cache");
+    }
     return res.status(StatusCodes.OK).json({
       success: true,
       data: item,
-      message: 'Inventory item updated successfully'
+      message: "Inventory item updated successfully",
     });
   } catch (error) {
-    console.error('Update item error: ', error);
+    console.error("Update item error: ", error);
     next(error);
   }
 };
@@ -204,42 +253,57 @@ const updateItem = async (req, res, next) => {
 const deleteItem = async (req, res, next) => {
   try {
     const item = await InventoryItem.findByPk(req.params.id);
-    if (!item) throw new NotFoundError('Item not fouund.');
+    if (!item) throw new NotFoundError("Item not fouund.");
+    const batch = await Batch.findOne({
+      where: { inventory_item_id: item.id },
+    });
+    if (batch)
+      throw new BadRequestError("A batch exists! Unable to remove item");
 
     await item.destroy();
-    
+    console.log("Item has been deleted");
+    const result = await invalidateCache("items");
+    if (!result) {
+      console.log("Failed to invalidate cache");
+    }
     return res.status(StatusCodes.OK).json({
       success: true,
-      message: 'Inventory item deleted successfully'
+      message: "Inventory item deleted successfully",
     });
   } catch (error) {
-    console.error('Delete Item error: ', error.message);
+    console.error("Delete Item error: ", error.message);
     next(error);
   }
 };
 
 const restoreItem = async (req, res, next) => {
   try {
-    const item = await InventoryItem.findByPk(req.params.id, { paranoid: false });
-    if (!item) throw new NotFoundError('Item not found.');
+    const item = await InventoryItem.findByPk(req.params.id, {
+      paranoid: false,
+    });
+    if (!item) throw new NotFoundError("Item not found.");
 
     await item.restore();
-    
+    const result = await invalidateCache("items");
+
+    if (!result) {
+      console.log("Failed to invalidate cache");
+    }
     return res.status(StatusCodes.OK).json({
       success: true,
-      message: 'Inventory item restored successfully'
+      message: "Inventory item restored successfully",
     });
   } catch (error) {
-    console.error('Restore Item error: ', error.message);
+    console.error("Restore Item error: ", error.message);
     next(error);
   }
 };
 
-module.exports = {
+export {
   createItem,
   getAllItems,
   getItemById,
   updateItem,
   deleteItem,
-  restoreItem
+  restoreItem,
 };

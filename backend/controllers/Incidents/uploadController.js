@@ -1,7 +1,11 @@
-const { getFileUrl, getFilePath } = require("../../config/multer");
-const { StatusCodes } = require("http-status-codes");
-const { BadRequestError } = require("../../utils/Error");
+// const { getFileUrl, getFilePath } = require("../../config/multer");
+// const { StatusCodes } = require("http-status-codes");
+// const { BadRequestError } = require("../../utils/Error");
 
+import getFileUrl from "../../config/multer.js";
+import getFilePath from "../../config/multer.js";
+import { StatusCodes } from "http-status-codes";
+import { BadRequestError } from "../../utils/Error.js";
 /**
  * Upload an image for an incident report
  * @param {Object} req - Express request object
@@ -58,6 +62,4 @@ const uploadIncidentImage = async (req, res, next) => {
   }
 };
 
-module.exports = {
-  uploadIncidentImage,
-};
+export { uploadIncidentImage };

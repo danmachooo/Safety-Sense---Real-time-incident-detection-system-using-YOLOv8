@@ -441,9 +441,53 @@ const showNotification = (message, type) => {
         </div>
       </div>
 
+      <!-- Empty State -->
+      <div
+        v-else-if="!loading && !error && items.length === 0"
+        class="bg-white/70 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-12 text-center"
+      >
+        <Package class="w-16 h-16 mx-auto text-gray-400 mb-4" />
+        <h3 class="text-xl font-semibold text-gray-900 mb-2">
+          {{
+            searchQuery || categoryFilter !== "all"
+              ? "No items found"
+              : "No inventory items yet"
+          }}
+        </h3>
+        <p class="text-gray-600 mb-6">
+          {{
+            searchQuery || categoryFilter !== "all"
+              ? "Try adjusting your search criteria or filters to find what you're looking for."
+              : "Get started by adding your first inventory item to the system."
+          }}
+        </p>
+        <div class="flex flex-col sm:flex-row gap-3 justify-center">
+          <button
+            v-if="searchQuery || categoryFilter !== 'all'"
+            @click="
+              () => {
+                searchQuery = '';
+                categoryFilter = 'all';
+                fetchItems();
+              }
+            "
+            class="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors font-medium"
+          >
+            Clear Filters
+          </button>
+          <button
+            @click="openEditModal()"
+            class="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium flex items-center justify-center"
+          >
+            <PlusCircle class="w-4 h-4 mr-2" />
+            Add First Item
+          </button>
+        </div>
+      </div>
+
       <!-- Table -->
       <div
-        v-else
+        v-else-if="items.length > 0"
         class="bg-white/70 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 overflow-hidden"
       >
         <div class="overflow-x-auto">

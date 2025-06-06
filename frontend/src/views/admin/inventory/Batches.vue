@@ -226,7 +226,12 @@ const expiredBatches = computed(() => {
 });
 
 const totalValue = computed(() => {
-  return batches.value.reduce((sum, batch) => sum + (batch.cost || 0), 0);
+  const val = batches.value.reduce((sum, batch) => {
+    const cost = parseFloat(batch.cost) || 0; // 👈 convert to number safely
+    return sum + cost;
+  }, 0);
+  console.log("VAL: ", val);
+  return val;
 });
 
 // Visible pages for pagination
@@ -468,9 +473,54 @@ const goToPage = (page) => {
         </div>
       </div>
 
+      <!-- Empty State -->
+      <div
+        v-else-if="!loading && !error && batches.length === 0"
+        class="bg-white/70 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-12 text-center"
+      >
+        <Package2 class="w-16 h-16 mx-auto text-gray-400 mb-4" />
+        <h3 class="text-xl font-semibold text-gray-900 mb-2">
+          {{
+            searchQuery || filters.supplier || filters.expiringSoon
+              ? "No batches found"
+              : "No inventory batches yet"
+          }}
+        </h3>
+        <p class="text-gray-600 mb-6">
+          {{
+            searchQuery || filters.supplier || filters.expiringSoon
+              ? "Try adjusting your search criteria or filters to find what you're looking for."
+              : "Get started by creating your first inventory batch to track expiration dates and stock levels."
+          }}
+        </p>
+        <div class="flex flex-col sm:flex-row gap-3 justify-center">
+          <button
+            v-if="searchQuery || filters.supplier || filters.expiringSoon"
+            @click="
+              () => {
+                searchQuery = '';
+                filters.supplier = '';
+                filters.expiringSoon = false;
+                fetchBatches();
+              }
+            "
+            class="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors font-medium"
+          >
+            Clear Filters
+          </button>
+          <button
+            @click="openBatchModal()"
+            class="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium flex items-center justify-center"
+          >
+            <PlusCircle class="w-4 h-4 mr-2" />
+            Add First Batch
+          </button>
+        </div>
+      </div>
+
       <!-- Table -->
       <div
-        v-else
+        v-else-if="batches.length > 0"
         class="bg-white/70 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 overflow-hidden"
       >
         <div class="overflow-x-auto">

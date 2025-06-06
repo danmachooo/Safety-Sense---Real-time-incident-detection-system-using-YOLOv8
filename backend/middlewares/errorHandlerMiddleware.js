@@ -1,9 +1,11 @@
-const { makeError } = require("../utils/Error");
+// const { makeError } = require("../utils/Error");
+
+import { makeError } from "../utils/Error.js";
 
 async function errorHandlerMiddleware(err, req, res, next) {
-    const { error, statusCode } = makeError(err);
-    console.error(error.message, error);
-    return res.status(statusCode).json(error);
+  const { error, statusCode } = makeError(err);
+  console.error(error.message, error);
+  return res.status(statusCode).json(error);
 }
 
-module.exports = errorHandlerMiddleware;
+export default errorHandlerMiddleware;

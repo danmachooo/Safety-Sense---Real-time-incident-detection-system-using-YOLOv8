@@ -1,11 +1,13 @@
-const express = require("express");
-const router = express.Router();
-const {
-  sendTopicNotification,
+import {
+  _sendTopicNotification,
   notifyAllResponders,
-} = require("../controllers/Notification/fcmController");
+} from "../controllers/Notification/fcmController.js";
 
-router.post("/send", sendTopicNotification);
+import express from "express";
+
+const router = express.Router();
+
+router.post("/send", _sendTopicNotification);
 router.post("/notify-all-responders", notifyAllResponders);
 
-module.exports = router;
+export default router;

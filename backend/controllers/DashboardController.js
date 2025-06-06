@@ -1,20 +1,28 @@
-require("dotenv").config();
-const { Op } = require("sequelize");
-// Import models from the index file to ensure associations are loaded
-const models = require("../models/index");
-const Incident = models.Incident;
-const User = models.User;
-const Camera = models.Camera;
-const InventoryItem = models.InventoryItem;
-const Batch = models.Batch;
-const Deployment = models.Deployment;
-const Category = models.Category;
-const IncidentAcceptance = models.IncidentAcceptance;
-const IncidentDismissal = models.IncidentDismissal;
+// const { Op } = require("sequelize");
+// // Import models from the index file to ensure associations are loaded
+// const models = require("../models/index");
 
-const { BadRequestError, NotFoundError } = require("../utils/Error");
-const { StatusCodes } = require("http-status-codes");
-const sequelize = require("../config/database");
+// const { BadRequestError, NotFoundError } = require("../utils/Error");
+// const { StatusCodes } = require("http-status-codes");
+// const sequelize = require("../config/database");
+
+import { Op } from "sequelize";
+import { BadRequestError, NotFoundError } from "../utils/Error.js";
+import { StatusCodes } from "http-status-codes";
+import sequelize from "../config/database.js";
+
+import models from "../models/index.js";
+const {
+  User,
+  Incident,
+  Camera,
+  InventoryItem,
+  Batch,
+  Deployment,
+  Category,
+  IncidentDismissal,
+  IncidentAcceptance,
+} = models;
 
 /**
  * Get dashboard summary statistics
@@ -909,7 +917,7 @@ const getMapData = async (req, res, next) => {
   }
 };
 
-module.exports = {
+export {
   getDashboardSummary,
   getIncidentStats,
   getInventoryStats,

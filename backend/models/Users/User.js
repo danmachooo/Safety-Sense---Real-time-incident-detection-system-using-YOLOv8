@@ -1,5 +1,8 @@
-const { DataTypes } = require("sequelize");
-const sequelize = require("../../config/database");
+// const { DataTypes } = require("sequelize");
+// const sequelize = require("../../config/database");
+
+import { DataTypes } from "sequelize";
+import sequelize from "../../config/database.js";
 
 const User = sequelize.define(
   "Users",
@@ -110,4 +113,4 @@ const User = sequelize.define(
 );
 
 // We'll set up associations in the models/index.js file instead of here
-module.exports = User;
+export default User;

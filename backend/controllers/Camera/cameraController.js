@@ -1,9 +1,19 @@
-const { StatusCodes } = require("http-status-codes");
-const { BadRequestError, NotFoundError } = require("../../utils/Error");
-const Camera = require("../../models/Incidents/Camera");
-const CameraLog = require("../../models/Incidents/CameraLog");
-const { Op } = require("sequelize");
-const { get } = require("../../routes/SystemRoutes");
+// const { StatusCodes } = require("http-status-codes");
+// const { BadRequestError, NotFoundError } = require("../../utils/Error");
+// const Camera = require("../../models/Incidents/Camera");
+// const CameraLog = require("../../models/Incidents/CameraLog");
+// const { Op } = require("sequelize");
+
+import { StatusCodes } from "http-status-codes";
+import { BadRequestError, NotFoundError } from "../../utils/Error.js";
+// import Camera from "../../models/Incidents/Camera.js";
+// import CameraLog from "../../models/Incidents/CameraLog.js";
+
+import models from "../../models/index.js";
+
+const { Camera, CameraLog } = models;
+
+import { Op } from "sequelize";
 
 const registerCamera = async (req, res, next) => {
   try {
@@ -260,7 +270,7 @@ const getDeletedCameras = async (req, res, next) => {
   }
 };
 
-module.exports = {
+export {
   registerCamera,
   updateCamera,
   deleteCamera,

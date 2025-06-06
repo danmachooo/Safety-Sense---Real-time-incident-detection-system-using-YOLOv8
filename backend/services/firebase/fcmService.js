@@ -1,5 +1,8 @@
-const admin = require("../../config/firebase/firebase");
-const { BadRequestError } = require("../../utils/Error");
+// const admin = require("../../config/firebase/firebase");
+// const { BadRequestError } = require("../../utils/Error");
+
+import admin from "../../config/firebase/firebase.js";
+import { BadRequestError } from "../../utils/Error.js";
 
 const sendTopicNotification = async (
   topic,
@@ -46,7 +49,4 @@ const sendTopicNotification = async (
     throw new Error("Error sending notifications");
   }
 };
-
-module.exports = {
-  sendTopicNotification,
-};
+export { sendTopicNotification };

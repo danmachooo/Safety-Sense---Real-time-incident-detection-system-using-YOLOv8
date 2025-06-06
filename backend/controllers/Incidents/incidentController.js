@@ -1,17 +1,21 @@
-require("dotenv").config();
-const { Op } = require("sequelize");
-// Import models from the index file to ensure associations are loaded
-const models = require("../../models");
-const Incident = models.Incident;
-const Camera = models.Camera;
-const User = models.User;
-const IncidentAcceptance = models.IncidentAcceptance;
-const IncidentDismissal = models.IncidentDismissal; // Add this line
+import { Op } from "sequelize"; // Import models from the index file to ensure associations are loaded
+import models from "../../models/index.js";
+const { Incident, Camera, User, IncidentAcceptance, IncidentDismissal } =
+  models;
+// const Camera = models.Camera;
+// const User = models.User;
+// const IncidentAcceptance = models.IncidentAcceptance;
+// const IncidentDismissal = models.IncidentDismissal; // Add this line
 
-const { BadRequestError, NotFoundError } = require("../../utils/Error");
-const { StatusCodes } = require("http-status-codes");
-const sequelize = require("../../config/database");
-const fcmService = require("../../services/firebase/fcmService");
+// const { BadRequestError, NotFoundError } = require("../../utils/Error");
+// const { StatusCodes } = require("http-status-codes");
+// const sequelize = require("../../config/database");
+// const fcmService = require("../../services/firebase/fcmService");
+
+import { BadRequestError, NotFoundError } from "../../utils/Error.js";
+import { StatusCodes } from "http-status-codes";
+import sequelize from "../../config/database.js";
+import { _sendTopicNotification } from "../Notification/fcmController.js";
 /**
  * Create a new incident (handles both citizen reports and camera detections)
  * @param {Object} req - Express request object
@@ -177,7 +181,7 @@ const createCitizenReport = async (req, res, next) => {
           : incident.description;
 
       console.log(process.env.RESPONDER_TOPIC);
-      await fcmService.sendTopicNotification(
+      await _sendTopicNotification(
         process.env.RESPONDER_TOPIC || "all_responders",
         "Incident Alert!",
         shortDescription,
@@ -1356,7 +1360,7 @@ const getUsersByIncident = async (req, res, next) => {
   }
 };
 
-module.exports = {
+export {
   createIncident,
   createCitizenReport,
   createCameraDetection,

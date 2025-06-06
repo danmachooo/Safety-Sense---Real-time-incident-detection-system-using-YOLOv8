@@ -1,9 +1,11 @@
-const express = require("express");
-const router = express.Router();
-const authMiddleware = require("../middlewares/authMiddleware");
-const adminMiddleware = require("../middlewares/adminMiddleware");
+import express from "express";
+import authMiddleware from "../middlewares/authMiddleware.js";
+import adminMiddleware from "../middlewares/adminMiddleware.js";
+import loginRateLimiter from "../middlewares/loginRateLimiter.js";
 
-const {
+const router = express.Router();
+
+import {
   createIncident,
   createCitizenReport,
   createCameraDetection,
@@ -22,11 +24,9 @@ const {
   getDismissedIncidentsByUser,
   getUsersByDismissedIncident,
   getIncidentStats,
-} = require("../controllers/Incidents/incidentController");
-const { upload } = require("../config/multer");
-const {
-  uploadIncidentImage,
-} = require("../controllers/Incidents/uploadController");
+} from "../controllers/Incidents/incidentController.js";
+import { uploadSingle } from "../config/multer.js";
+import { uploadIncidentImage } from "../controllers/Incidents/uploadController.js";
 
 // Get all incidents with filtering
 router.get("/", authMiddleware, getIncidents);
@@ -65,7 +65,7 @@ router.post("/", createIncident);
 
 // Create new incident from citizen report - public endpoint, no auth required
 router.post("/citizen-report", createCitizenReport);
-router.post("/upload-image", upload.single("image"), uploadIncidentImage);
+router.post("/upload-image", uploadSingle, uploadIncidentImage);
 
 // Create new incident from camera detection - requires authentication
 router.post("/camera-detection", authMiddleware, createCameraDetection);
@@ -96,4 +96,4 @@ router.put("/:id/restore", authMiddleware, adminMiddleware, restoreIncident);
 // Delete incident (soft delete) - admin only
 router.delete("/:id", authMiddleware, adminMiddleware, softDeleteIncident);
 
-module.exports = router;
+export default router;

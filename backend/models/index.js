@@ -1,31 +1,35 @@
-const sequelize = require("../config/database");
-const setupAssociations = require("./associations");
+// models/index.js - Main entry point for all models
+
+import sequelize from "../config/database.js";
+import setupAssociations from "./associations.js";
 
 // Import all models
-const User = require("./Users/User");
-const LoginHistory = require("./Users/LoginHistory");
-const Camera = require("./Incidents/Camera");
-const CameraStatus = require("./Incidents/CameraHealthCheck");
-const CameraLog = require("./Incidents/CameraLog");
-const Incident = require("./Incidents/Incident");
-const IncidentAcceptance = require("./Incidents/IncidentAcceptance");
-const Notification = require("./Notification/Notification");
-const InventoryItem = require("./Inventory/InventoryItem");
-const Batch = require("./Inventory/Batch");
-const Category = require("./Inventory/Category");
-const Deployment = require("./Inventory/Deployment");
-const invNotification = require("./Inventory/InventoryNotification");
-const IncidentDismissal = require("./Incidents/IncidentDismissal");
+import User from "./Users/User.js";
+import LoginHistory from "./Users/LoginHistory.js";
+import Camera from "./Incidents/Camera.js";
+import CameraHealthCheck from "./Incidents/CameraHealthCheck.js";
+import CameraLog from "./Incidents/CameraLog.js";
+import Incident from "./Incidents/Incident.js";
+import IncidentAcceptance from "./Incidents/IncidentAcceptance.js";
+import IncidentDismissal from "./Incidents/IncidentDismissal.js";
+import Notification from "./Notification/Notification.js";
+import InventoryItem from "./Inventory/InventoryItem.js";
+import Batch from "./Inventory/Batch.js";
+import Category from "./Inventory/Category.js";
+import Deployment from "./Inventory/Deployment.js";
+import InventoryNotification from "./Inventory/InventoryNotification.js";
+// import ActionLog from "./ActionLog.js"; // Uncomment if this exists
 
-// Set up associations
+// IMPORTANT: Set up associations ONCE here
 setupAssociations();
 
 // Export all models
 const models = {
+  sequelize,
   User,
   LoginHistory,
   Camera,
-  CameraStatus,
+  CameraHealthCheck,
   CameraLog,
   Incident,
   IncidentAcceptance,
@@ -35,7 +39,8 @@ const models = {
   Batch,
   Category,
   Deployment,
-  invNotification,
+  InventoryNotification,
+  // ActionLog, // Uncomment if this exists
 };
 
-module.exports = models;
+export default models;

@@ -1,7 +1,10 @@
-const express = require("express");
+import express from "express";
+import authMiddleware from "../middlewares/authMiddleware.js";
+import adminMiddleware from "../middlewares/adminMiddleware.js";
+import loginRateLimiter from "../middlewares/loginRateLimiter.js";
+
 const router = express.Router();
-const authMiddleware = require("../middlewares/authMiddleware");
-const {
+import {
   getUser,
   getUsers,
   updateUser,
@@ -9,8 +12,7 @@ const {
   restoreUser,
   getDeletedUsers,
   createUser,
-} = require("../controllers/Users/ManageUser");
-const adminMiddleware = require("../middlewares/adminMiddleware");
+} from "../controllers/Users/ManageUser.js";
 
 router.post("/create", authMiddleware, createUser); //ok
 router.get("/get/:id", authMiddleware, getUser); //ok
@@ -26,4 +28,4 @@ router.delete(
 router.patch("/restore/:id", authMiddleware, adminMiddleware, restoreUser); // not yet
 // router.get('/search', authMiddleware, adminMiddleware, searchUsers);
 
-module.exports = router;
+export default router;

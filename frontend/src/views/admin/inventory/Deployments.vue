@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from "vue";
+import { ref, computed, watch, onMounted } from "vue";
 import {
   Eye,
   ChevronLeft,
@@ -13,14 +13,16 @@ import {
   MapPin,
   Calendar,
   Package,
-  TrendingUp,
   Clock,
   CheckCircle2,
+  Ban,
 } from "lucide-vue-next";
 import api from "../../../utils/axios";
 
+// Reactive state for filters, pagination and data
 const deployments = ref([]);
 const loading = ref(true);
+const error = ref(null);
 const currentPage = ref(1);
 const totalPages = ref(1);
 const itemsPerPage = ref(10);
@@ -28,63 +30,121 @@ const searchQuery = ref("");
 const statusFilter = ref("");
 const showModal = ref(false);
 const currentDeployment = ref(null);
+const deploymentLoading = ref(false);
+const isUpdating = ref(false);
 const notification = ref({ show: false, type: "", message: "" });
 
+// Define non-returnable item categories/keywords
+const nonReturnableItems = [
+  "alcohol",
+  "gloves",
+  "masks",
+  "sanitizer",
+  "wipes",
+  "disposable",
+  "single-use",
+  "consumable",
+  "bandages",
+  "gauze",
+  "tape",
+  "syringe",
+  "needle",
+  "swab",
+  "cotton",
+  "tissue",
+  "paper",
+  "plastic",
+];
+
+// Helper function to check if an item is returnable
+const isItemReturnable = (itemName) => {
+  if (!itemName) return true; // Default to returnable if no name
+
+  const lowerItemName = itemName.toLowerCase();
+  return !nonReturnableItems.some((keyword) => lowerItemName.includes(keyword));
+};
+
+// Helper function to check if deployment should show return date
+const shouldShowReturnDate = (deployment) => {
+  const itemName = deployment.inventoryDeploymentItem?.name || "";
+  return isItemReturnable(itemName) && deployment.expected_return_date;
+};
+
+// Helper function to check if status update buttons should be enabled
+const canUpdateStatus = (deployment) => {
+  const itemName = deployment.inventoryDeploymentItem?.name || "";
+  return isItemReturnable(itemName) && deployment.status === "DEPLOYED";
+};
+
+// Fetch deployments from API
 const fetchDeployments = async () => {
   try {
     loading.value = true;
+    error.value = null;
+
     const response = await api.get("inventory/deployment", {
       params: {
         page: currentPage.value,
         limit: itemsPerPage.value,
-        status: statusFilter.value,
-        search: searchQuery.value,
+        status: statusFilter.value || undefined,
+        search: searchQuery.value || undefined,
       },
     });
+
     deployments.value = response.data.data;
     totalPages.value = response.data.meta.pages;
-  } catch (error) {
-    console.error("Error fetching deployments:", error);
+  } catch (err) {
+    console.error("Error fetching deployments:", err);
+    error.value = err;
     showNotification("Failed to fetch deployments", "error");
   } finally {
     loading.value = false;
   }
 };
 
-onMounted(fetchDeployments);
-
-const viewDeployment = async (id) => {
+// Fetch a single deployment by ID
+const fetchDeployment = async (id) => {
   try {
+    deploymentLoading.value = true;
     const response = await api.get(`inventory/deployment/${id}`);
     currentDeployment.value = response.data.data;
-    showModal.value = true;
-  } catch (error) {
-    console.error("Error fetching deployment details:", error);
+  } catch (err) {
+    console.error("Error fetching deployment details:", err);
     showNotification("Failed to fetch deployment details", "error");
+  } finally {
+    deploymentLoading.value = false;
   }
 };
 
-const updateDeploymentStatus = async (newStatus) => {
+// Update deployment status
+const updateDeploymentStatus = async (status) => {
   try {
+    isUpdating.value = true;
+
     const response = await api.put(
       `inventory/deployment/${currentDeployment.value.id}/status`,
       {
-        status: newStatus,
+        status,
         actual_return_date:
-          newStatus === "RETURNED" ? new Date().toISOString() : null,
-        notes: `Status updated to ${newStatus}`,
+          status === "RETURNED" ? new Date().toISOString() : null,
+        notes: `Status updated to ${status}`,
       }
     );
+
     currentDeployment.value = response.data.data;
-    showNotification(`Deployment status updated to ${newStatus}`, "success");
+    showNotification(`Deployment status updated to ${status}`, "success");
+    closeModal();
     fetchDeployments();
-  } catch (error) {
-    console.error("Error updating deployment status:", error);
+  } catch (err) {
+    console.error("Error updating deployment status:", err);
     showNotification("Failed to update deployment status", "error");
+  } finally {
+    isUpdating.value = false;
   }
 };
 
-const statusColor = computed(() => (status) => {
+// Status color utility
+const statusColor = (status) => {
   switch (status) {
     case "DEPLOYED":
       return {
@@ -117,9 +177,11 @@ const statusColor = computed(() => (status) => {
         border: "border-gray-200",
       };
   }
-});
+};
 
+// Format date utility
 const formatDate = (dateString) => {
+  if (!dateString) return "N/A";
   return new Date(dateString).toLocaleDateString("en-US", {
     year: "numeric",
     month: "short",
@@ -127,9 +189,54 @@ const formatDate = (dateString) => {
   });
 };
 
+// Check if deployment is overdue
+const isOverdue = (deployment) => {
+  if (deployment.status !== "DEPLOYED") return false;
+  if (!deployment.expected_return_date) return false;
+  return new Date(deployment.expected_return_date) < new Date();
+};
+
+// Get days until return
+const getDaysUntilReturn = (deployment) => {
+  if (deployment.status !== "DEPLOYED") return null;
+  if (!deployment.expected_return_date) return null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const returnDate = new Date(deployment.expected_return_date);
+  returnDate.setHours(0, 0, 0, 0);
+
+  const diffTime = returnDate - today;
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays;
+};
+
+// Show notification
 const showNotification = (message, type) => {
   notification.value = { show: true, type, message };
-  setTimeout(() => (notification.value.show = false), 3000);
+  setTimeout(() => {
+    notification.value.show = false;
+  }, 3000);
+};
+
+// View deployment details
+const viewDeployment = (id) => {
+  fetchDeployment(id);
+  showModal.value = true;
+};
+
+// Close modal
+const closeModal = () => {
+  showModal.value = false;
+  setTimeout(() => {
+    currentDeployment.value = null;
+  }, 300); // Small delay to prevent UI flicker
+};
+
+// Handle status update
+const handleStatusUpdate = async (status) => {
+  await updateDeploymentStatus(status);
 };
 
 // Computed stats
@@ -144,6 +251,7 @@ const returnedCount = computed(() => {
 const overdueCount = computed(() => {
   return deployments.value.filter((d) => {
     if (d.status !== "DEPLOYED") return false;
+    if (!d.expected_return_date) return false;
     return new Date(d.expected_return_date) < new Date();
   }).length;
 });
@@ -164,6 +272,13 @@ const visiblePages = computed(() => {
   return Array.from({ length: end - start + 1 }, (_, i) => start + i);
 });
 
+// Watch for filter changes and reset to first page
+watch([searchQuery, statusFilter], () => {
+  currentPage.value = 1;
+  fetchDeployments();
+});
+
+// Pagination
 const goToPage = (page) => {
   if (page >= 1 && page <= totalPages.value) {
     currentPage.value = page;
@@ -171,21 +286,8 @@ const goToPage = (page) => {
   }
 };
 
-// Check if deployment is overdue
-const isOverdue = (deployment) => {
-  if (deployment.status !== "DEPLOYED") return false;
-  return new Date(deployment.expected_return_date) < new Date();
-};
-
-// Get days until return
-const getDaysUntilReturn = (deployment) => {
-  if (deployment.status !== "DEPLOYED") return null;
-  const today = new Date();
-  const returnDate = new Date(deployment.expected_return_date);
-  const diffTime = returnDate - today;
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  return diffDays;
-};
+// Initialize data on component mount
+onMounted(fetchDeployments);
 </script>
 
 <template>
@@ -238,7 +340,7 @@ const getDaysUntilReturn = (deployment) => {
                 Deployment Management
               </h1>
               <p class="text-gray-600 mt-1 text-lg">
-                Track and manage inventory deployments
+                Track and manage inventory deployments with smart caching
               </p>
             </div>
           </div>
@@ -320,7 +422,6 @@ const getDaysUntilReturn = (deployment) => {
             />
             <input
               v-model="searchQuery"
-              @input="fetchDeployments"
               type="text"
               placeholder="Search deployments..."
               class="pl-12 w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white/50 backdrop-blur-sm transition-all duration-200"
@@ -332,7 +433,6 @@ const getDaysUntilReturn = (deployment) => {
             />
             <select
               v-model="statusFilter"
-              @change="fetchDeployments"
               class="pl-12 w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white/50 backdrop-blur-sm transition-all duration-200"
             >
               <option value="">All Statuses</option>
@@ -357,9 +457,23 @@ const getDaysUntilReturn = (deployment) => {
         </div>
       </div>
 
+      <!-- Error State -->
+      <div
+        v-else-if="error"
+        class="bg-red-50/80 backdrop-blur-sm border border-red-200 p-6 rounded-2xl text-red-700"
+      >
+        <div class="flex items-center">
+          <AlertTriangle class="w-6 h-6 mr-3" />
+          <div>
+            <p class="font-semibold">Error loading data:</p>
+            <p>{{ error.message }}</p>
+          </div>
+        </div>
+      </div>
+
       <!-- Deployments Table -->
       <div
-        v-else
+        v-else-if="deployments && deployments.length > 0"
         class="bg-white/70 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 overflow-hidden"
       >
         <div class="overflow-x-auto">
@@ -407,15 +521,35 @@ const getDaysUntilReturn = (deployment) => {
                 <td class="px-6 py-4">
                   <div class="flex items-center">
                     <div
-                      class="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center mr-4"
+                      :class="[
+                        'w-10 h-10 rounded-xl flex items-center justify-center mr-4',
+                        isItemReturnable(
+                          deployment.inventoryDeploymentItem?.name
+                        )
+                          ? 'bg-gradient-to-r from-blue-500 to-indigo-600'
+                          : 'bg-gradient-to-r from-gray-400 to-gray-600',
+                      ]"
                     >
                       <Package class="w-5 h-5 text-white" />
                     </div>
-                    <div class="font-semibold text-gray-900">
-                      {{
-                        deployment.inventoryDeploymentItem?.name ||
-                        "Unknown Item"
-                      }}
+                    <div>
+                      <div class="font-semibold text-gray-900">
+                        {{
+                          deployment.inventoryDeploymentItem?.name ||
+                          "Unknown Item"
+                        }}
+                      </div>
+                      <div
+                        v-if="
+                          !isItemReturnable(
+                            deployment.inventoryDeploymentItem?.name
+                          )
+                        "
+                        class="text-xs text-gray-500 flex items-center mt-1"
+                      >
+                        <Ban class="w-3 h-3 mr-1" />
+                        Non-returnable
+                      </div>
                     </div>
                   </div>
                 </td>
@@ -445,7 +579,10 @@ const getDaysUntilReturn = (deployment) => {
                   </span>
                 </td>
                 <td class="px-6 py-4">
-                  <div class="flex items-center">
+                  <div
+                    v-if="shouldShowReturnDate(deployment)"
+                    class="flex items-center"
+                  >
                     <Calendar class="w-4 h-4 text-gray-400 mr-2" />
                     <div>
                       <div class="font-medium text-gray-900">
@@ -479,6 +616,10 @@ const getDaysUntilReturn = (deployment) => {
                       </div>
                     </div>
                   </div>
+                  <div v-else class="flex items-center text-gray-500">
+                    <Ban class="w-4 h-4 mr-2" />
+                    <span class="text-sm">Permanent deployment</span>
+                  </div>
                 </td>
                 <td class="px-6 py-4">
                   <div class="flex items-center justify-end">
@@ -500,8 +641,8 @@ const getDaysUntilReturn = (deployment) => {
           <div class="flex flex-col md:flex-row items-center justify-between">
             <div class="mb-4 md:mb-0 text-sm text-gray-600 font-medium">
               Showing {{ (currentPage - 1) * itemsPerPage + 1 }} to
-              {{ Math.min(currentPage * itemsPerPage, deployments.length) }} of
-              {{ deployments.length }} results
+              {{ Math.min(currentPage * itemsPerPage, totalDeployments) }} of
+              {{ totalDeployments }} results
             </div>
             <nav class="flex items-center space-x-1">
               <button
@@ -536,6 +677,33 @@ const getDaysUntilReturn = (deployment) => {
         </div>
       </div>
 
+      <!-- Empty State -->
+      <div
+        v-else-if="!loading && (!deployments || deployments.length === 0)"
+        class="bg-white/70 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-12 text-center"
+      >
+        <Package class="w-16 h-16 mx-auto text-gray-400 mb-4" />
+        <h3 class="text-xl font-semibold text-gray-900 mb-2">
+          No deployments found
+        </h3>
+        <p class="text-gray-600 mb-6">
+          There are no deployments matching your current filters.
+        </p>
+        <button
+          @click="
+            () => {
+              searchQuery = '';
+              statusFilter = '';
+              currentPage = 1;
+              fetchDeployments();
+            }
+          "
+          class="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
+        >
+          Clear Filters
+        </button>
+      </div>
+
       <!-- Deployment Details Modal -->
       <div
         v-if="showModal"
@@ -549,23 +717,61 @@ const getDaysUntilReturn = (deployment) => {
           >
             <div class="flex items-center">
               <div
-                class="p-3 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl mr-4"
+                :class="[
+                  'p-3 rounded-xl mr-4',
+                  currentDeployment &&
+                  isItemReturnable(
+                    currentDeployment.inventoryDeploymentItem?.name
+                  )
+                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600'
+                    : 'bg-gradient-to-r from-gray-400 to-gray-600',
+                ]"
               >
                 <Truck class="w-6 h-6 text-white" />
               </div>
-              <h3 class="text-2xl font-bold text-gray-900">
-                Deployment Details
-              </h3>
+              <div>
+                <h3 class="text-2xl font-bold text-gray-900">
+                  Deployment Details
+                </h3>
+                <p
+                  v-if="
+                    currentDeployment &&
+                    !isItemReturnable(
+                      currentDeployment.inventoryDeploymentItem?.name
+                    )
+                  "
+                  class="text-sm text-gray-500 flex items-center mt-1"
+                >
+                  <Ban class="w-4 h-4 mr-1" />
+                  Non-returnable item
+                </p>
+              </div>
             </div>
             <button
-              @click="showModal = false"
+              @click="closeModal"
               class="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-xl transition-all duration-200"
             >
               <X class="w-6 h-6" />
             </button>
           </div>
 
-          <div v-if="currentDeployment" class="p-8">
+          <!-- Loading state for deployment details -->
+          <div
+            v-if="deploymentLoading"
+            class="p-8 flex justify-center items-center"
+          >
+            <div class="relative">
+              <div
+                class="animate-spin rounded-full h-8 w-8 border-2 border-blue-200"
+              ></div>
+              <div
+                class="animate-spin rounded-full h-8 w-8 border-2 border-blue-600 border-t-transparent absolute top-0 left-0"
+              ></div>
+            </div>
+          </div>
+
+          <!-- Deployment details content -->
+          <div v-else-if="currentDeployment" class="p-8">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
               <div class="space-y-4">
                 <div>
@@ -631,11 +837,18 @@ const getDaysUntilReturn = (deployment) => {
                   <p class="text-sm font-semibold text-gray-500 mb-2">
                     Expected Return Date
                   </p>
-                  <div class="flex items-center">
+                  <div
+                    v-if="shouldShowReturnDate(currentDeployment)"
+                    class="flex items-center"
+                  >
                     <Calendar class="w-4 h-4 text-gray-400 mr-2" />
                     <p class="text-gray-900 font-medium">
                       {{ formatDate(currentDeployment.expected_return_date) }}
                     </p>
+                  </div>
+                  <div v-else class="flex items-center text-gray-500">
+                    <Ban class="w-4 h-4 mr-2" />
+                    <p class="text-sm">Permanent deployment</p>
                   </div>
                 </div>
               </div>
@@ -649,35 +862,64 @@ const getDaysUntilReturn = (deployment) => {
             </div>
 
             <!-- Status Update Section -->
-            <div class="border-t border-gray-100 pt-6">
+            <div
+              v-if="canUpdateStatus(currentDeployment)"
+              class="border-t border-gray-100 pt-6"
+            >
               <p class="text-lg font-semibold text-gray-900 mb-4">
                 Update Status
               </p>
               <div class="flex flex-wrap gap-3">
                 <button
                   v-if="currentDeployment.status !== 'RETURNED'"
-                  @click="updateDeploymentStatus('RETURNED')"
+                  @click="handleStatusUpdate('RETURNED')"
+                  :disabled="isUpdating"
                   class="btn-status-returned"
                 >
                   <Check class="w-4 h-4 mr-2" />
-                  Mark as Returned
+                  {{ isUpdating ? "Updating..." : "Mark as Returned" }}
                 </button>
                 <button
                   v-if="currentDeployment.status !== 'LOST'"
-                  @click="updateDeploymentStatus('LOST')"
+                  @click="handleStatusUpdate('LOST')"
+                  :disabled="isUpdating"
                   class="btn-status-lost"
                 >
                   <AlertTriangle class="w-4 h-4 mr-2" />
-                  Mark as Lost
+                  {{ isUpdating ? "Updating..." : "Mark as Lost" }}
                 </button>
                 <button
                   v-if="currentDeployment.status !== 'DAMAGED'"
-                  @click="updateDeploymentStatus('DAMAGED')"
+                  @click="handleStatusUpdate('DAMAGED')"
+                  :disabled="isUpdating"
                   class="btn-status-damaged"
                 >
                   <AlertTriangle class="w-4 h-4 mr-2" />
-                  Mark as Damaged
+                  {{ isUpdating ? "Updating..." : "Mark as Damaged" }}
                 </button>
+              </div>
+            </div>
+
+            <!-- Non-returnable item notice -->
+            <div
+              v-else-if="
+                !isItemReturnable(
+                  currentDeployment.inventoryDeploymentItem?.name
+                )
+              "
+              class="border-t border-gray-100 pt-6"
+            >
+              <div class="bg-gray-50 rounded-xl p-4 flex items-center">
+                <Ban class="w-5 h-5 text-gray-500 mr-3" />
+                <div>
+                  <p class="text-sm font-medium text-gray-700">
+                    Non-returnable Item
+                  </p>
+                  <p class="text-xs text-gray-500 mt-1">
+                    This item is not expected to be returned and will remain
+                    permanently deployed.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -712,14 +954,14 @@ const getDaysUntilReturn = (deployment) => {
 }
 
 .btn-status-returned {
-  @apply px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-sm font-medium hover:bg-emerald-100 transition-all duration-200 flex items-center;
+  @apply px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-sm font-medium hover:bg-emerald-100 transition-all duration-200 flex items-center disabled:opacity-50 disabled:cursor-not-allowed;
 }
 
 .btn-status-lost {
-  @apply px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-xl text-sm font-medium hover:bg-red-100 transition-all duration-200 flex items-center;
+  @apply px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-xl text-sm font-medium hover:bg-red-100 transition-all duration-200 flex items-center disabled:opacity-50 disabled:cursor-not-allowed;
 }
 
 .btn-status-damaged {
-  @apply px-4 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl text-sm font-medium hover:bg-amber-100 transition-all duration-200 flex items-center;
+  @apply px-4 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl text-sm font-medium hover:bg-amber-100 transition-all duration-200 flex items-center disabled:opacity-50 disabled:cursor-not-allowed;
 }
 </style>

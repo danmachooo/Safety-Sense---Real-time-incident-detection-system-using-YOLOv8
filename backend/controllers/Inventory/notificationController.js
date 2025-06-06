@@ -6,9 +6,13 @@
 // const { StatusCodes } = require('http-status-codes');
 // const { NotFoundError } = require('../../utils/Error');
 
-import User from "../../models/Users/User.js";
-import InventoryItem from "../../models/Inventory/InventoryItem.js";
-import Notification from "../../models/Notification/Notification.js";
+// import User from "../../models/Users/User.js";
+// import InventoryItem from "../../models/Inventory/InventoryItem.js";
+// import Notification from "../../models/Notification/Notification.js";
+
+import models from "../../models/index.js";
+const { InventoryItem, User, Notification } = models;
+
 import { Op } from "sequelize";
 import { StatusCodes } from "http-status-codes";
 import { NotFoundError } from "../../utils/Error.js";

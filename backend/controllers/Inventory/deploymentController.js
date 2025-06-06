@@ -1,22 +1,13 @@
-// const { Op } = require("sequelize");
-
-// const Deployment = require("../../models/Inventory/Deployment");
-// const { InventoryItem, User } = require("../../models/Inventory");
-// const Notification = require("../../models/Inventory/InventoryNotification");
-// const {
-//   BadRequestError,
-//   NotFoundError,
-//   ForbiddenError,
-//   UnauthorizedError,
-// } = require("../../utils/Error");
-// const { StatusCodes } = require("http-status-codes");
-
 import Op from "sequelize";
-import Deployment from "../../models/Inventory/Deployment.js";
-
-import InventoryItem from "../../models/Inventory/InventoryItem.js";
-import User from "../../models/Users/User.js";
-import Notification from "../../models/Inventory/InventoryNotification.js";
+import models from "../../models/index.js";
+import { StatusCodes } from "http-status-codes";
+import {
+  BadRequestError,
+  NotFoundError,
+  ForbiddenError,
+  UnauthorizedError,
+} from "../../utils/Error.js";
+const { Deployment, InventoryItem, User, Notification } = models;
 
 const createDeployment = async (req, res, next) => {
   try {
@@ -120,7 +111,7 @@ const getAllDeployments = async (req, res, next) => {
       whereClause[Op.or] = [
         { id: { [Op.like]: `%${search}%` } },
         { status: { [Op.like]: `%${search}%` } },
-        { "$inventoryDeploymentItem.name$": { [Op.like]: `%${search}%` } },
+        { "$inventoryItem.name$": { [Op.like]: `%${search}%` } },
         { "$deployer.firstname$": { [Op.like]: `%${search}%` } },
         { "$deployer.lastname$": { [Op.like]: `%${search}%` } },
         ,
@@ -132,7 +123,7 @@ const getAllDeployments = async (req, res, next) => {
       include: [
         {
           model: InventoryItem,
-          as: "inventoryDeploymentItem",
+          as: "inventoryItem",
           attributes: ["id", "name", "unit_of_measure"],
         },
         {
@@ -168,7 +159,7 @@ const getDeploymentById = async (req, res, next) => {
       include: [
         {
           model: InventoryItem,
-          as: "inventoryDeploymentItem",
+          as: "inventoryItem",
           attributes: ["id", "name", "unit_of_measure"],
         },
         {
@@ -196,7 +187,7 @@ const updateDeploymentStatus = async (req, res, next) => {
   try {
     const { status, actual_return_date, notes } = req.body;
     const deployment = await Deployment.findByPk(req.params.id, {
-      include: [{ model: InventoryItem, as: "inventoryDeploymentItem" }],
+      include: [{ model: InventoryItem, as: "inventoryItem" }],
     });
 
     if (!deployment) throw new NotFoundError("Deployment not found");
@@ -214,7 +205,7 @@ const updateDeploymentStatus = async (req, res, next) => {
 
     // If item is returned, update inventory quantity
     if (status === "RETURNED" && oldStatus === "DEPLOYED") {
-      await deployment.inventoryDeploymentItem.increment("quantity_in_stock", {
+      await deployment.inventoryItem.increment("quantity_in_stock", {
         by: deployment.quantity_deployed,
       });
 
@@ -224,7 +215,7 @@ const updateDeploymentStatus = async (req, res, next) => {
         inventory_item_id: deployment.inventory_item_id,
         user_id: req.user.id,
         title: "Equipment Returned",
-        message: `${deployment.inventoryDeploymentItem.name} returned from ${deployment.deployment_location}`,
+        message: `${deployment.inventoryItem.name} returned from ${deployment.deployment_location}`,
         priority: "LOW",
       });
     }
@@ -256,7 +247,7 @@ const getOverdueDeployments = async (req, res, next) => {
         include: [
           {
             model: InventoryItem,
-            as: "inventoryDeploymentItem",
+            as: "inventoryItem",
             attributes: ["id", "name", "unit_of_measure"],
           },
           {

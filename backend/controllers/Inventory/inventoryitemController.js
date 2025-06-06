@@ -18,10 +18,15 @@ import {
   getCached,
   invalidateCache,
 } from "../../services/redis/cache.js";
-import User from "../../models/Users/User.js";
-import InventoryItem from "../../models/Inventory/InventoryItem.js";
-import Category from "../../models/Inventory/Category.js";
-import Notification from "../../models/Notification/Notification.js";
+
+// import User from "../../models/Users/User.js";
+// import InventoryItem from "../../models/Inventory/InventoryItem.js";
+// import Category from "../../models/Inventory/Category.js";
+// import Notification from "../../models/Notification/Notification.js";
+
+import models from "../../models/index.js";
+const { User, InventoryItem, Category, Notification } = models;
+
 import { BadRequestError, NotFoundError } from "../../utils/Error.js";
 import { StatusCodes } from "http-status-codes";
 import Batch from "../../models/Inventory/Batch.js";

@@ -1,8 +1,9 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref, onMounted, computed, watch, onUnmounted } from "vue";
 import {
   Bell,
   User,
+  Settings,
   LogOut,
   ChevronDown,
   X,
@@ -14,41 +15,165 @@ import {
 } from "lucide-vue-next";
 import { useAuthStore } from "../stores/authStore";
 import { useRouter } from "vue-router";
+import api from "../utils/axios";
 
-// Composables
-import { useNotifications } from "../utils/composables/notification/useNotification";
-import { useUser } from "../utils/composables/auth/useUser";
-import { useTimeFormat } from "../utils/composables/utils/useTimeFormat";
-
-// Stores and router
+const loggedInUser = ref(JSON.parse(localStorage.getItem("authUser")) || {});
 const authStore = useAuthStore();
 const router = useRouter();
 
-// UI state
 const showUserDropdown = ref(false);
 const showNotifications = ref(false);
 
-// Use composables
-const {
-  currentTab,
-  sortOrder,
-  notifications,
-  totalNotifications,
-  hasMore,
-  unreadCount,
-  isLoading,
-  markAsRead,
-  loadMore,
-  toggleSort,
-  switchTab,
-  refreshNotifications,
-  isMarkingAsRead,
-} = useNotifications();
+// Notification State
+const notifications = ref([]);
+const currentTab = ref("unread");
+const sortOrder = ref("desc");
+const isLoading = ref(false);
+const loadingMore = ref(false);
+const totalNotifications = ref(0);
+const hasMore = ref(false);
+const limit = 5;
+const offset = ref(0);
 
-const { user, userInitials, userFullName } = useUser();
-const { formatTime } = useTimeFormat();
+const user = ref({
+  firstname: "",
+  lastname: "",
+  contact: "",
+  role: "",
+});
 
-// User actions
+// Add new refs for tracking unread notifications
+const totalUnreadCount = ref(0);
+const pollingInterval = ref(null);
+
+// Computed
+const unreadCount = computed(() => totalUnreadCount.value);
+
+// Notification Functions
+const fetchNotifications = async (loadMore = false) => {
+  try {
+    if (!loadMore) {
+      isLoading.value = true;
+      offset.value = 0;
+    } else {
+      loadingMore.value = true;
+    }
+
+    const params = new URLSearchParams({
+      isRead: currentTab.value === "read",
+      limit,
+      offset: offset.value,
+      sortOrder: sortOrder.value,
+    });
+
+    const response = await api.get(`/system/notifications?${params}`);
+
+    if (response.data.success) {
+      if (loadMore) {
+        notifications.value = [...notifications.value, ...response.data.data];
+        console.log(notifications.value);
+      } else {
+        notifications.value = response.data.data;
+      }
+
+      hasMore.value = response.data.hasMore;
+      totalNotifications.value = response.data.totalNotifications;
+
+      // Update unread count if we're fetching unread notifications
+      if (currentTab.value === "unread" && !loadMore) {
+        totalUnreadCount.value = response.data.totalNotifications;
+      }
+    }
+  } catch (error) {
+    console.error("Error fetching notifications:", error);
+  } finally {
+    isLoading.value = false;
+    loadingMore.value = false;
+  }
+};
+
+// Add function to fetch only unread count
+const fetchUnreadCount = async () => {
+  try {
+    const response = await api.get("/system/notifications/unread-count");
+    if (response.data.success) {
+      totalUnreadCount.value = response.data.count;
+    }
+  } catch (error) {
+    console.error("Error fetching unread count:", error);
+  }
+};
+
+// Modify markAsRead to update counts
+const markAsRead = async (id) => {
+  try {
+    await api.patch(`/system/notifications/mark-as-read/${id}`);
+    const notification = notifications.value.find((n) => n.id === id);
+    if (notification) {
+      notification.isRead = true;
+      totalUnreadCount.value = Math.max(0, totalUnreadCount.value - 1);
+
+      // If we're in unread tab, remove the notification
+      if (currentTab.value === "unread") {
+        notifications.value = notifications.value.filter((n) => n.id !== id);
+        totalNotifications.value--;
+      }
+    }
+  } catch (error) {
+    console.error("Error marking notification as read:", error);
+  }
+};
+
+// Add polling function for real-time updates
+const startPolling = () => {
+  // Poll every 30 seconds
+  pollingInterval.value = setInterval(async () => {
+    await fetchUnreadCount();
+
+    // If showing unread notifications, refresh the list
+    if (currentTab.value === "unread" && showNotifications.value) {
+      await fetchNotifications();
+    }
+  }, 3000);
+};
+
+const formatTime = (timestamp) => {
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diff = now - date;
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (minutes < 60) {
+    return `${minutes}m ago`;
+  } else if (hours < 24) {
+    return `${hours}h ago`;
+  } else if (days < 7) {
+    return `${days}d ago`;
+  } else {
+    return date.toLocaleDateString();
+  }
+};
+
+// Existing Header Functions
+const fetchUser = async () => {
+  try {
+    user.value = {
+      firstname: loggedInUser.value.firstname || "",
+      lastname: loggedInUser.value.lastname || "",
+      contact: loggedInUser.value.contact || "",
+      email: loggedInUser.value.email || "",
+      role: loggedInUser.value.role || "",
+      createdAt: loggedInUser.value.createdAt || "",
+      isVerified: loggedInUser.value.isVerified ?? false,
+      isBlocked: loggedInUser.value.isBlocked ?? false,
+    };
+  } catch (error) {
+    console.error("Error fetching user data:", error);
+  }
+};
+
 const handleLogout = async () => {
   await authStore.logout();
   if (!authStore.isAuthenticated) {
@@ -58,10 +183,8 @@ const handleLogout = async () => {
 
 const goToProfile = () => {
   router.push("/admin/users/profile/me");
-  showUserDropdown.value = false;
 };
 
-// UI handlers
 const toggleUserDropdown = () => {
   showUserDropdown.value = !showUserDropdown.value;
   if (showUserDropdown.value) {
@@ -69,46 +192,47 @@ const toggleUserDropdown = () => {
   }
 };
 
+// Update toggleNotifications to refresh data when opening
 const toggleNotifications = () => {
   showNotifications.value = !showNotifications.value;
   if (showNotifications.value) {
     showUserDropdown.value = false;
-    refreshNotifications();
+    fetchNotifications();
+    fetchUnreadCount();
   }
 };
 
-const handleMarkAsRead = async (id) => {
-  try {
-    await markAsRead(id);
-  } catch (error) {
-    console.error("Error marking notification as read:", error);
-  }
-};
-
-const handleTabChange = (tab) => {
-  switchTab(tab);
-};
-
-// Click outside handler
-const handleClickOutside = (e) => {
-  const target = e.target;
-  if (!target.closest(".user-dropdown") && !target.closest(".user-button")) {
-    showUserDropdown.value = false;
-  }
-  if (
-    !target.closest(".notifications-dropdown") &&
-    !target.closest(".notifications-button")
-  ) {
-    showNotifications.value = false;
-  }
-};
-
-onMounted(() => {
-  document.addEventListener("click", handleClickOutside);
+// Watch for tab changes
+watch(currentTab, () => {
+  fetchNotifications();
 });
 
+// Event Listeners
+onMounted(() => {
+  fetchUser();
+  fetchNotifications();
+  fetchUnreadCount();
+  startPolling();
+
+  document.addEventListener("click", (e) => {
+    const target = e.target;
+    if (!target.closest(".user-dropdown") && !target.closest(".user-button")) {
+      showUserDropdown.value = false;
+    }
+    if (
+      !target.closest(".notifications-dropdown") &&
+      !target.closest(".notifications-button")
+    ) {
+      showNotifications.value = false;
+    }
+  });
+});
+
+// Add cleanup on unmount
 onUnmounted(() => {
-  document.removeEventListener("click", handleClickOutside);
+  if (pollingInterval.value) {
+    clearInterval(pollingInterval.value);
+  }
 });
 </script>
 
@@ -134,7 +258,7 @@ onUnmounted(() => {
             v-if="unreadCount > 0"
             class="absolute top-0 right-0 transform translate-x-1/2 -translate-y-1/2 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center animate-pulse"
           >
-            {{ unreadCount > 99 ? "99+" : unreadCount }}
+            {{ unreadCount }}
           </span>
         </button>
 
@@ -156,9 +280,6 @@ onUnmounted(() => {
                 <button
                   @click="toggleSort"
                   class="p-1.5 text-gray-600 hover:text-gray-900 rounded-full hover:bg-gray-100 transition-colors duration-200"
-                  :title="`Sort ${
-                    sortOrder === 'asc' ? 'Descending' : 'Ascending'
-                  }`"
                 >
                   <component
                     :is="sortOrder === 'asc' ? ArrowUp : ArrowDown"
@@ -176,7 +297,7 @@ onUnmounted(() => {
                   { id: 'read', name: 'Read' },
                 ]"
                 :key="tab.id"
-                @click="handleTabChange(tab.id)"
+                @click="currentTab = tab.id"
                 class="flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors duration-200 relative"
                 :class="
                   currentTab === tab.id
@@ -189,7 +310,7 @@ onUnmounted(() => {
                   v-if="tab.id === 'unread' && unreadCount > 0"
                   class="absolute top-0 right-0 transform translate-x-1/2 -translate-y-1/2 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center"
                 >
-                  {{ unreadCount > 9 ? "9+" : unreadCount }}
+                  {{ unreadCount }}
                 </span>
               </button>
             </div>
@@ -212,8 +333,8 @@ onUnmounted(() => {
                 :class="{ 'bg-blue-50/50': !notification.isRead }"
               >
                 <div class="flex justify-between items-start">
-                  <div class="flex-1 pr-2">
-                    <p class="text-sm text-gray-800 leading-relaxed">
+                  <div class="flex-1">
+                    <p class="text-sm text-gray-800">
                       {{ notification.description }}
                     </p>
                     <p class="text-xs text-gray-500 mt-1">
@@ -222,16 +343,10 @@ onUnmounted(() => {
                   </div>
                   <button
                     v-if="!notification.isRead"
-                    @click="handleMarkAsRead(notification.id)"
-                    :disabled="isMarkingAsRead"
-                    class="text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity duration-200 disabled:opacity-50"
-                    title="Mark as read"
+                    @click="markAsRead(notification.id)"
+                    class="text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
                   >
-                    <Loader2
-                      v-if="isMarkingAsRead"
-                      class="w-4 h-4 animate-spin"
-                    />
-                    <Check v-else class="w-4 h-4" />
+                    <Check class="w-4 h-4" />
                   </button>
                 </div>
               </div>
@@ -240,22 +355,19 @@ onUnmounted(() => {
               <div v-if="hasMore" class="p-3 text-center border-t">
                 <button
                   @click="loadMore"
-                  class="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center justify-center w-full space-x-2 disabled:opacity-50"
-                  :disabled="isLoading"
+                  class="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center justify-center w-full space-x-2"
+                  :disabled="loadingMore"
                 >
-                  <Loader2 v-if="isLoading" class="w-4 h-4 animate-spin" />
+                  <Loader2 v-if="loadingMore" class="w-4 h-4 animate-spin" />
                   <MoreHorizontal v-else class="w-4 h-4" />
-                  <span>{{ isLoading ? "Loading..." : "Show More" }}</span>
+                  <span>{{ loadingMore ? "Loading..." : "Show More" }}</span>
                 </button>
               </div>
             </template>
 
             <!-- Empty State -->
-            <div v-else class="p-8 text-center text-gray-500">
-              <Bell class="w-12 h-12 mx-auto text-gray-300 mb-3" />
-              <p class="text-sm">
-                No {{ currentTab === "unread" ? "unread" : "" }} notifications
-              </p>
+            <div v-else class="p-4 text-center text-gray-500">
+              No {{ currentTab === "unread" ? "unread" : "" }} notifications
             </div>
           </div>
         </div>
@@ -270,19 +382,19 @@ onUnmounted(() => {
           <div class="flex items-center space-x-3">
             <div
               v-if="user.avatar"
-              class="w-8 h-8 rounded-full bg-cover bg-center border-2 border-gray-300"
+              class="w-8 h-8 rounded-full bg-cover bg-center"
               :style="{ backgroundImage: `url(${user.avatar})` }"
             ></div>
             <div
               v-else
-              class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold text-sm"
+              class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold"
             >
-              {{ userInitials }}
+              {{ user.firstname[0] }}{{ user.lastname[0] }}
             </div>
 
             <div class="hidden md:block text-left">
               <p class="text-sm font-medium text-white">{{ user.firstname }}</p>
-              <p class="text-xs text-gray-300 capitalize">{{ user.role }}</p>
+              <p class="text-xs text-gray-300">{{ user.role }}</p>
             </div>
           </div>
           <ChevronDown
@@ -297,10 +409,10 @@ onUnmounted(() => {
           class="user-dropdown absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50"
         >
           <div class="p-3 border-b border-gray-200">
-            <p class="text-sm font-medium text-gray-800 truncate">
-              {{ userFullName }}
+            <p class="text-sm font-medium text-gray-800">
+              {{ user.firstname }} {{ user.lastname }}
             </p>
-            <p class="text-xs text-gray-500 truncate">{{ user.email }}</p>
+            <p class="text-xs text-gray-500">{{ user.email }}</p>
           </div>
           <div class="p-2">
             <button
@@ -331,7 +443,7 @@ onUnmounted(() => {
 }
 
 .max-h-96::-webkit-scrollbar {
-  width: 6px;
+  width: 2px;
 }
 
 .max-h-96::-webkit-scrollbar-track {
@@ -341,9 +453,5 @@ onUnmounted(() => {
 .max-h-96::-webkit-scrollbar-thumb {
   background-color: #cbd5e1;
   border-radius: 3px;
-}
-
-.max-h-96::-webkit-scrollbar-thumb:hover {
-  background-color: #94a3b8;
 }
 </style>

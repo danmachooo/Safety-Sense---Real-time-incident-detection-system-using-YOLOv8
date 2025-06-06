@@ -1,10 +1,5 @@
-// const { DataTypes } = require('sequelize');
-// const sequelize = require('../../config/database');
-// const Category = require('./Category');
-
 import { DataTypes } from "sequelize";
 import sequelize from "../../config/database.js";
-import Category from "./Category.js";
 
 const InventoryItem = sequelize.define(
   "InventoryItem",
@@ -28,7 +23,7 @@ const InventoryItem = sequelize.define(
       type: DataTypes.INTEGER,
       allowNull: false,
       references: {
-        model: Category,
+        model: "categories", // Use table name
         key: "id",
       },
     },
@@ -89,24 +84,12 @@ const InventoryItem = sequelize.define(
     paranoid: true,
     tableName: "inventory_items",
     indexes: [
-      {
-        fields: ["name"],
-      },
-      {
-        fields: ["category_id"],
-      },
-      {
-        fields: ["condition"],
-      },
-      {
-        fields: ["is_deployable"],
-      },
-      {
-        fields: ["is_active"],
-      },
-      {
-        fields: ["deletedAt"],
-      },
+      { fields: ["name"] },
+      { fields: ["category_id"] },
+      { fields: ["condition"] },
+      { fields: ["is_deployable"] },
+      { fields: ["is_active"] },
+      { fields: ["deletedAt"] },
     ],
   }
 );

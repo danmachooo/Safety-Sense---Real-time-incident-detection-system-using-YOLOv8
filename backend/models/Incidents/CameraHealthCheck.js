@@ -1,9 +1,5 @@
-// const { DataTypes } = require("sequelize");
-// const sequelize = require("../../config/database");
-
 import { DataTypes } from "sequelize";
 import sequelize from "../../config/database.js";
-import Camera from "./Camera.js";
 
 const CameraHealthCheck = sequelize.define(
   "CameraHealthCheck",
@@ -17,40 +13,33 @@ const CameraHealthCheck = sequelize.define(
       type: DataTypes.INTEGER,
       allowNull: false,
       references: {
-        model: Camera,
+        model: "Cameras", // Use table name instead of model reference
         key: "id",
       },
       onDelete: "CASCADE",
     },
     status: {
-      // ✅ Status during the check
       type: DataTypes.ENUM("online", "offline", "unknown"),
       allowNull: false,
     },
     checkedAt: {
-      // ✅ When was the check performed?
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,
     },
     downtimeStart: {
-      // ✅ NEW FIELD: When camera went offline
       type: DataTypes.DATE,
       allowNull: true,
     },
     downtimeEnd: {
-      // ✅ NEW FIELD: When camera came back online
       type: DataTypes.DATE,
       allowNull: true,
     },
   },
   {
     tableName: "CameraHealthChecks",
-    timestamps: false, // ✅ Since this table is just for records, no need for timestamps
+    timestamps: false,
     indexes: [{ fields: ["cameraId"] }, { fields: ["checkedAt"] }],
   }
 );
-
-// ✅ Define relationship
-CameraHealthCheck.belongsTo(Camera, { foreignKey: "cameraId", as: "camera" });
 
 export default CameraHealthCheck;

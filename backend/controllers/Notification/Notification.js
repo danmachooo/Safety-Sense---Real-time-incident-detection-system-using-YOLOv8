@@ -2,9 +2,9 @@
 // const User = require('../../models/Users/User');
 // const { StatusCodes } = require('http-status-codes');
 // const { BadRequestError, NotFoundError } = require('../../utils/Error');
+import models from "../../models/index.js";
 
-import Notification from "../../models/Notification/Notification.js";
-import User from "../../models/Users/User.js";
+const { Notification, User } = models;
 import { StatusCodes } from "http-status-codes";
 import { BadRequestError, NotFoundError } from "../../utils/Error.js";
 /**

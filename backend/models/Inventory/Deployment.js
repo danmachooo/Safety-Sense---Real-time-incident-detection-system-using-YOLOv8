@@ -1,12 +1,5 @@
-// const { DataTypes } = require('sequelize');
-// const sequelize = require('../../config/database');
-// const InventoryItem = require('./InventoryItem');
-// const User = require('../Users/User');
-
 import { DataTypes } from "sequelize";
 import sequelize from "../../config/database.js";
-import InventoryItem from "./InventoryItem.js";
-import User from "../Users/User.js";
 
 const Deployment = sequelize.define(
   "Deployment",
@@ -19,14 +12,14 @@ const Deployment = sequelize.define(
     inventory_item_id: {
       type: DataTypes.INTEGER,
       references: {
-        model: InventoryItem,
+        model: "inventory_items", // Use table name
         key: "id",
       },
     },
     deployed_by: {
       type: DataTypes.INTEGER,
       references: {
-        model: User,
+        model: "users", // Use table name
         key: "id",
       },
     },
@@ -79,24 +72,12 @@ const Deployment = sequelize.define(
     paranoid: true,
     tableName: "deployments",
     indexes: [
-      {
-        fields: ["inventory_item_id"],
-      },
-      {
-        fields: ["deployed_by"],
-      },
-      {
-        fields: ["deployment_type"],
-      },
-      {
-        fields: ["status"],
-      },
-      {
-        fields: ["deployment_date"],
-      },
-      {
-        fields: ["deletedAt"],
-      },
+      { fields: ["inventory_item_id"] },
+      { fields: ["deployed_by"] },
+      { fields: ["deployment_type"] },
+      { fields: ["status"] },
+      { fields: ["deployment_date"] },
+      { fields: ["deletedAt"] },
     ],
   }
 );

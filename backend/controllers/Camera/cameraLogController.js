@@ -1,5 +1,6 @@
 // const CameraLog = require('../../models/Incidents/CameraLog');
-import CameraLog from "../../models/Incidents/CameraLog.js";
+import models from "../../models/index.js";
+const { CameraLog } = models;
 
 const getCameraLogs = async (req, res, next) => {
   try {

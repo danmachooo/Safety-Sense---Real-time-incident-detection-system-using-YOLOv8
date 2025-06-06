@@ -6,8 +6,13 @@
 
 import { StatusCodes } from "http-status-codes";
 import { BadRequestError, NotFoundError } from "../../utils/Error.js";
-import Camera from "../../models/Incidents/Camera.js";
-import CameraLog from "../../models/Incidents/CameraLog.js";
+// import Camera from "../../models/Incidents/Camera.js";
+// import CameraLog from "../../models/Incidents/CameraLog.js";
+
+import models from "../../models/index.js";
+
+const { Camera, CameraLog } = models;
+
 import { Op } from "sequelize";
 
 const registerCamera = async (req, res, next) => {

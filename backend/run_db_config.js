@@ -2,7 +2,7 @@
 // require("./models"); // Importing this will auto-associate models
 
 import sequelize from "./config/database.js";
-import "./models";
+import "./models/index.js";
 
 sequelize
   .sync({ alter: true })

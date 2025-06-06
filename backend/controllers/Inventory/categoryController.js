@@ -14,8 +14,10 @@
 // const { Op } = require("sequelize");
 
 import { StatusCodes } from "http-status-codes";
-import InventoryItem from "../../models/Inventory/InventoryItem.js";
-import Category from "../../models/Inventory/Category.js";
+import models from "../../models/index.js";
+const { Category, InventoryItem } = models;
+// import InventoryItem from "../../models/Inventory/InventoryItem.js";
+// import Category from "../../models/Inventory/Category.js";
 import {
   BadRequestError,
   NotFoundError,

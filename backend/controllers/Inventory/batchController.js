@@ -17,10 +17,20 @@
 
 import { Op } from "sequelize";
 
-import InventoryItem from "../../models/Inventory/InventoryItem.js";
-import Batch from "../../models/Inventory/Batch.js";
-import User from "../../models/Users/User.js";
-import Notification from "../../models/Inventory/InventoryNotification.js";
+// import InventoryItem from "../../models/Inventory/InventoryItem.js";
+// import Batch from "../../models/Inventory/Batch.js";
+// import User from "../../models/Users/User.js";
+// import Notification from "../../models/Inventory/InventoryNotification.js";
+
+// import {
+//   InventoryItem,
+//   Batch,
+//   User,
+//   Notification,
+// } from "../../models/index.js";
+
+import models from "../../models/index.js";
+const { User, InventoryItem, Category, Batch } = models;
 
 import {
   BadRequestError,
@@ -150,7 +160,7 @@ const getAllBatches = async (req, res, next) => {
   }
   const cacheKey = `batch:all:${JSON.stringify(req.query)}`;
   try {
-    const cached = await getCached(cachedKey);
+    const cached = await getCached(cacheKey);
     if (cached) {
       console.log("Serving batch from redis...");
       return res.status(StatusCodes.OK).json(cached);
@@ -161,7 +171,7 @@ const getAllBatches = async (req, res, next) => {
       include: [
         {
           model: InventoryItem,
-          as: "inventoryBatchItem",
+          as: "inventoryItem",
           attributes: ["id", "name", "unit_of_measure"],
         },
         {
@@ -203,7 +213,7 @@ const getBatchById = async (req, res, next) => {
       include: [
         {
           model: InventoryItem,
-          as: "inventoryBatchItem",
+          as: "inventoryItem",
           attributes: ["id", "name", "unit_of_measure"],
         },
         {
@@ -377,7 +387,7 @@ const getExpiringBatches = async (req, res, next) => {
       include: [
         {
           model: InventoryItem,
-          as: "inventoryBatchItem",
+          as: "inventoryItem",
           attributes: ["id", "name", "unit_of_measure"],
         },
       ],

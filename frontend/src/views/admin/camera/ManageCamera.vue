@@ -448,8 +448,68 @@ const formatDate = (dateString) => {
         </div>
       </div>
 
+      <!-- Loading State -->
+      <div
+        v-if="isRefreshing && cameras.length === 0"
+        class="flex justify-center items-center h-64"
+      >
+        <div class="relative">
+          <div
+            class="animate-spin rounded-full h-16 w-16 border-4 border-blue-200"
+          ></div>
+          <div
+            class="animate-spin rounded-full h-16 w-16 border-4 border-blue-600 border-t-transparent absolute top-0 left-0"
+          ></div>
+        </div>
+      </div>
+
+      <!-- Empty State -->
+      <div
+        v-else-if="!isRefreshing && cameras.length === 0"
+        class="bg-white/70 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-12 text-center"
+      >
+        <Camera class="w-16 h-16 mx-auto text-gray-400 mb-4" />
+        <h3 class="text-xl font-semibold text-gray-900 mb-2">
+          {{
+            searchQuery || statusFilter !== "all"
+              ? "No cameras found"
+              : "No security cameras yet"
+          }}
+        </h3>
+        <p class="text-gray-600 mb-6">
+          {{
+            searchQuery || statusFilter !== "all"
+              ? "Try adjusting your search criteria or filters to find what you're looking for."
+              : "Get started by registering your first security camera to begin monitoring your premises."
+          }}
+        </p>
+        <div class="flex flex-col sm:flex-row gap-3 justify-center">
+          <button
+            v-if="searchQuery || statusFilter !== 'all'"
+            @click="
+              () => {
+                searchQuery = '';
+                statusFilter = 'all';
+                fetchCameras();
+              }
+            "
+            class="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors font-medium"
+          >
+            Clear Filters
+          </button>
+          <button
+            @click="addNewCamera"
+            class="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium flex items-center justify-center"
+          >
+            <PlusCircle class="w-4 h-4 mr-2" />
+            Register First Camera
+          </button>
+        </div>
+      </div>
+
       <!-- Table -->
       <div
+        v-else-if="cameras.length > 0"
         class="bg-white/70 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 overflow-hidden"
       >
         <div class="overflow-x-auto">

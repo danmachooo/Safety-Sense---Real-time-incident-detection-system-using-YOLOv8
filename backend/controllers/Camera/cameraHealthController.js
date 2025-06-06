@@ -8,9 +8,14 @@
 
 import { StatusCodes } from "http-status-codes";
 import { BadRequestError, NotFoundError } from "../../utils/Error.js";
-import Camera from "../../models/Incidents/Camera.js";
-import CameraHealthCheck from "../../models/Incidents/CameraHealthCheck.js";
-import CameraLog from "../../models/Incidents/CameraLog.js";
+// import Camera from "../../models/Incidents/Camera.js";
+// import CameraHealthCheck from "../../models/Incidents/CameraHealthCheck.js";
+// import CameraLog from "../../models/Incidents/CameraLog.js";
+
+import models from "../../models/index.js";
+
+const { Camera, CameraHealthCheck, CameraLog } = models;
+
 import { Op } from "sequelize";
 import axios from "axios";
 

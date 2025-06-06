@@ -10,16 +10,19 @@ import { Op } from "sequelize";
 import { BadRequestError, NotFoundError } from "../utils/Error.js";
 import { StatusCodes } from "http-status-codes";
 import sequelize from "../config/database.js";
+
 import models from "../models/index.js";
-const Incident = models.Incident;
-const User = models.User;
-const Camera = models.Camera;
-const InventoryItem = models.InventoryItem;
-const Batch = models.Batch;
-const Deployment = models.Deployment;
-const Category = models.Category;
-const IncidentAcceptance = models.IncidentAcceptance;
-const IncidentDismissal = models.IncidentDismissal;
+const {
+  User,
+  Incident,
+  Camera,
+  InventoryItem,
+  Batch,
+  Deployment,
+  Category,
+  IncidentDismissal,
+  IncidentAcceptance,
+} = models;
 
 /**
  * Get dashboard summary statistics

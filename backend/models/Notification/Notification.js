@@ -1,10 +1,5 @@
-// const { DataTypes } = require('sequelize');
-// const sequelize = require('../../config/database');
-// const Camera = require('../Incidents/Camera');
-
 import { DataTypes } from "sequelize";
 import sequelize from "../../config/database.js";
-import Camera from "../Incidents/Camera.js";
 
 const Notification = sequelize.define(
   "Notification",
@@ -46,23 +41,23 @@ const Notification = sequelize.define(
     },
     entityId: {
       type: DataTypes.INTEGER,
-      allowNull: true, // ✅ Can be null if logging general actions
+      allowNull: true,
     },
     description: {
       type: DataTypes.TEXT,
-      allowNull: false, // ✅ Ensure every notification has a description
+      allowNull: false,
     },
   },
   {
     timestamps: true,
-    paranoid: true, // ✅ Enables soft delete (restorable logs)
+    paranoid: true,
     tableName: "notifications",
     indexes: [
       { fields: ["userId"] },
       { fields: ["actionType"] },
       { fields: ["entityType"] },
       { fields: ["isRead"] },
-      { fields: ["entityId"] }, // ✅ Add entityId for easier queries
+      { fields: ["entityId"] },
       { fields: ["createdAt"] },
       { fields: ["deletedAt"] },
     ],

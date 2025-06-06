@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, reactive, watchEffect } from "vue";
+import { ref, computed, watch, onMounted } from "vue";
 import {
   Eye,
   ChevronLeft,
@@ -17,23 +17,22 @@ import {
   CheckCircle2,
   Ban,
 } from "lucide-vue-next";
+import api from "../../../utils/axios";
 
-// Composables
-import {
-  useDeployments,
-  useDeployment,
-} from "../../../utils/composables/deployments/useDeployments";
-import { useDeploymentUtils } from "../../../utils/composables/deployments/useDeploymentUtils";
-import { useNotifications } from "../../../utils/composables/inventory/useNotifications";
-import { usePagination } from "../../../utils/composables/inventory/usePagination";
-
-// Reactive state for filters and pagination
+// Reactive state for filters, pagination and data
+const deployments = ref([]);
+const loading = ref(true);
+const error = ref(null);
 const currentPage = ref(1);
+const totalPages = ref(1);
 const itemsPerPage = ref(10);
 const searchQuery = ref("");
 const statusFilter = ref("");
 const showModal = ref(false);
-const currentDeploymentId = ref(null);
+const currentDeployment = ref(null);
+const deploymentLoading = ref(false);
+const isUpdating = ref(false);
+const notification = ref({ show: false, type: "", message: "" });
 
 // Define non-returnable item categories/keywords
 const nonReturnableItems = [
@@ -77,80 +76,218 @@ const canUpdateStatus = (deployment) => {
   return isItemReturnable(itemName) && deployment.status === "DEPLOYED";
 };
 
-const computedParams = computed(() => ({
-  page: currentPage.value,
-  limit: itemsPerPage.value,
-  status: statusFilter.value || undefined,
-  search: searchQuery.value || undefined,
-}));
+// Fetch deployments from API
+const fetchDeployments = async () => {
+  try {
+    loading.value = true;
+    error.value = null;
 
-const {
-  deployments,
-  totalPages,
-  loading,
-  error,
-  deployedCount,
-  returnedCount,
-  overdueCount,
-  totalDeployments,
-  updateDeploymentStatus,
-  isUpdating,
-  refetchDeployments,
-} = useDeployments(computedParams);
+    const response = await api.get("inventory/deployment", {
+      params: {
+        page: currentPage.value,
+        limit: itemsPerPage.value,
+        status: statusFilter.value || undefined,
+        search: searchQuery.value || undefined,
+      },
+    });
 
-const { deployment: currentDeployment, loading: deploymentLoading } =
-  useDeployment(currentDeploymentId);
+    deployments.value = response.data.data;
+    totalPages.value = response.data.meta.pages;
+  } catch (err) {
+    console.error("Error fetching deployments:", err);
+    error.value = err;
+    showNotification("Failed to fetch deployments", "error");
+  } finally {
+    loading.value = false;
+  }
+};
 
-const { statusColor, formatDate, isOverdue, getDaysUntilReturn } =
-  useDeploymentUtils();
-const { notification, showNotification } = useNotifications();
-const { visiblePages } = usePagination(totalPages, currentPage);
+// Fetch a single deployment by ID
+const fetchDeployment = async (id) => {
+  try {
+    deploymentLoading.value = true;
+    const response = await api.get(`inventory/deployment/${id}`);
+    currentDeployment.value = response.data.data;
+  } catch (err) {
+    console.error("Error fetching deployment details:", err);
+    showNotification("Failed to fetch deployment details", "error");
+  } finally {
+    deploymentLoading.value = false;
+  }
+};
 
-// Watch for filter changes and reset to first page
-watch([searchQuery, statusFilter], () => {
-  currentPage.value = 1;
-});
+// Update deployment status
+const updateDeploymentStatus = async (status) => {
+  try {
+    isUpdating.value = true;
+
+    const response = await api.put(
+      `inventory/deployment/${currentDeployment.value.id}/status`,
+      {
+        status,
+        actual_return_date:
+          status === "RETURNED" ? new Date().toISOString() : null,
+        notes: `Status updated to ${status}`,
+      }
+    );
+
+    currentDeployment.value = response.data.data;
+    showNotification(`Deployment status updated to ${status}`, "success");
+    closeModal();
+    fetchDeployments();
+  } catch (err) {
+    console.error("Error updating deployment status:", err);
+    showNotification("Failed to update deployment status", "error");
+  } finally {
+    isUpdating.value = false;
+  }
+};
+
+// Status color utility
+const statusColor = (status) => {
+  switch (status) {
+    case "DEPLOYED":
+      return {
+        bg: "bg-blue-50",
+        text: "text-blue-700",
+        border: "border-blue-200",
+      };
+    case "RETURNED":
+      return {
+        bg: "bg-emerald-50",
+        text: "text-emerald-700",
+        border: "border-emerald-200",
+      };
+    case "LOST":
+      return {
+        bg: "bg-red-50",
+        text: "text-red-700",
+        border: "border-red-200",
+      };
+    case "DAMAGED":
+      return {
+        bg: "bg-amber-50",
+        text: "text-amber-700",
+        border: "border-amber-200",
+      };
+    default:
+      return {
+        bg: "bg-gray-50",
+        text: "text-gray-700",
+        border: "border-gray-200",
+      };
+  }
+};
+
+// Format date utility
+const formatDate = (dateString) => {
+  if (!dateString) return "N/A";
+  return new Date(dateString).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+};
+
+// Check if deployment is overdue
+const isOverdue = (deployment) => {
+  if (deployment.status !== "DEPLOYED") return false;
+  if (!deployment.expected_return_date) return false;
+  return new Date(deployment.expected_return_date) < new Date();
+};
+
+// Get days until return
+const getDaysUntilReturn = (deployment) => {
+  if (deployment.status !== "DEPLOYED") return null;
+  if (!deployment.expected_return_date) return null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const returnDate = new Date(deployment.expected_return_date);
+  returnDate.setHours(0, 0, 0, 0);
+
+  const diffTime = returnDate - today;
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays;
+};
+
+// Show notification
+const showNotification = (message, type) => {
+  notification.value = { show: true, type, message };
+  setTimeout(() => {
+    notification.value.show = false;
+  }, 3000);
+};
 
 // View deployment details
 const viewDeployment = (id) => {
-  currentDeploymentId.value = id;
+  fetchDeployment(id);
   showModal.value = true;
 };
 
-// Close modal and reset deployment ID
+// Close modal
 const closeModal = () => {
   showModal.value = false;
   setTimeout(() => {
-    currentDeploymentId.value = null;
+    currentDeployment.value = null;
   }, 300); // Small delay to prevent UI flicker
 };
 
 // Handle status update
 const handleStatusUpdate = async (status) => {
-  try {
-    await updateDeploymentStatus({
-      id: currentDeploymentId.value,
-      status,
-    });
-    showNotification(`Deployment status updated to ${status}`, "success");
-    closeModal();
-    refetchDeployments();
-  } catch (error) {
-    console.error("Error updating deployment status:", error);
-    showNotification("Failed to update deployment status", "error");
-  }
+  await updateDeploymentStatus(status);
 };
 
-watchEffect(() => {
-  console.log("Query key:", ["deployments", { ...computedParams.value }]);
+// Computed stats
+const deployedCount = computed(() => {
+  return deployments.value.filter((d) => d.status === "DEPLOYED").length;
+});
+
+const returnedCount = computed(() => {
+  return deployments.value.filter((d) => d.status === "RETURNED").length;
+});
+
+const overdueCount = computed(() => {
+  return deployments.value.filter((d) => {
+    if (d.status !== "DEPLOYED") return false;
+    if (!d.expected_return_date) return false;
+    return new Date(d.expected_return_date) < new Date();
+  }).length;
+});
+
+const totalDeployments = computed(() => deployments.value.length);
+
+// Visible pages for pagination
+const visiblePages = computed(() => {
+  const range = 2;
+  let start = Math.max(1, currentPage.value - range);
+  let end = Math.min(totalPages.value, currentPage.value + range);
+
+  if (end - start < range * 2) {
+    start = Math.max(1, end - range * 2);
+    end = Math.min(totalPages.value, start + range * 2);
+  }
+
+  return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+});
+
+// Watch for filter changes and reset to first page
+watch([searchQuery, statusFilter], () => {
+  currentPage.value = 1;
+  fetchDeployments();
 });
 
 // Pagination
 const goToPage = (page) => {
   if (page >= 1 && page <= totalPages.value) {
     currentPage.value = page;
+    fetchDeployments();
   }
 };
+
+// Initialize data on component mount
+onMounted(fetchDeployments);
 </script>
 
 <template>
@@ -558,6 +695,7 @@ const goToPage = (page) => {
               searchQuery = '';
               statusFilter = '';
               currentPage = 1;
+              fetchDeployments();
             }
           "
           class="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"

@@ -1,10 +1,5 @@
-// const { DataTypes } = require("sequelize");
-// const sequelize = require("../../config/database");
-
 import { DataTypes } from "sequelize";
 import sequelize from "../../config/database.js";
-import Camera from "./Camera.js";
-import User from "../Users/User.js"; // ✅ Ensure user tracking
 
 const CameraLog = sequelize.define(
   "CameraLog",
@@ -18,22 +13,20 @@ const CameraLog = sequelize.define(
       type: DataTypes.INTEGER,
       allowNull: false,
       references: {
-        model: Camera,
+        model: "Cameras", // Use table name instead of model reference
         key: "id",
       },
       onDelete: "CASCADE",
     },
     userId: {
-      // ✅ Who made the change?
       type: DataTypes.INTEGER,
-      allowNull: true, // Can be null if it's an automated system check
+      allowNull: true,
       references: {
-        model: User,
+        model: "users", // Use table name instead of model reference
         key: "id",
       },
     },
     actionType: {
-      // ✅ Log type
       type: DataTypes.ENUM(
         "CREATED",
         "UPDATED",
@@ -44,17 +37,14 @@ const CameraLog = sequelize.define(
       allowNull: false,
     },
     oldStatus: {
-      // ✅ Previous status (if applicable)
       type: DataTypes.ENUM("online", "offline", "unknown"),
       allowNull: true,
     },
     newStatus: {
-      // ✅ New status after update
       type: DataTypes.ENUM("online", "offline", "unknown"),
       allowNull: true,
     },
     description: {
-      // ✅ What exactly changed?
       type: DataTypes.TEXT,
       allowNull: false,
     },
@@ -69,9 +59,5 @@ const CameraLog = sequelize.define(
     ],
   }
 );
-
-// ✅ Define relationships
-CameraLog.belongsTo(Camera, { foreignKey: "cameraId", as: "camera" });
-CameraLog.belongsTo(User, { foreignKey: "userId", as: "user" });
 
 export default CameraLog;

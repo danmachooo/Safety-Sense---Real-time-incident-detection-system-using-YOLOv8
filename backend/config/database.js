@@ -1,6 +1,3 @@
-// const { Sequelize } = require("sequelize");
-// const mysql = require("mysql2/promise");
-
 import { Sequelize } from "sequelize";
 import mysql from "mysql2/promise";
 

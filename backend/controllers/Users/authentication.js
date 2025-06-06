@@ -24,7 +24,8 @@ import {
   ForbiddenError,
   UnauthorizedError,
 } from "../../utils/Error.js";
-import User from "../../models/Users/User.js";
+import models from "../../models/index.js";
+const { User } = models;
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";

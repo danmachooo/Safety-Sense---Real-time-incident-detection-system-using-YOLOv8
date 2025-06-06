@@ -4,8 +4,8 @@
 // const { Op } = require("sequelize");
 // const { StatusCodes } = require("http-status-codes");
 
-import User from "../../models/Users/User.js";
-import LoginHistory from "../../models/Users/LoginHistory.js";
+import models from "../../models/index.js";
+const { User, LoginHistory } = models;
 import { BadRequestError, NotFoundError } from "../../utils/Error.js";
 import { Op } from "sequelize";
 import { StatusCodes } from "http-status-codes";

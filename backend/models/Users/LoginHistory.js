@@ -1,9 +1,6 @@
-// const { DataTypes } = require("sequelize");
-// const sequelize = require("../../config/database");
-
 import { DataTypes } from "sequelize";
 import sequelize from "../../config/database.js";
-import User from "./User.js";
+
 const LoginHistory = sequelize.define(
   "LoginHistory",
   {
@@ -36,11 +33,4 @@ const LoginHistory = sequelize.define(
     ],
   }
 );
-
-LoginHistory.belongsTo(User, {
-  foreignKey: "userId",
-  as: "user",
-  onDelete: "CASCADE",
-});
-
 export default LoginHistory;

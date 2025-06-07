@@ -91,6 +91,12 @@ const loginUser = async (req, res, next) => {
     const refreshToken = jwt.sign({ userId: user.id }, REFRESH_SECRET, {
       expiresIn: REFRESH_EXPIRATION,
     });
+    console.log("LOGIN IN ENDPOINT");
+    console.log("==================");
+    console.log("JWT EXPIRY: ", JWT_EXPIRATION);
+    console.log("ACCESS TOKEN: \n", accessToken);
+    console.log("REFRESH TOKEN: \n-", refreshToken);
+    console.log("==================");
 
     await user.update({ accessToken, refreshToken, fcmToken });
     await logUserLogin(user.id);
@@ -161,7 +167,11 @@ const logoutUser = async (req, res, next) => {
     if (!user) throw new NotFoundError("User not found!.");
     await user.update({ accessToken: null });
     await user.update({ refreshToken: null });
-
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "Strict",
+    });
     if (fcmToken === user.fcmToken) {
       console.log("FCM Token is removed from the user");
       await user.update({ fcmToken: null });
@@ -314,8 +324,13 @@ const refreshAccessToken = async (req, res, next) => {
     const payload = jwt.verify(refreshToken, REFRESH_SECRET);
     const user = await User.findOne({ where: { id: payload.userId } });
 
+    if (!user) throw new NotFoundError("User not found");
+
+    console.log("User token: ", user.refreshToken);
+    console.log("From cookie: ", refreshToken);
+
     if (!user || user.refreshToken !== refreshToken) {
-      throw new ForbiddenError("Invalid Token!");
+      throw new ForbiddenError("Invalid Token!!");
     }
 
     const newAccessToken = jwt.sign(

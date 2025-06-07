@@ -36,7 +36,7 @@ import loginRateLimiter from "../middlewares/loginRateLimiter.js";
 
 const router = express.Router();
 
-router.post("/login", loginRateLimiter, loginUser); //ok
+router.post("/login", loginUser); //ok
 router.patch("/update-fcm-token", authMiddleware, updateFcmToken);
 router.post("/logout", authMiddleware, logoutUser); //ok
 router.get("/login-history", authMiddleware, getLoginHistory); //ok

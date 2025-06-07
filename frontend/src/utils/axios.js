@@ -1,6 +1,5 @@
 import axios from "axios";
 import { useAuthStore } from "../stores/authStore";
-import { refreshToken as refreshTokenApi } from "./tokenRefresher";
 
 const api = axios.create({
   baseURL: "http://localhost:3000/api",
@@ -10,15 +9,16 @@ const api = axios.create({
   withCredentials: true,
 });
 
+// Queue for requests while token is being refreshed
 let isRefreshing = false;
 let failedQueue = [];
 
 const processQueue = (error, token = null) => {
-  failedQueue.forEach((prom) => {
+  failedQueue.forEach(({ resolve, reject }) => {
     if (error) {
-      prom.reject(error);
+      reject(error);
     } else {
-      prom.resolve(token);
+      resolve(token);
     }
   });
 
@@ -28,6 +28,11 @@ const processQueue = (error, token = null) => {
 // Request interceptor - attach token to requests
 api.interceptors.request.use(
   (config) => {
+    // Skip adding token for refresh endpoint to avoid loops
+    if (config.url === "/auth/refresh") {
+      return config;
+    }
+
     // Get token from store first, fallback to localStorage
     const authStore = useAuthStore();
     let token = authStore.accessToken;
@@ -46,104 +51,74 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor - handle token refresh
+// Response interceptor - handle authentication errors and token refresh
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
 
     // Check if this is a 401 error and we haven't already tried to refresh
-    if (
-      error.response?.status === 401 &&
-      !originalRequest._retry &&
-      localStorage.getItem("refreshToken")
-    ) {
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      // Skip refresh for login and refresh endpoints
+      if (
+        originalRequest.url === "/auth/login" ||
+        originalRequest.url === "/auth/refresh"
+      ) {
+        const authStore = useAuthStore();
+        authStore.clearAuthState();
+        return Promise.reject(error);
+      }
+
       originalRequest._retry = true;
 
-      // If we're already refreshing, queue this request
       if (isRefreshing) {
+        // If already refreshing, queue this request
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
         })
-          .then((token) => {
-            if (token) {
-              originalRequest.headers["Authorization"] = `Bearer ${token}`;
-              return api(originalRequest);
+          .then(() => {
+            // Retry original request with new token
+            const authStore = useAuthStore();
+            if (authStore.accessToken) {
+              originalRequest.headers[
+                "Authorization"
+              ] = `Bearer ${authStore.accessToken}`;
             }
-            return Promise.reject(new Error("No token received"));
+            return api(originalRequest);
           })
-          .catch((err) => Promise.reject(err));
+          .catch((err) => {
+            return Promise.reject(err);
+          });
       }
 
+      console.log("401 Unauthorized - attempting token refresh");
       isRefreshing = true;
 
       try {
         const authStore = useAuthStore();
+        const newToken = await authStore.refreshToken();
 
-        // Only attempt refresh if we have a refresh token
-        if (!authStore.refreshToken && !localStorage.getItem("refreshToken")) {
-          throw new Error("No refresh token available");
-        }
-
-        console.log("Attempting token refresh due to 401 response");
-        const newToken = await refreshTokenApi(authStore);
-
-        if (!newToken || typeof newToken !== "string") {
-          throw new Error("Invalid token received from refresh");
-        }
-
-        // Update the store with new token
-        authStore.updateToken(newToken);
-
-        // Process all queued requests with new token
+        // Process queued requests
         processQueue(null, newToken);
 
-        // Retry the original request with new token
+        // Retry original request with new token
         originalRequest.headers["Authorization"] = `Bearer ${newToken}`;
-
-        console.log("Token refreshed successfully, retrying original request");
         return api(originalRequest);
       } catch (refreshError) {
-        console.error("Token refresh failed in interceptor:", refreshError);
-
-        // Process queue with error
+        // If refresh fails, process queue with error and clear auth
         processQueue(refreshError, null);
-
-        // Handle different types of refresh errors
-        const authStore = useAuthStore();
-
-        if (
-          refreshError.response?.status === 401 ||
-          refreshError.response?.status === 403
-        ) {
-          // Refresh token is invalid - logout user
-          console.log("Refresh token expired, logging out user");
-          authStore.handleTokenExpired();
-        } else if (
-          refreshError.message?.includes("Network Error") ||
-          !refreshError.response
-        ) {
-          // Network error - don't logout, let the request fail naturally
-          console.log(
-            "Network error during token refresh, keeping user logged in"
-          );
-        } else {
-          // Other errors - logout to be safe
-          authStore.handleTokenExpired();
-        }
-
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;
       }
     }
 
-    // For non-401 errors or if we don't have a refresh token, just reject
+    // For all other errors, just reject
     return Promise.reject(error);
   }
 );
 
-// // Add request/response logging for debugging (remove in production)
+// Add request/response logging for debugging (remove in production)
 // if (process.env.NODE_ENV === "development") {
 //   api.interceptors.request.use((request) => {
 //     console.log("API Request:", request.method?.toUpperCase(), request.url);

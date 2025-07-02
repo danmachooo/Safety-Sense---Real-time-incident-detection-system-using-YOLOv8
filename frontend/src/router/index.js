@@ -1,7 +1,8 @@
 import { createRouter, createWebHistory } from "vue-router";
+
 import AdminLayout from "../layouts/AdminLayout.vue";
 import LoginForm from "../components/LoginForm.vue";
-
+import Dashboard from "../views/Dashboard.vue";
 import ViewUsers from "../views/admin/users/ViewUsers.vue";
 import CreateUser from "../views/admin/users/CreateUser.vue";
 import ArchivedUsers from "../views/admin/users/ArchivedUsers.vue";
@@ -18,34 +19,40 @@ import Notifications from "../views/admin/inventory/Notifications.vue";
 import ManageCamera from "../views/admin/camera/ManageCamera.vue";
 import CameraDetail from "../views/admin/camera/CameraDetail.vue";
 import ArchivedCamera from "../views/admin/camera/ArchivedCamera.vue";
+
 const routes = [
   {
     path: "/admin",
     component: AdminLayout,
     children: [
+      // Dashboard route - added as the default/index route
+      { path: "", redirect: "dashboard" }, // Redirect /admin to /admin/dashboard
+      { path: "dashboard", component: Dashboard },
+
+      // User Management routes
       { path: "users/view", component: ViewUsers },
       { path: "users/create", component: CreateUser },
       { path: "users/archived", component: ArchivedUsers },
       { path: "users/login-history", component: LoginHistory },
-      
+      { path: "users/profile/:id", component: Profile, props: true },
+      { path: "users/profile/me", component: AdminProfile, props: true },
+
+      // Inventory Management routes
       { path: "inventory/items", component: InventoryItems },
       { path: "inventory/categories", component: Categories },
       { path: "inventory/batches", component: Batches },
       { path: "inventory/deployments", component: Deployments },
       { path: "inventory/notifications", component: Notifications },
 
-      { path: "users/profile/:id", component: Profile, props: true },
-      { path: "users/profile/me", component: AdminProfile, props: true },
-
+      // Camera Management routes
       { path: "camera/manage", component: ManageCamera },
       { path: "camera/detail/:id", component: CameraDetail, props: true },
       { path: "camera/archived", component: ArchivedCamera },
-
     ],
   },
   {
     path: "/",
-    component: LoginForm
+    component: LoginForm,
   },
 ];
 

@@ -22,6 +22,7 @@ import {
   icons,
   PackageOpen,
   ChartColumnStackedIcon,
+  LayoutDashboard, // Added dashboard icon
 } from "lucide-vue-next";
 import Header from "../components/Header.vue";
 
@@ -53,6 +54,17 @@ const navigateTo = (route) => {
       </div>
 
       <nav class="space-y-5 px-5 pb-5">
+        <!-- Dashboard -->
+        <div class="relative mb-2">
+          <button
+            @click="navigateTo('/admin/dashboard')"
+            class="w-full flex items-center p-3 rounded-lg duration-200 ease-in-out text-gray-300 hover:text-white hover:bg-[#263238] transition-colors"
+          >
+            <LayoutDashboard class="w-5 h-5 text-white" />
+            <span class="font-medium text-white ml-3">Dashboard</span>
+          </button>
+        </div>
+
         <!-- User Management -->
         <div class="relative mb-2">
           <button

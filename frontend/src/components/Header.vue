@@ -12,6 +12,7 @@ import {
   ArrowDown,
   Loader2,
   MoreHorizontal,
+  AlertTriangle,
 } from "lucide-vue-next";
 import { useAuthStore } from "../stores/authStore";
 import { useRouter } from "vue-router";
@@ -20,9 +21,12 @@ import api from "../utils/axios";
 const loggedInUser = ref(JSON.parse(localStorage.getItem("authUser")) || {});
 const authStore = useAuthStore();
 const router = useRouter();
-
 const showUserDropdown = ref(false);
 const showNotifications = ref(false);
+
+// Add logout confirmation state
+const showLogoutConfirmation = ref(false);
+const isLoggingOut = ref(false);
 
 // Notification State
 const notifications = ref([]);
@@ -67,7 +71,6 @@ const fetchNotifications = async (loadMore = false) => {
     });
 
     const response = await api.get(`/system/notifications?${params}`);
-
     if (response.data.success) {
       if (loadMore) {
         notifications.value = [...notifications.value, ...response.data.data];
@@ -75,10 +78,8 @@ const fetchNotifications = async (loadMore = false) => {
       } else {
         notifications.value = response.data.data;
       }
-
       hasMore.value = response.data.hasMore;
       totalNotifications.value = response.data.totalNotifications;
-
       // Update unread count if we're fetching unread notifications
       if (currentTab.value === "unread" && !loadMore) {
         totalUnreadCount.value = response.data.totalNotifications;
@@ -112,7 +113,6 @@ const markAsRead = async (id) => {
     if (notification) {
       notification.isRead = true;
       totalUnreadCount.value = Math.max(0, totalUnreadCount.value - 1);
-
       // If we're in unread tab, remove the notification
       if (currentTab.value === "unread") {
         notifications.value = notifications.value.filter((n) => n.id !== id);
@@ -129,7 +129,6 @@ const startPolling = () => {
   // Poll every 30 seconds
   pollingInterval.value = setInterval(async () => {
     await fetchUnreadCount();
-
     // If showing unread notifications, refresh the list
     if (currentTab.value === "unread" && showNotifications.value) {
       await fetchNotifications();
@@ -174,10 +173,29 @@ const fetchUser = async () => {
   }
 };
 
-const handleLogout = async () => {
-  await authStore.logout();
-  if (!authStore.isAuthenticated) {
-    router.push("/");
+// Updated logout functions
+const showLogoutDialog = () => {
+  showLogoutConfirmation.value = true;
+  showUserDropdown.value = false;
+};
+
+const cancelLogout = () => {
+  showLogoutConfirmation.value = false;
+};
+
+const confirmLogout = async () => {
+  try {
+    isLoggingOut.value = true;
+    await authStore.logout();
+
+    if (!authStore.isAuthenticated) {
+      showLogoutConfirmation.value = false;
+      router.push("/");
+    }
+  } catch (error) {
+    console.error("Logout error:", error);
+  } finally {
+    isLoggingOut.value = false;
   }
 };
 
@@ -200,6 +218,16 @@ const toggleNotifications = () => {
     fetchNotifications();
     fetchUnreadCount();
   }
+};
+
+const toggleSort = () => {
+  sortOrder.value = sortOrder.value === "asc" ? "desc" : "asc";
+  fetchNotifications();
+};
+
+const loadMore = () => {
+  offset.value += limit;
+  fetchNotifications(true);
 };
 
 // Watch for tab changes
@@ -391,7 +419,6 @@ onUnmounted(() => {
             >
               {{ user.firstname[0] }}{{ user.lastname[0] }}
             </div>
-
             <div class="hidden md:block text-left">
               <p class="text-sm font-medium text-white">{{ user.firstname }}</p>
               <p class="text-xs text-gray-300">{{ user.role }}</p>
@@ -423,11 +450,62 @@ onUnmounted(() => {
               <span>Profile</span>
             </button>
             <button
-              @click="handleLogout"
+              @click="showLogoutDialog"
               class="w-full flex items-center space-x-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200"
             >
               <LogOut class="w-4 h-4" />
               <span>Logout</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Logout Confirmation Modal -->
+    <div
+      v-if="showLogoutConfirmation"
+      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]"
+      @click.self="cancelLogout"
+    >
+      <div
+        class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 transform transition-all"
+      >
+        <div class="p-6">
+          <!-- Header -->
+          <div class="flex items-center mb-4">
+            <div class="flex-shrink-0">
+              <AlertTriangle class="w-6 h-6 text-amber-500" />
+            </div>
+            <div class="ml-3">
+              <h3 class="text-lg font-medium text-gray-900">Confirm Logout</h3>
+            </div>
+          </div>
+
+          <!-- Content -->
+          <div class="mb-6">
+            <p class="text-sm text-gray-600">
+              Are you sure you want to logout? You will need to sign in again to
+              access your account.
+            </p>
+          </div>
+
+          <!-- Actions -->
+          <div class="flex justify-end space-x-3">
+            <button
+              @click="cancelLogout"
+              class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors duration-200"
+              :disabled="isLoggingOut"
+            >
+              Cancel
+            </button>
+            <button
+              @click="confirmLogout"
+              class="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+              :disabled="isLoggingOut"
+            >
+              <Loader2 v-if="isLoggingOut" class="w-4 h-4 animate-spin" />
+              <LogOut v-else class="w-4 h-4" />
+              <span>{{ isLoggingOut ? "Logging out..." : "Logout" }}</span>
             </button>
           </div>
         </div>
@@ -453,5 +531,35 @@ onUnmounted(() => {
 .max-h-96::-webkit-scrollbar-thumb {
   background-color: #cbd5e1;
   border-radius: 3px;
+}
+
+/* Modal backdrop animation */
+.fixed.inset-0 {
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Modal content animation */
+.transform.transition-all {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 </style>

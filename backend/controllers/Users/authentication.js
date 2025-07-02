@@ -58,7 +58,9 @@ const loginUser = async (req, res, next) => {
     const user = await User.findOne({ where: { email } });
 
     if (!user || user.isSoftDeleted()) {
-      throw new NotFoundError("User not found! Invalid credentials.");
+      throw new NotFoundError(
+        "That email and password doesn't exists in our records."
+      );
     }
 
     if (user.isBlocked) {
@@ -73,7 +75,9 @@ const loginUser = async (req, res, next) => {
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      throw new NotFoundError("User not found! Invalid credentials.");
+      throw new NotFoundError(
+        "That email and password doesn't exists in our records."
+      );
     }
 
     if (user.accessToken) {
@@ -81,6 +85,10 @@ const loginUser = async (req, res, next) => {
         "Another session is already active. Please log out first."
       );
     }
+
+    // if (user.role === "admin" && fcmToken) {
+    //   throw new ForbiddenError("Admin shouldn't use the app.");
+    // }
 
     const accessToken = jwt.sign(
       { userId: user.id, role: user.role, isBlocked: user.isBlocked },
@@ -91,12 +99,6 @@ const loginUser = async (req, res, next) => {
     const refreshToken = jwt.sign({ userId: user.id }, REFRESH_SECRET, {
       expiresIn: REFRESH_EXPIRATION,
     });
-    console.log("LOGIN IN ENDPOINT");
-    console.log("==================");
-    console.log("JWT EXPIRY: ", JWT_EXPIRATION);
-    console.log("ACCESS TOKEN: \n", accessToken);
-    console.log("REFRESH TOKEN: \n-", refreshToken);
-    console.log("==================");
 
     await user.update({ accessToken, refreshToken, fcmToken });
     await logUserLogin(user.id);
@@ -124,6 +126,7 @@ const loginUser = async (req, res, next) => {
       message: "You are logged in!",
       data: {
         access: accessToken,
+        refresh: refreshToken,
         user: sanitizedUser,
       },
     });

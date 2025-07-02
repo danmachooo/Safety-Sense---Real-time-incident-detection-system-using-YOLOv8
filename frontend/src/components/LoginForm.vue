@@ -26,6 +26,24 @@
           Sign in to your account
         </p>
 
+        <!-- Success Message -->
+        <div
+          v-if="showSuccessMessage"
+          class="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded-lg flex items-center"
+        >
+          <CheckCircle class="w-5 h-5 mr-2" />
+          <span class="text-sm">Login successful! Redirecting...</span>
+        </div>
+
+        <!-- Error Message -->
+        <div
+          v-if="errorMessage"
+          class="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg flex items-center"
+        >
+          <AlertCircle class="w-5 h-5 mr-2" />
+          <span class="text-sm">{{ errorMessage }}</span>
+        </div>
+
         <!-- Form -->
         <form @submit.prevent="handleLogin">
           <div class="mb-4">
@@ -36,11 +54,12 @@
               type="email"
               v-model="email"
               class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              :class="{ 'border-red-500': errorMessage && !email }"
               placeholder="Enter your email"
+              :disabled="isLoading"
               required
             />
           </div>
-
           <div class="mb-4">
             <label class="block text-gray-300 text-sm font-medium mb-1"
               >Password</label
@@ -49,7 +68,9 @@
               type="password"
               v-model="password"
               class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              :class="{ 'border-red-500': errorMessage && !password }"
               placeholder="Enter your password"
+              :disabled="isLoading"
               required
             />
           </div>
@@ -66,9 +87,11 @@
           <!-- Login Button -->
           <button
             type="submit"
-            class="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-500 transition duration-300"
+            class="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-500 transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+            :disabled="isLoading"
           >
-            Sign In
+            <Loader2 v-if="isLoading" class="w-4 h-4 mr-2 animate-spin" />
+            <span>{{ isLoading ? "Signing In..." : "Sign In" }}</span>
           </button>
         </form>
       </div>
@@ -79,34 +102,102 @@
 <script setup>
 import { ref, nextTick } from "vue";
 import { useRouter } from "vue-router";
-import { useAuthStore } from "../stores/authStore"; // Import Pinia Store
+import { useAuthStore } from "../stores/authStore";
 import { storeToRefs } from "pinia";
-
-import logo from "../assets/final.png"; // ✅ Correct Logo Import
+import { CheckCircle, AlertCircle, Loader2 } from "lucide-vue-next";
+import logo from "../assets/final.png";
 
 const router = useRouter();
 const email = ref("");
 const password = ref("");
+const errorMessage = ref("");
+const showSuccessMessage = ref(false);
+const isLoading = ref(false);
+
 const authStore = useAuthStore();
-const { isAuthenticated } = storeToRefs(authStore); // ✅ makes it reactive
+const { isAuthenticated } = storeToRefs(authStore);
+
+const clearMessages = () => {
+  errorMessage.value = "";
+  showSuccessMessage.value = false;
+};
 
 const handleLogin = async () => {
   try {
+    // Clear previous messages
+    clearMessages();
+    isLoading.value = true;
+
     console.log("Logging in...");
 
-    // Simulate login
-    await authStore.login(email.value, password.value);
+    // Validate form inputs
+    if (!email.value || !password.value) {
+      errorMessage.value = "Please fill in all required fields.";
+      return;
+    }
 
+    // Attempt login
+    await authStore.login(email.value, password.value);
     await nextTick();
 
     if (isAuthenticated.value) {
-      console.log("Redirecting to dashboard...");
-      router.push("/admin/users/view");
+      console.log("Login successful, redirecting...");
+      showSuccessMessage.value = true;
+
+      // Add a small delay to show success message before redirect
+      setTimeout(() => {
+        router.push("/admin/users/view");
+      }, 1500);
     } else {
-      console.error("Login failed: Invalid credentials.");
+      errorMessage.value = "Invalid email or password. Please try again.";
     }
   } catch (error) {
-    console.error("Login error:", error.message);
+    console.error("Login error:", error);
+
+    // Handle different types of errors
+    if (error.response) {
+      // Server responded with error status
+      switch (error.response.status) {
+        case 401:
+          errorMessage.value = "Invalid email or password.";
+          break;
+        case 403:
+          errorMessage.value =
+            "Account access denied. Please contact administrator.";
+          break;
+        case 429:
+          errorMessage.value =
+            "Too many login attempts. Please try again later.";
+          break;
+        case 500:
+          errorMessage.value = "Server error. Please try again later.";
+          break;
+        default:
+          errorMessage.value =
+            error.response.data?.message || "Login failed. Please try again.";
+      }
+    } else if (error.request) {
+      // Network error
+      errorMessage.value =
+        "Network error. Please check your connection and try again.";
+    } else {
+      // Other errors
+      errorMessage.value =
+        error.message || "An unexpected error occurred. Please try again.";
+    }
+  } finally {
+    isLoading.value = false;
   }
 };
+
+// Clear error message when user starts typing
+const clearErrorOnInput = () => {
+  if (errorMessage.value) {
+    errorMessage.value = "";
+  }
+};
+
+// Watch for input changes to clear errors
+import { watch } from "vue";
+watch([email, password], clearErrorOnInput);
 </script>

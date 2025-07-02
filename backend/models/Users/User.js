@@ -43,8 +43,6 @@ const User = sequelize.define(
     refreshToken: {
       type: DataTypes.TEXT,
       allowNull: true,
-      unique: true,
-      unique: true,
     },
     resetPasswordExpires: {
       type: DataTypes.DATE,

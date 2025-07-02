@@ -22,7 +22,7 @@ import apiRouter from "./routes/api.js";
 // Middlewares
 app.use(
   cors({
-    origin: process.env.FRONTEND_DOMAIN || "http://localhost:5173",
+    origin: process.env.FRONTEND_DOMAIN,
     credentials: true,
   })
 );
@@ -59,7 +59,7 @@ setupCronJobs();
 
 // Start backend
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`File uploads will be stored in: ${path.resolve(uploadsDir)}`);
 });

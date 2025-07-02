@@ -21,6 +21,13 @@ const Incident = sequelize.define(
       },
       onDelete: "SET NULL",
     },
+    ipAddress: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      validate: {
+        isIP: true,
+      },
+    },
     reportedBy: {
       type: DataTypes.STRING,
       allowNull: true,

@@ -15,7 +15,7 @@ const { Incident, Camera, User, IncidentAcceptance, IncidentDismissal } =
 import { BadRequestError, NotFoundError } from "../../utils/Error.js";
 import { StatusCodes } from "http-status-codes";
 import sequelize from "../../config/database.js";
-import { _sendTopicNotification } from "../Notification/fcmController.js";
+import { sendTopicNotification } from "../../services/firebase/fcmService.js";
 /**
  * Create a new incident (handles both citizen reports and camera detections)
  * @param {Object} req - Express request object
@@ -125,12 +125,14 @@ const createIncident = async (req, res, next) => {
  * @param {Function} next - Express next middleware function
  */
 const createCitizenReport = async (req, res, next) => {
+  console.log("Running citizen report");
   let transaction;
 
   try {
     transaction = await sequelize.transaction();
 
     const {
+      ipAddress,
       reportedBy,
       contact,
       type,
@@ -140,8 +142,16 @@ const createCitizenReport = async (req, res, next) => {
       latitude,
     } = req.body;
 
+    console.debug("REQUEST BODY: ", req.body.ipAddress);
     // Only require type, snapshotUrl, longitude, and latitude
-    if (!type || !snapshotUrl || !longitude || !latitude || !description) {
+    if (
+      !type ||
+      !snapshotUrl ||
+      !longitude ||
+      !latitude ||
+      !description ||
+      !ipAddress
+    ) {
       throw new BadRequestError(
         "Required fields are missing: type, snapshotUrl, description, longitude, latitude"
       );
@@ -169,6 +179,7 @@ const createCitizenReport = async (req, res, next) => {
         description,
         longitude,
         latitude,
+        ipAddress,
         status: "pending",
       },
       { transaction }
@@ -180,13 +191,14 @@ const createCitizenReport = async (req, res, next) => {
           ? `${incident.description.substring(0, 100)}...`
           : incident.description;
 
-      console.log(process.env.RESPONDER_TOPIC);
-      await _sendTopicNotification(
+      console.log("Broadcasting to: ", process.env.RESPONDER_TOPIC);
+      await sendTopicNotification(
         process.env.RESPONDER_TOPIC || "all_responders",
         "Incident Alert!",
         shortDescription,
-        incident.id,
-        {} // Explicit empty data parameter
+        {
+          incidentId: incident.id, // include this in the data payload
+        }
       );
     } catch (error) {
       console.error("FCM notification failed:", error);

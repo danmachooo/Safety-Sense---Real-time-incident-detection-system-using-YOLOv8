@@ -2,8 +2,8 @@
 // const { StatusCodes } = require("http-status-codes");
 // const { BadRequestError } = require("../../utils/Error");
 
-import getFileUrl from "../../config/multer.js";
-import getFilePath from "../../config/multer.js";
+import { getFileUrl } from "../../config/multer.js";
+import { getFilePath } from "../../config/multer.js";
 import { StatusCodes } from "http-status-codes";
 import { BadRequestError } from "../../utils/Error.js";
 /**

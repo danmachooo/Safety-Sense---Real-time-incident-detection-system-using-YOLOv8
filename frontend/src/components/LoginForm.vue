@@ -146,7 +146,7 @@ const handleLogin = async () => {
 
       // Add a small delay to show success message before redirect
       setTimeout(() => {
-        router.push("/admin/users/view");
+        router.push("/admin/dashboard");
       }, 1500);
     } else {
       errorMessage.value = "Invalid email or password. Please try again.";

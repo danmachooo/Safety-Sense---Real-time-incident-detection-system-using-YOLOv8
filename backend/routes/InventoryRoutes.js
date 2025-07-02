@@ -39,6 +39,7 @@ import {
   updateItem,
   deleteItem,
   restoreItem,
+  uploadExcelFile,
 } from "../controllers/Inventory/inventoryitemController.js";
 
 import {
@@ -49,6 +50,9 @@ import {
   deleteNotification,
   restoreNotification,
 } from "../controllers/Inventory/notificationController.js";
+
+import { uploadExcel } from "../middlewares/excelUploadMiddleware.js";
+import { generateEmptyTemplate } from "../controllers/Incidents/incidentController.js";
 
 //Categories
 router.get("/categories", authMiddleware, adminMiddleware, getAllCategories);
@@ -76,6 +80,9 @@ router.put("/items/:id", authMiddleware, adminMiddleware, updateItem);
 router.delete("/items/:id", authMiddleware, adminMiddleware, deleteItem);
 router.patch("/items/:id", authMiddleware, adminMiddleware, restoreItem);
 
+//Upload excel
+router.post("/upload-excel", uploadExcel, authMiddleware, uploadExcelFile);
+router.get("/download-template", generateEmptyTemplate);
 //Batches
 router.get("/batches", authMiddleware, adminMiddleware, getAllBatches);
 router.get(

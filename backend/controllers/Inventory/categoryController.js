@@ -1,23 +1,7 @@
-// const { StatusCodes } = require("http-status-codes");
-// const { Category, InventoryItem } = require("../../models/Inventory");
-// const {
-//   BadRequestError,
-//   NotFoundError,
-//   ForbiddenError,
-//   UnauthorizedError,
-// } = require("../../utils/Error");
-// const {
-//   getCached,
-//   setCache,
-//   invalidateCache,
-// } = require("../../services/redis/cache");
-// const { Op } = require("sequelize");
-
 import { StatusCodes } from "http-status-codes";
 import models from "../../models/index.js";
 const { Category, InventoryItem } = models;
-// import InventoryItem from "../../models/Inventory/InventoryItem.js";
-// import Category from "../../models/Inventory/Category.js";
+
 import {
   BadRequestError,
   NotFoundError,

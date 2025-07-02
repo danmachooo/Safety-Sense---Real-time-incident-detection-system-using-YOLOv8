@@ -16,6 +16,16 @@ import { BadRequestError, NotFoundError } from "../../utils/Error.js";
 import { StatusCodes } from "http-status-codes";
 import sequelize from "../../config/database.js";
 import { sendTopicNotification } from "../../services/firebase/fcmService.js";
+
+import xlsx from "xlsx";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
+
+// Get current directory for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 /**
  * Create a new incident (handles both citizen reports and camera detections)
  * @param {Object} req - Express request object
@@ -1372,6 +1382,62 @@ const getUsersByIncident = async (req, res, next) => {
   }
 };
 
+const generateEmptyTemplate = async (req, res, next) => {
+  try {
+    // Empty template with just headers
+    const headers = [
+      "name",
+      "description",
+      "category",
+      "type",
+      "quantity",
+      "unit_price",
+      "min_stock_level",
+      "reorder_level",
+      "unit_of_measure",
+      "condition",
+      "location",
+      "is_deployable",
+      "supplier",
+      "expiry_date",
+      "funding_source",
+      "cost",
+      "batch_notes",
+      "notes",
+    ];
+
+    // Create workbook with empty template
+    const workbook = xlsx.utils.book_new();
+    const worksheet = xlsx.utils.aoa_to_sheet([headers]);
+
+    // Set column widths
+    worksheet["!cols"] = headers.map(() => ({ wch: 20 }));
+
+    xlsx.utils.book_append_sheet(workbook, worksheet, "Inventory Template");
+
+    // Generate buffer
+    const buffer = xlsx.write(workbook, {
+      type: "buffer",
+      bookType: "xlsx",
+    });
+
+    // Set response headers
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="inventory_template_empty.xlsx"'
+    );
+
+    return res.status(StatusCodes.OK).send(buffer);
+  } catch (error) {
+    console.error("Error generating empty template:", error);
+    next(error);
+  }
+};
+
 export {
   createIncident,
   createCitizenReport,
@@ -1391,4 +1457,5 @@ export {
   getDismissedIncidentsByUser,
   getUsersByDismissedIncident,
   getIncidentStats,
+  generateEmptyTemplate,
 };

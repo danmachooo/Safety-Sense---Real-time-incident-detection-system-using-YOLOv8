@@ -1,33 +1,4 @@
-// const { Op } = require("sequelize");
-// const { InventoryItem, Batch } = require("../../models/Inventory");
-// const User = require("../../models/Users/User");
-// const Notification = require("../../models/Inventory/InventoryNotification");
-// const {
-//   BadRequestError,
-//   NotFoundError,
-//   ForbiddenError,
-//   UnauthorizedError,
-// } = require("../../utils/Error");
-// const { StatusCodes } = require("http-status-codes");
-// const {
-//   getCached,
-//   setCache,
-//   invalidateCache,
-// } = require("../../services/redis/cache");
-
 import { Op } from "sequelize";
-
-// import InventoryItem from "../../models/Inventory/InventoryItem.js";
-// import Batch from "../../models/Inventory/Batch.js";
-// import User from "../../models/Users/User.js";
-// import Notification from "../../models/Inventory/InventoryNotification.js";
-
-// import {
-//   InventoryItem,
-//   Batch,
-//   User,
-//   Notification,
-// } from "../../models/index.js";
 
 import models from "../../models/index.js";
 const { User, InventoryItem, Category, Batch } = models;

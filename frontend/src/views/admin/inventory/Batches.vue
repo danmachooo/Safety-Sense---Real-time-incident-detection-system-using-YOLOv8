@@ -569,7 +569,7 @@ const goToPage = (page) => {
                     </div>
                     <div>
                       <div class="font-semibold text-gray-900">
-                        {{ batch.inventoryBatchItem?.name || "Unknown Item" }}
+                        {{ batch.inventoryItem?.name || "Unknown Item" }}
                       </div>
                       <div class="text-sm text-gray-500">
                         {{ batch.supplier || "No supplier" }}
@@ -583,7 +583,7 @@ const goToPage = (page) => {
                       batch.quantity
                     }}</span>
                     <span class="text-sm text-gray-500 ml-1">{{
-                      batch.inventoryBatchItem?.unit_of_measure || "units"
+                      batch.inventoryItem?.unit_of_measure || "units"
                     }}</span>
                   </div>
                 </td>

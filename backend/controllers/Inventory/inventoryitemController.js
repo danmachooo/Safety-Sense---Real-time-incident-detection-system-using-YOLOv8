@@ -1,28 +1,11 @@
-// const { Op } = require("sequelize");
-// const {
-//   getCached,
-//   setCache,
-//   invalidateCache,
-// } = require("../../services/redis/cache");
-// const User = require("../../models/Users/User");
-// const InventoryItem = require("../../models/Inventory/InventoryItem");
-// const Category = require("../../models/Inventory/Category");
-// const Notification = require("../../models/Inventory/InventoryNotification");
-// const { BadRequestError, NotFoundError } = require("../../utils/Error");
-// const { StatusCodes } = require("http-status-codes");
-// const { Batch } = require("../../models/Inventory");
-
 import { Op } from "sequelize";
 import {
   setCache,
   getCached,
   invalidateCache,
+  invalidateCachePattern,
 } from "../../services/redis/cache.js";
-
-// import User from "../../models/Users/User.js";
-// import InventoryItem from "../../models/Inventory/InventoryItem.js";
-// import Category from "../../models/Inventory/Category.js";
-// import Notification from "../../models/Notification/Notification.js";
+import { processExcelFile } from "./services/inventoryService.js";
 
 import models from "../../models/index.js";
 const { User, InventoryItem, Category, Notification } = models;
@@ -30,6 +13,21 @@ const { User, InventoryItem, Category, Notification } = models;
 import { BadRequestError, NotFoundError } from "../../utils/Error.js";
 import { StatusCodes } from "http-status-codes";
 import Batch from "../../models/Inventory/Batch.js";
+
+// Helper function to invalidate all items-related cache
+export const invalidateItemsCache = async () => {
+  try {
+    // Invalidate all cache keys that start with "items:"
+    const result = await invalidateCachePattern("items:*");
+    if (!result) {
+      console.log("Failed to invalidate items cache pattern");
+    }
+    return result;
+  } catch (error) {
+    console.error("Error invalidating items cache:", error);
+    return false;
+  }
+};
 
 const createItem = async (req, res, next) => {
   try {
@@ -75,11 +73,9 @@ const createItem = async (req, res, next) => {
         priority: "HIGH",
       });
     }
-    const result = await invalidateCache("items");
 
-    if (!result) {
-      console.log("Failed to invalidate cache");
-    }
+    // Invalidate all items-related cache
+    await invalidateItemsCache();
 
     return res.status(StatusCodes.CREATED).json({
       success: true,
@@ -89,6 +85,26 @@ const createItem = async (req, res, next) => {
   } catch (error) {
     console.error("Item creation error: ", error.message);
     next(error);
+  }
+};
+
+const uploadExcelFile = async (req, res, next) => {
+  console.log("EXCEL USER: ", req.user.id);
+  try {
+    if (!req.file) throw new BadRequestError("No file uploaded.");
+    const result = await processExcelFile(req.file.path, req.user.id);
+
+    // Invalidate cache after bulk upload
+    await invalidateItemsCache();
+
+    return res.status(200).json({
+      success: true,
+      message: "Excel file processed.",
+      data: result,
+    });
+  } catch (err) {
+    console.error("Excel processing error:", err);
+    next(err);
   }
 };
 
@@ -114,7 +130,16 @@ const getAllItems = async (req, res, next) => {
       { description: { [Op.like]: `%${search}%` } },
     ];
   }
-  const cacheKey = `items:all:${JSON.stringify(req.query)}`;
+
+  // Create a more specific cache key
+  const cacheKey = `items:all:${JSON.stringify({
+    category_id,
+    search,
+    condition,
+    is_deployable,
+    page,
+    limit,
+  })}`;
 
   try {
     const cached = await getCached(cacheKey);
@@ -147,7 +172,9 @@ const getAllItems = async (req, res, next) => {
         currentPage: parseInt(page),
       },
     };
-    await setCache(cacheKey, response, 60);
+
+    // Cache for 5 minutes (300 seconds) instead of 1 minute for better performance
+    await setCache(cacheKey, response, 300);
     return res.status(StatusCodes.OK).json(response);
   } catch (error) {
     console.error("Fetching items error: ", error);
@@ -157,12 +184,21 @@ const getAllItems = async (req, res, next) => {
 
 const getItemById = async (req, res, next) => {
   try {
-    const item = await InventoryItem.findByPk(req.params.id, {
+    const itemId = req.params.id;
+    const cacheKey = `item:${itemId}`;
+
+    // Check cache first
+    const cached = await getCached(cacheKey);
+    if (cached) {
+      console.log(`Serving item ${itemId} from redis...`);
+      return res.status(StatusCodes.OK).json(cached);
+    }
+
+    const item = await InventoryItem.findByPk(itemId, {
       include: [
         {
           model: Category,
           as: "category",
-
           attributes: ["id", "name", "type"],
         },
       ],
@@ -170,11 +206,16 @@ const getItemById = async (req, res, next) => {
 
     if (!item) throw new NotFoundError("Item not found.");
 
-    return res.status(StatusCodes.OK).json({
+    const response = {
       success: true,
       message: "Item has been fetched.",
       data: item,
-    });
+    };
+
+    // Cache individual item for 10 minutes
+    await setCache(cacheKey, response, 600);
+
+    return res.status(StatusCodes.OK).json(response);
   } catch (error) {
     console.error("Fetching item error: ", error);
     next(error);
@@ -183,7 +224,8 @@ const getItemById = async (req, res, next) => {
 
 const updateItem = async (req, res, next) => {
   try {
-    const item = await InventoryItem.findByPk(req.params.id);
+    const itemId = req.params.id;
+    const item = await InventoryItem.findByPk(itemId);
     if (!item) throw new NotFoundError("Item not found.");
 
     const {
@@ -234,11 +276,13 @@ const updateItem = async (req, res, next) => {
         });
       }
     }
-    const result = await invalidateCache("items");
 
-    if (!result) {
-      console.log("Failed to invalidate cache");
-    }
+    // Invalidate all items-related cache AND the specific item cache
+    await Promise.all([
+      invalidateItemsCache(),
+      invalidateCachePattern(`item:${itemId}`),
+    ]);
+
     return res.status(StatusCodes.OK).json({
       success: true,
       data: item,
@@ -252,8 +296,10 @@ const updateItem = async (req, res, next) => {
 
 const deleteItem = async (req, res, next) => {
   try {
-    const item = await InventoryItem.findByPk(req.params.id);
-    if (!item) throw new NotFoundError("Item not fouund.");
+    const itemId = req.params.id;
+    const item = await InventoryItem.findByPk(itemId);
+    if (!item) throw new NotFoundError("Item not found.");
+
     const batch = await Batch.findOne({
       where: { inventory_item_id: item.id },
     });
@@ -262,10 +308,13 @@ const deleteItem = async (req, res, next) => {
 
     await item.destroy();
     console.log("Item has been deleted");
-    const result = await invalidateCache("items");
-    if (!result) {
-      console.log("Failed to invalidate cache");
-    }
+
+    // Invalidate all items-related cache AND the specific item cache
+    await Promise.all([
+      invalidateItemsCache(),
+      invalidateCachePattern(`item:${itemId}`),
+    ]);
+
     return res.status(StatusCodes.OK).json({
       success: true,
       message: "Inventory item deleted successfully",
@@ -278,17 +327,20 @@ const deleteItem = async (req, res, next) => {
 
 const restoreItem = async (req, res, next) => {
   try {
-    const item = await InventoryItem.findByPk(req.params.id, {
+    const itemId = req.params.id;
+    const item = await InventoryItem.findByPk(itemId, {
       paranoid: false,
     });
     if (!item) throw new NotFoundError("Item not found.");
 
     await item.restore();
-    const result = await invalidateCache("items");
 
-    if (!result) {
-      console.log("Failed to invalidate cache");
-    }
+    // Invalidate all items-related cache AND the specific item cache
+    await Promise.all([
+      invalidateItemsCache(),
+      invalidateCachePattern(`item:${itemId}`),
+    ]);
+
     return res.status(StatusCodes.OK).json({
       success: true,
       message: "Inventory item restored successfully",
@@ -306,4 +358,5 @@ export {
   updateItem,
   deleteItem,
   restoreItem,
+  uploadExcelFile,
 };

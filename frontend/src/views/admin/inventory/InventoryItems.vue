@@ -20,6 +20,22 @@ import {
   TrendingUp,
   AlertTriangle,
   ChartBarStackedIcon,
+  ArrowLeft,
+  Save,
+  MapPin,
+  Calendar,
+  FileText,
+  Settings,
+  Info,
+  Hash,
+  Tag,
+  Upload,
+  FileSpreadsheet,
+  Download,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  RefreshCw,
 } from "lucide-vue-next";
 import api from "../../../utils/axios";
 
@@ -30,6 +46,7 @@ const loading = ref(true);
 const error = ref(null);
 const showModal = ref(false);
 const showDeployModal = ref(false);
+const showUploadModal = ref(false);
 const notification = ref({ show: false, type: "", message: "" });
 const searchQuery = ref("");
 const categoryFilter = ref("all");
@@ -39,6 +56,14 @@ const totalItems = ref(0);
 const totalPages = ref(0);
 const sortField = ref("name");
 const sortOrder = ref("asc");
+
+// Excel upload state
+const uploadLoading = ref(false);
+const uploadProgress = ref(0);
+const uploadResults = ref(null);
+const selectedFile = ref(null);
+const fileInput = ref(null);
+const uploadError = ref(null);
 
 // Form state
 const newItem = ref({
@@ -62,7 +87,7 @@ const deploymentDetails = ref({
   quantity_deployed: 1,
   deployment_location: "",
   deployment_date: new Date().toISOString().split("T")[0],
-  expected_return_date: "",
+  expected_return_date: null,
   incident_type: "",
   notes: "",
 });
@@ -106,7 +131,6 @@ const fetchItems = async () => {
         sortOrder: sortOrder.value,
       },
     });
-
     items.value = response.data.data;
     totalItems.value = response.data.meta.total;
     totalPages.value = response.data.meta.pages;
@@ -116,6 +140,197 @@ const fetchItems = async () => {
   } finally {
     loading.value = false;
   }
+};
+
+// Excel Upload Functions
+const openUploadModal = () => {
+  showUploadModal.value = true;
+  resetUploadState();
+};
+
+const resetUploadState = () => {
+  selectedFile.value = null;
+  uploadResults.value = null;
+  uploadError.value = null;
+  uploadProgress.value = 0;
+  if (fileInput.value) {
+    fileInput.value.value = "";
+  }
+};
+
+const handleFileSelect = (event) => {
+  const file = event.target.files[0];
+  if (file) {
+    // Validate file type
+    const allowedTypes = [
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.ms-excel",
+      "text/csv",
+    ];
+
+    if (!allowedTypes.includes(file.type)) {
+      uploadError.value =
+        "Please select a valid Excel file (.xlsx, .xls) or CSV file";
+      return;
+    }
+
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      uploadError.value = "File size must be less than 10MB";
+      return;
+    }
+
+    selectedFile.value = file;
+    uploadError.value = null;
+  }
+};
+
+const uploadExcelFile = async () => {
+  if (!selectedFile.value) {
+    uploadError.value = "Please select a file to upload";
+    return;
+  }
+
+  try {
+    uploadLoading.value = true;
+    uploadProgress.value = 0;
+    uploadError.value = null;
+
+    const formData = new FormData();
+    formData.append("file", selectedFile.value);
+
+    // Simulate progress for better UX
+    const progressInterval = setInterval(() => {
+      if (uploadProgress.value < 90) {
+        uploadProgress.value += Math.random() * 10;
+      }
+    }, 200);
+
+    const response = await api.post("inventory/upload-excel", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+      onUploadProgress: (progressEvent) => {
+        const percentCompleted = Math.round(
+          (progressEvent.loaded * 100) / progressEvent.total
+        );
+        uploadProgress.value = percentCompleted;
+      },
+    });
+
+    clearInterval(progressInterval);
+    uploadProgress.value = 100;
+
+    // Debug: Log the actual response structure
+    console.log("Upload response:", response.data);
+
+    // Handle the response structure - adjust based on your actual API response
+    const responseData = response.data.data || response.data;
+
+    // Check different possible response structures
+    let successItems = [];
+    let errorItems = [];
+
+    if (responseData.success && Array.isArray(responseData.success)) {
+      successItems = responseData.success;
+    } else if (
+      responseData.successful &&
+      Array.isArray(responseData.successful)
+    ) {
+      successItems = responseData.successful;
+    } else if (
+      responseData.successItems &&
+      Array.isArray(responseData.successItems)
+    ) {
+      successItems = responseData.successItems;
+    }
+
+    if (responseData.errors && Array.isArray(responseData.errors)) {
+      errorItems = responseData.errors;
+    } else if (responseData.failed && Array.isArray(responseData.failed)) {
+      errorItems = responseData.failed;
+    } else if (
+      responseData.errorItems &&
+      Array.isArray(responseData.errorItems)
+    ) {
+      errorItems = responseData.errorItems;
+    }
+
+    uploadResults.value = {
+      successful: successItems.length,
+      failed: errorItems.length,
+      total: successItems.length + errorItems.length,
+      successItems: successItems,
+      errors: errorItems,
+    };
+
+    // Show success notification
+    const { successful, failed } = uploadResults.value;
+
+    if (successful > 0 && failed === 0) {
+      showNotification(
+        `Upload completed successfully: ${successful} items processed`,
+        "success"
+      );
+    } else if (successful > 0 && failed > 0) {
+      showNotification(
+        `Upload completed: ${successful} items successful, ${failed} failed`,
+        "warning"
+      );
+    } else if (failed > 0 && successful === 0) {
+      showNotification(
+        `Upload failed: ${failed} items could not be processed`,
+        "error"
+      );
+    } else {
+      showNotification(
+        "Upload completed but no items were processed",
+        "warning"
+      );
+    }
+
+    // Refresh the items list
+    await fetchItems();
+  } catch (err) {
+    console.error("Upload error:", err);
+    uploadError.value =
+      err.response?.data?.message || "Upload failed. Please try again.";
+    showNotification("Excel upload failed", "error");
+  } finally {
+    uploadLoading.value = false;
+  }
+};
+
+const downloadTemplate = async () => {
+  try {
+    const response = await api.get("inventory/download-template", {
+      responseType: "blob",
+    });
+
+    const blob = new Blob([response.data], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "inventory_template.xlsx";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+
+    showNotification("Template downloaded successfully", "success");
+  } catch (err) {
+    showNotification("Failed to download template", "error");
+  }
+};
+
+const closeUploadModal = () => {
+  showUploadModal.value = false;
+  setTimeout(() => {
+    resetUploadState();
+  }, 300);
 };
 
 // Sorting
@@ -163,7 +378,6 @@ const saveItem = async () => {
     const url = newItem.value.id
       ? `inventory/items/${newItem.value.id}`
       : "inventory/items";
-
     await api[method](url, newItem.value);
     showNotification(
       `Item ${newItem.value.id ? "updated" : "added"} successfully`,
@@ -198,7 +412,7 @@ const openDeployModal = (item) => {
     quantity_deployed: 1,
     deployment_location: "",
     deployment_date: new Date().toISOString().split("T")[0],
-    expected_return_date: "",
+    expected_return_date: null,
     incident_type: "",
     notes: "",
   };
@@ -224,12 +438,10 @@ const visiblePages = computed(() => {
   const range = 2;
   let start = Math.max(1, currentPage.value - range);
   let end = Math.min(totalPages.value, currentPage.value + range);
-
   if (end - start < range * 2) {
     start = Math.max(1, end - range * 2);
     end = Math.min(totalPages.value, start + range * 2);
   }
-
   return Array.from({ length: end - start + 1 }, (_, i) => start + i);
 });
 
@@ -245,6 +457,22 @@ const showNotification = (message, type) => {
   notification.value = { show: true, type, message };
   setTimeout(() => (notification.value.show = false), 3000);
 };
+
+// Get current item for deployment modal
+const currentDeployItem = computed(() => {
+  return items.value.find(
+    (item) => item.id === deploymentDetails.value.inventory_item_id
+  );
+});
+
+// Format file size
+const formatFileSize = (bytes) => {
+  if (bytes === 0) return "0 Bytes";
+  const k = 1024;
+  const sizes = ["Bytes", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+};
 </script>
 
 <template>
@@ -254,18 +482,26 @@ const showNotification = (message, type) => {
     <!-- Notification Toast -->
     <div
       v-if="notification.show"
-      class="fixed top-6 right-6 z-50 animate-slide-in"
+      class="fixed top-6 right-6 z-[9999] animate-slide-in"
     >
       <div
         :class="[
           'flex items-center p-4 rounded-xl shadow-lg backdrop-blur-sm border transform transition-all duration-300',
           notification.type === 'success'
             ? 'bg-emerald-50/90 text-emerald-800 border-emerald-200'
+            : notification.type === 'warning'
+            ? 'bg-amber-50/90 text-amber-800 border-amber-200'
             : 'bg-red-50/90 text-red-800 border-red-200',
         ]"
       >
         <component
-          :is="notification.type === 'success' ? CheckCircle : AlertCircle"
+          :is="
+            notification.type === 'success'
+              ? CheckCircle
+              : notification.type === 'warning'
+              ? AlertTriangle
+              : AlertCircle
+          "
           class="w-5 h-5 mr-3"
         />
         <span class="text-sm font-medium">{{ notification.message }}</span>
@@ -303,12 +539,20 @@ const showNotification = (message, type) => {
             </div>
           </div>
         </div>
-        <button @click="openEditModal()" class="btn-primary group">
-          <PlusCircle
-            class="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform duration-200"
-          />
-          Add New Item
-        </button>
+        <div class="flex flex-col sm:flex-row gap-3">
+          <button @click="openUploadModal()" class="btn-upload group">
+            <Upload
+              class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform duration-200"
+            />
+            Upload Excel
+          </button>
+          <button @click="openEditModal()" class="btn-primary group">
+            <PlusCircle
+              class="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform duration-200"
+            />
+            Add New Item
+          </button>
+        </div>
       </div>
 
       <!-- Stats Cards -->
@@ -474,6 +718,13 @@ const showNotification = (message, type) => {
             class="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors font-medium"
           >
             Clear Filters
+          </button>
+          <button
+            @click="openUploadModal()"
+            class="px-4 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors font-medium flex items-center justify-center"
+          >
+            <Upload class="w-4 h-4 mr-2" />
+            Upload Excel
           </button>
           <button
             @click="openEditModal()"
@@ -671,312 +922,769 @@ const showNotification = (message, type) => {
       </div>
     </div>
 
-    <!-- Item Modal -->
+    <!-- Excel Upload Modal -->
     <div
-      v-if="showModal"
-      class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+      v-if="showUploadModal"
+      class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+      @click.self="closeUploadModal"
     >
       <div
-        class="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto"
+        class="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[95vh] overflow-hidden"
       >
+        <!-- Modal Header -->
         <div
-          class="p-8 border-b border-gray-100 flex justify-between items-center"
+          class="bg-gradient-to-r from-emerald-50 to-green-50 px-8 py-6 border-b border-gray-100"
         >
-          <div class="flex items-center">
-            <div
-              class="p-3 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl mr-4"
-            >
-              <Package class="w-6 h-6 text-white" />
-            </div>
-            <h3 class="text-2xl font-bold text-gray-900">
-              {{ newItem.id ? "Edit" : "New" }} Inventory Item
-            </h3>
-          </div>
-          <button
-            @click="showModal = false"
-            class="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-xl transition-all duration-200"
-          >
-            <X class="w-6 h-6" />
-          </button>
-        </div>
-        <form @submit.prevent="saveItem" class="p-8">
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <!-- Name -->
-            <div>
-              <label class="block text-sm font-semibold text-gray-700 mb-3"
-                >Item Name *</label
-              >
-              <input
-                v-model="newItem.name"
-                type="text"
-                required
-                class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-              />
-            </div>
-
-            <!-- Category -->
-            <div>
-              <label class="block text-sm font-semibold text-gray-700 mb-3"
-                >Category *</label
-              >
-              <select
-                v-model="newItem.category_id"
-                required
-                class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-              >
-                <option value="" disabled>Select a category</option>
-                <option
-                  v-for="category in categories"
-                  :key="category.id"
-                  :value="category.id"
-                >
-                  {{ category.name }}
-                </option>
-              </select>
-            </div>
-
-            <!-- Quantity -->
-            <div>
-              <label class="block text-sm font-semibold text-gray-700 mb-3"
-                >Quantity in Stock *</label
-              >
-              <input
-                v-model.number="newItem.quantity_in_stock"
-                type="number"
-                min="0"
-                required
-                class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-              />
-            </div>
-
-            <!-- Minimum Stock -->
-            <div>
-              <label class="block text-sm font-semibold text-gray-700 mb-3"
-                >Minimum Stock Level *</label
-              >
-              <input
-                v-model.number="newItem.min_stock_level"
-                type="number"
-                min="0"
-                required
-                class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-              />
-            </div>
-
-            <!-- Unit of Measure -->
-            <div>
-              <label class="block text-sm font-semibold text-gray-700 mb-3"
-                >Unit of Measure *</label
-              >
-              <select
-                v-model="newItem.unit_of_measure"
-                required
-                class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-              >
-                <option value="units">Units</option>
-                <option value="liters">Liters</option>
-                <option value="kilograms">Kilograms</option>
-                <option value="pieces">Pieces</option>
-              </select>
-            </div>
-
-            <!-- Condition -->
-            <div>
-              <label class="block text-sm font-semibold text-gray-700 mb-3"
-                >Condition *</label
-              >
-              <select
-                v-model="newItem.condition"
-                required
-                class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-              >
-                <option value="NEW">New</option>
-                <option value="USED">Used</option>
-                <option value="DAMAGED">Damaged</option>
-              </select>
-            </div>
-
-            <!-- Location -->
-            <div>
-              <label class="block text-sm font-semibold text-gray-700 mb-3"
-                >Storage Location *</label
-              >
-              <input
-                v-model="newItem.location"
-                type="text"
-                required
-                class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-              />
-            </div>
-
-            <!-- Deployable -->
+          <div class="flex items-center justify-between">
             <div class="flex items-center">
-              <input
-                v-model="newItem.is_deployable"
-                type="checkbox"
-                class="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mr-3"
-              />
-              <label class="text-sm font-semibold text-gray-700"
-                >Is this item deployable?</label
+              <button
+                @click="closeUploadModal"
+                class="mr-4 p-2 text-gray-400 hover:text-gray-600 hover:bg-white/50 rounded-xl transition-all duration-200"
               >
+                <ArrowLeft class="w-5 h-5" />
+              </button>
+              <div
+                class="p-3 bg-gradient-to-r from-emerald-500 to-green-600 rounded-xl mr-4"
+              >
+                <FileSpreadsheet class="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 class="text-2xl font-bold text-gray-900">
+                  Upload Excel File
+                </h3>
+                <p class="text-gray-600 mt-1">
+                  Import inventory items from Excel or CSV file
+                </p>
+              </div>
+            </div>
+            <button
+              @click="closeUploadModal"
+              class="text-gray-400 hover:text-gray-600 p-2 hover:bg-white/50 rounded-xl transition-all duration-200"
+            >
+              <X class="w-6 h-6" />
+            </button>
+          </div>
+        </div>
+
+        <!-- Modal Content -->
+        <div class="overflow-y-auto max-h-[calc(95vh-120px)]">
+          <div class="p-8">
+            <!-- Template Download Section -->
+            <div class="mb-8">
+              <div
+                class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-100"
+              >
+                <div class="flex items-center mb-4">
+                  <Download class="w-5 h-5 text-blue-600 mr-2" />
+                  <h4 class="text-lg font-semibold text-gray-900">
+                    Download Template
+                  </h4>
+                </div>
+                <p class="text-gray-600 mb-4">
+                  Download the Excel template to ensure your data is formatted
+                  correctly for import.
+                </p>
+                <button @click="downloadTemplate" class="btn-template">
+                  <Download class="w-4 h-4 mr-2" />
+                  Download Excel Template
+                </button>
+              </div>
+            </div>
+
+            <!-- File Upload Section -->
+            <div class="mb-8">
+              <div class="flex items-center mb-6">
+                <Upload class="w-5 h-5 text-emerald-600 mr-2" />
+                <h4 class="text-lg font-semibold text-gray-900">Upload File</h4>
+              </div>
+
+              <!-- File Drop Zone -->
+              <div
+                class="border-2 border-dashed border-gray-300 rounded-2xl p-8 text-center hover:border-emerald-400 transition-colors duration-200"
+                :class="{ 'border-emerald-400 bg-emerald-50': selectedFile }"
+              >
+                <input
+                  ref="fileInput"
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  @change="handleFileSelect"
+                  class="hidden"
+                />
+
+                <div v-if="!selectedFile">
+                  <FileSpreadsheet
+                    class="w-16 h-16 text-gray-400 mx-auto mb-4"
+                  />
+                  <h5 class="text-lg font-semibold text-gray-900 mb-2">
+                    Choose a file to upload
+                  </h5>
+                  <p class="text-gray-600 mb-4">
+                    Select an Excel (.xlsx, .xls) or CSV file containing your
+                    inventory data
+                  </p>
+                  <button @click="fileInput.click()" class="btn-file-select">
+                    <Upload class="w-4 h-4 mr-2" />
+                    Select File
+                  </button>
+                </div>
+
+                <div v-else class="flex items-center justify-center">
+                  <FileSpreadsheet class="w-8 h-8 text-emerald-600 mr-3" />
+                  <div class="text-left">
+                    <p class="font-semibold text-gray-900">
+                      {{ selectedFile.name }}
+                    </p>
+                    <p class="text-sm text-gray-600">
+                      {{ formatFileSize(selectedFile.size) }}
+                    </p>
+                  </div>
+                  <button
+                    @click="resetUploadState"
+                    class="ml-4 p-2 text-gray-400 hover:text-red-600 rounded-lg transition-colors"
+                  >
+                    <X class="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              <!-- Error Display -->
+              <div
+                v-if="uploadError"
+                class="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl"
+              >
+                <div class="flex items-center">
+                  <XCircle class="w-5 h-5 text-red-600 mr-2" />
+                  <p class="text-red-800 font-medium">{{ uploadError }}</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Upload Progress -->
+            <div v-if="uploadLoading" class="mb-8">
+              <div
+                class="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-6 border border-amber-100"
+              >
+                <div class="flex items-center mb-4">
+                  <Clock class="w-5 h-5 text-amber-600 mr-2 animate-spin" />
+                  <h4 class="text-lg font-semibold text-gray-900">
+                    Uploading File...
+                  </h4>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-3 mb-4">
+                  <div
+                    class="bg-gradient-to-r from-emerald-500 to-green-600 h-3 rounded-full transition-all duration-300"
+                    :style="{ width: `${uploadProgress}%` }"
+                  ></div>
+                </div>
+                <p class="text-gray-600 text-sm">
+                  {{ uploadProgress }}% complete
+                </p>
+              </div>
+            </div>
+
+            <!-- Upload Results -->
+            <div v-if="uploadResults" class="mb-8">
+              <div
+                class="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-100"
+              >
+                <div class="flex items-center mb-4">
+                  <CheckCircle2 class="w-5 h-5 text-green-600 mr-2" />
+                  <h4 class="text-lg font-semibold text-gray-900">
+                    Upload Results
+                  </h4>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div class="text-center">
+                    <p class="text-2xl font-bold text-green-600">
+                      {{ uploadResults.successful || 0 }}
+                    </p>
+                    <p class="text-sm text-gray-600">Items Added</p>
+                  </div>
+                  <div class="text-center">
+                    <p class="text-2xl font-bold text-red-600">
+                      {{ uploadResults.failed || 0 }}
+                    </p>
+                    <p class="text-sm text-gray-600">Failed</p>
+                  </div>
+                  <div class="text-center">
+                    <p class="text-2xl font-bold text-gray-900">
+                      {{ uploadResults.total || 0 }}
+                    </p>
+                    <p class="text-sm text-gray-600">Total Processed</p>
+                  </div>
+                </div>
+
+                <!-- Error Details -->
+                <div
+                  v-if="uploadResults.errors && uploadResults.errors.length > 0"
+                  class="mt-6"
+                >
+                  <h5 class="font-semibold text-gray-900 mb-3">Errors:</h5>
+                  <div class="max-h-32 overflow-y-auto">
+                    <div
+                      v-for="(error, index) in uploadResults.errors"
+                      :key="index"
+                      class="text-sm text-red-700 bg-red-50 p-2 rounded mb-2"
+                    >
+                      Row {{ error.row }}: {{ error.message }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div
+              class="flex justify-end space-x-4 pt-6 border-t border-gray-200"
+            >
+              <button
+                @click="closeUploadModal"
+                class="btn-secondary"
+                :disabled="uploadLoading"
+              >
+                {{ uploadResults ? "Close" : "Cancel" }}
+              </button>
+              <button
+                v-if="selectedFile && !uploadResults"
+                @click="uploadExcelFile"
+                :disabled="uploadLoading"
+                class="btn-upload-action"
+              >
+                <component
+                  :is="uploadLoading ? RefreshCw : Upload"
+                  :class="['w-4 h-4 mr-2', { 'animate-spin': uploadLoading }]"
+                />
+                {{ uploadLoading ? "Uploading..." : "Upload File" }}
+              </button>
             </div>
           </div>
-
-          <!-- Description -->
-          <div class="mt-8">
-            <label class="block text-sm font-semibold text-gray-700 mb-3"
-              >Description</label
-            >
-            <textarea
-              v-model="newItem.description"
-              rows="3"
-              class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-            ></textarea>
-          </div>
-
-          <!-- Notes -->
-          <div class="mt-6">
-            <label class="block text-sm font-semibold text-gray-700 mb-3"
-              >Additional Notes</label
-            >
-            <textarea
-              v-model="newItem.notes"
-              rows="2"
-              class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-            ></textarea>
-          </div>
-
-          <div
-            class="flex justify-end space-x-4 mt-8 pt-6 border-t border-gray-100"
-          >
-            <button
-              type="button"
-              @click="showModal = false"
-              class="btn-secondary"
-            >
-              Cancel
-            </button>
-            <button type="submit" class="btn-primary">
-              {{ newItem.id ? "Update" : "Create" }} Item
-            </button>
-          </div>
-        </form>
+        </div>
       </div>
     </div>
 
-    <!-- Deployment Modal -->
+    <!-- Enhanced Item Modal -->
+    <div
+      v-if="showModal"
+      class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+      @click.self="showModal = false"
+    >
+      <div
+        class="bg-white rounded-3xl shadow-2xl w-full max-w-5xl max-h-[95vh] overflow-hidden"
+      >
+        <!-- Modal Header -->
+        <div
+          class="bg-gradient-to-r from-blue-50 to-indigo-50 px-8 py-6 border-b border-gray-100"
+        >
+          <div class="flex items-center justify-between">
+            <div class="flex items-center">
+              <button
+                @click="showModal = false"
+                class="mr-4 p-2 text-gray-400 hover:text-gray-600 hover:bg-white/50 rounded-xl transition-all duration-200"
+              >
+                <ArrowLeft class="w-5 h-5" />
+              </button>
+              <div
+                class="p-3 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl mr-4"
+              >
+                <Package class="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 class="text-2xl font-bold text-gray-900">
+                  {{
+                    newItem.id
+                      ? "Edit Inventory Item"
+                      : "Add New Inventory Item"
+                  }}
+                </h3>
+                <p class="text-gray-600 mt-1">
+                  {{
+                    newItem.id
+                      ? "Update item information and settings"
+                      : "Create a new inventory item with all necessary details"
+                  }}
+                </p>
+              </div>
+            </div>
+            <button
+              @click="showModal = false"
+              class="text-gray-400 hover:text-gray-600 p-2 hover:bg-white/50 rounded-xl transition-all duration-200"
+            >
+              <X class="w-6 h-6" />
+            </button>
+          </div>
+        </div>
+
+        <!-- Modal Content -->
+        <div class="overflow-y-auto max-h-[calc(95vh-120px)]">
+          <form @submit.prevent="saveItem" class="p-8">
+            <!-- Basic Information Section -->
+            <div class="mb-8">
+              <div class="flex items-center mb-6">
+                <Info class="w-5 h-5 text-blue-600 mr-2" />
+                <h4 class="text-lg font-semibold text-gray-900">
+                  Basic Information
+                </h4>
+              </div>
+              <div
+                class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-100"
+              >
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div>
+                    <label
+                      class="block text-sm font-semibold text-gray-700 mb-3"
+                    >
+                      <Package class="w-4 h-4 inline mr-1" />
+                      Item Name *
+                    </label>
+                    <input
+                      v-model="newItem.name"
+                      type="text"
+                      required
+                      placeholder="Enter item name"
+                      class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      class="block text-sm font-semibold text-gray-700 mb-3"
+                    >
+                      <Tag class="w-4 h-4 inline mr-1" />
+                      Category *
+                    </label>
+                    <select
+                      v-model="newItem.category_id"
+                      required
+                      class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                    >
+                      <option value="" disabled>Select a category</option>
+                      <option
+                        v-for="category in categories"
+                        :key="category.id"
+                        :value="category.id"
+                      >
+                        {{ category.name }}
+                      </option>
+                    </select>
+                  </div>
+                </div>
+                <div class="mt-6">
+                  <label class="block text-sm font-semibold text-gray-700 mb-3">
+                    <FileText class="w-4 h-4 inline mr-1" />
+                    Description
+                  </label>
+                  <textarea
+                    v-model="newItem.description"
+                    rows="3"
+                    placeholder="Describe the item..."
+                    class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                  ></textarea>
+                </div>
+              </div>
+            </div>
+
+            <!-- Stock Management Section -->
+            <div class="mb-8">
+              <div class="flex items-center mb-6">
+                <Hash class="w-5 h-5 text-emerald-600 mr-2" />
+                <h4 class="text-lg font-semibold text-gray-900">
+                  Stock Management
+                </h4>
+              </div>
+              <div
+                class="bg-gradient-to-br from-emerald-50 to-green-50 rounded-2xl p-6 border border-emerald-100"
+              >
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  <div>
+                    <label
+                      class="block text-sm font-semibold text-gray-700 mb-3"
+                    >
+                      Current Stock Quantity *
+                    </label>
+                    <input
+                      v-model.number="newItem.quantity_in_stock"
+                      type="number"
+                      min="0"
+                      required
+                      placeholder="0"
+                      class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      class="block text-sm font-semibold text-gray-700 mb-3"
+                    >
+                      Minimum Stock Level *
+                    </label>
+                    <input
+                      v-model.number="newItem.min_stock_level"
+                      type="number"
+                      min="0"
+                      required
+                      placeholder="0"
+                      class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      class="block text-sm font-semibold text-gray-700 mb-3"
+                    >
+                      Unit of Measure *
+                    </label>
+                    <select
+                      v-model="newItem.unit_of_measure"
+                      required
+                      class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200"
+                    >
+                      <option value="units">Units</option>
+                      <option value="liters">Liters</option>
+                      <option value="kilograms">Kilograms</option>
+                      <option value="pieces">Pieces</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Item Details Section -->
+            <div class="mb-8">
+              <div class="flex items-center mb-6">
+                <Settings class="w-5 h-5 text-amber-600 mr-2" />
+                <h4 class="text-lg font-semibold text-gray-900">
+                  Item Details
+                </h4>
+              </div>
+              <div
+                class="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-6 border border-amber-100"
+              >
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div>
+                    <label
+                      class="block text-sm font-semibold text-gray-700 mb-3"
+                    >
+                      Condition *
+                    </label>
+                    <select
+                      v-model="newItem.condition"
+                      required
+                      class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-200"
+                    >
+                      <option value="NEW">New</option>
+                      <option value="USED">Used</option>
+                      <option value="DAMAGED">Damaged</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label
+                      class="block text-sm font-semibold text-gray-700 mb-3"
+                    >
+                      <MapPin class="w-4 h-4 inline mr-1" />
+                      Storage Location *
+                    </label>
+                    <input
+                      v-model="newItem.location"
+                      type="text"
+                      required
+                      placeholder="e.g., Warehouse A, Shelf 3"
+                      class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-200"
+                    />
+                  </div>
+                </div>
+                <div class="mt-6">
+                  <div
+                    class="flex items-center p-4 bg-white/50 rounded-xl border border-amber-200"
+                  >
+                    <input
+                      v-model="newItem.is_deployable"
+                      type="checkbox"
+                      class="w-5 h-5 text-amber-600 border-gray-300 rounded focus:ring-amber-500 mr-3"
+                    />
+                    <div>
+                      <label class="text-sm font-semibold text-gray-700">
+                        <Truck class="w-4 h-4 inline mr-1" />
+                        Is this item deployable?
+                      </label>
+                      <p class="text-xs text-gray-600 mt-1">
+                        Check this if the item can be deployed for emergency or
+                        field operations
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Additional Notes Section -->
+            <div class="mb-8">
+              <div class="flex items-center mb-6">
+                <FileText class="w-5 h-5 text-gray-600 mr-2" />
+                <h4 class="text-lg font-semibold text-gray-900">
+                  Additional Notes
+                </h4>
+              </div>
+              <div class="bg-gray-50 rounded-2xl p-6 border border-gray-200">
+                <textarea
+                  v-model="newItem.notes"
+                  rows="4"
+                  placeholder="Add any additional notes, special handling instructions, or other relevant information..."
+                  class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-500 focus:border-gray-500 transition-all duration-200 resize-none"
+                ></textarea>
+              </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div
+              class="flex justify-end space-x-4 pt-6 border-t border-gray-200"
+            >
+              <button
+                type="button"
+                @click="showModal = false"
+                class="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button type="submit" class="btn-primary">
+                <Save class="w-4 h-4 mr-2" />
+                {{ newItem.id ? "Update Item" : "Create Item" }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Enhanced Deployment Modal -->
     <div
       v-if="showDeployModal"
-      class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+      class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+      @click.self="showDeployModal = false"
     >
-      <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl">
+      <div
+        class="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[95vh] overflow-hidden"
+      >
+        <!-- Modal Header -->
         <div
-          class="p-8 border-b border-gray-100 flex justify-between items-center"
+          class="bg-gradient-to-r from-emerald-50 to-teal-50 px-8 py-6 border-b border-gray-100"
         >
-          <div class="flex items-center">
-            <div
-              class="p-3 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-xl mr-4"
-            >
-              <Truck class="w-6 h-6 text-white" />
+          <div class="flex items-center justify-between">
+            <div class="flex items-center">
+              <button
+                @click="showDeployModal = false"
+                class="mr-4 p-2 text-gray-400 hover:text-gray-600 hover:bg-white/50 rounded-xl transition-all duration-200"
+              >
+                <ArrowLeft class="w-5 h-5" />
+              </button>
+              <div
+                class="p-3 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-xl mr-4"
+              >
+                <Truck class="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 class="text-2xl font-bold text-gray-900">Deploy Item</h3>
+                <p class="text-gray-600 mt-1">
+                  Deploy {{ currentDeployItem?.name }} for field operations
+                </p>
+              </div>
             </div>
-            <h3 class="text-2xl font-bold text-gray-900">Deploy Item</h3>
-          </div>
-          <button
-            @click="showDeployModal = false"
-            class="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-xl transition-all duration-200"
-          >
-            <X class="w-6 h-6" />
-          </button>
-        </div>
-        <form @submit.prevent="deployItem" class="p-8 space-y-6">
-          <div>
-            <label class="block text-sm font-semibold text-gray-700 mb-3"
-              >Deployment Type</label
-            >
-            <select
-              v-model="deploymentDetails.deployment_type"
-              required
-              class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200"
-            >
-              <option value="EMERGENCY">Emergency</option>
-              <option value="TRAINING">Training</option>
-              <option value="MAINTENANCE">Maintenance</option>
-              <option value="RELIEF_OPERATION">Relief Operation</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-sm font-semibold text-gray-700 mb-3"
-              >Quantity</label
-            >
-            <input
-              v-model.number="deploymentDetails.quantity_deployed"
-              type="number"
-              min="1"
-              required
-              class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200"
-            />
-          </div>
-          <div>
-            <label class="block text-sm font-semibold text-gray-700 mb-3"
-              >Deployment Location</label
-            >
-            <input
-              v-model="deploymentDetails.deployment_location"
-              required
-              class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200"
-            />
-          </div>
-          <div>
-            <label class="block text-sm font-semibold text-gray-700 mb-3"
-              >Deployment Date</label
-            >
-            <input
-              v-model="deploymentDetails.deployment_date"
-              type="date"
-              required
-              class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200"
-            />
-          </div>
-          <div>
-            <label class="block text-sm font-semibold text-gray-700 mb-3"
-              >Expected Return Date</label
-            >
-            <input
-              v-model="deploymentDetails.expected_return_date"
-              type="date"
-              class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200"
-            />
-          </div>
-          <div>
-            <label class="block text-sm font-semibold text-gray-700 mb-3"
-              >Incident Type</label
-            >
-            <input
-              v-model="deploymentDetails.incident_type"
-              class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200"
-            />
-          </div>
-          <div>
-            <label class="block text-sm font-semibold text-gray-700 mb-3"
-              >Notes</label
-            >
-            <textarea
-              v-model="deploymentDetails.notes"
-              rows="3"
-              class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200"
-            ></textarea>
-          </div>
-          <div class="flex justify-end space-x-4 pt-6 border-t border-gray-100">
             <button
-              type="button"
               @click="showDeployModal = false"
-              class="btn-secondary"
+              class="text-gray-400 hover:text-gray-600 p-2 hover:bg-white/50 rounded-xl transition-all duration-200"
             >
-              Cancel
+              <X class="w-6 h-6" />
             </button>
-            <button type="submit" class="btn-deploy">Deploy Item</button>
           </div>
-        </form>
+        </div>
+
+        <!-- Modal Content -->
+        <div class="overflow-y-auto max-h-[calc(95vh-120px)]">
+          <form @submit.prevent="deployItem" class="p-8">
+            <!-- Item Summary -->
+            <div class="mb-8">
+              <div
+                class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-100"
+              >
+                <div class="flex items-center mb-4">
+                  <Package class="w-5 h-5 text-blue-600 mr-2" />
+                  <h4 class="text-lg font-semibold text-gray-900">
+                    Item Being Deployed
+                  </h4>
+                </div>
+                <div class="flex items-center">
+                  <div
+                    class="w-12 h-12 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center mr-4"
+                  >
+                    <Package class="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h5 class="font-semibold text-gray-900">
+                      {{ currentDeployItem?.name }}
+                    </h5>
+                    <p class="text-sm text-gray-600">
+                      {{ currentDeployItem?.description }}
+                    </p>
+                    <p class="text-xs text-gray-500 mt-1">
+                      Available: {{ currentDeployItem?.quantity_in_stock }}
+                      {{ currentDeployItem?.unit_of_measure }}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Deployment Details -->
+            <div class="mb-8">
+              <div class="flex items-center mb-6">
+                <Settings class="w-5 h-5 text-emerald-600 mr-2" />
+                <h4 class="text-lg font-semibold text-gray-900">
+                  Deployment Details
+                </h4>
+              </div>
+              <div
+                class="bg-gradient-to-br from-emerald-50 to-green-50 rounded-2xl p-6 border border-emerald-100"
+              >
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div>
+                    <label
+                      class="block text-sm font-semibold text-gray-700 mb-3"
+                    >
+                      Deployment Type *
+                    </label>
+                    <select
+                      v-model="deploymentDetails.deployment_type"
+                      required
+                      class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200"
+                    >
+                      <option value="EMERGENCY">Emergency</option>
+                      <option value="TRAINING">Training</option>
+                      <option value="MAINTENANCE">Maintenance</option>
+                      <option value="RELIEF_OPERATION">Relief Operation</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label
+                      class="block text-sm font-semibold text-gray-700 mb-3"
+                    >
+                      Quantity to Deploy *
+                    </label>
+                    <input
+                      v-model.number="deploymentDetails.quantity_deployed"
+                      type="number"
+                      min="1"
+                      :max="currentDeployItem?.quantity_in_stock"
+                      required
+                      class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Location & Timeline -->
+            <div class="mb-8">
+              <div class="flex items-center mb-6">
+                <MapPin class="w-5 h-5 text-amber-600 mr-2" />
+                <h4 class="text-lg font-semibold text-gray-900">
+                  Location & Timeline
+                </h4>
+              </div>
+              <div
+                class="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-6 border border-amber-100"
+              >
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                  <div>
+                    <label
+                      class="block text-sm font-semibold text-gray-700 mb-3"
+                    >
+                      <MapPin class="w-4 h-4 inline mr-1" />
+                      Deployment Location *
+                    </label>
+                    <input
+                      v-model="deploymentDetails.deployment_location"
+                      required
+                      placeholder="e.g., Emergency Site Alpha, Training Facility B"
+                      class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-200"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      class="block text-sm font-semibold text-gray-700 mb-3"
+                    >
+                      Incident Type
+                    </label>
+                    <input
+                      v-model="deploymentDetails.incident_type"
+                      placeholder="e.g., Flood Response, Fire Emergency"
+                      class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-200"
+                    />
+                  </div>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div>
+                    <label
+                      class="block text-sm font-semibold text-gray-700 mb-3"
+                    >
+                      <Calendar class="w-4 h-4 inline mr-1" />
+                      Deployment Date *
+                    </label>
+                    <input
+                      v-model="deploymentDetails.deployment_date"
+                      type="date"
+                      required
+                      class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-200"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      class="block text-sm font-semibold text-gray-700 mb-3"
+                    >
+                      <Calendar class="w-4 h-4 inline mr-1" />
+                      Expected Return Date
+                    </label>
+                    <input
+                      v-model="deploymentDetails.expected_return_date"
+                      type="date"
+                      class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-200"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Additional Notes -->
+            <div class="mb-8">
+              <div class="flex items-center mb-6">
+                <FileText class="w-5 h-5 text-gray-600 mr-2" />
+                <h4 class="text-lg font-semibold text-gray-900">
+                  Additional Information
+                </h4>
+              </div>
+              <div class="bg-gray-50 rounded-2xl p-6 border border-gray-200">
+                <textarea
+                  v-model="deploymentDetails.notes"
+                  rows="4"
+                  placeholder="Add deployment notes, special instructions, contact information, or other relevant details..."
+                  class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-500 focus:border-gray-500 transition-all duration-200 resize-none"
+                ></textarea>
+              </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div
+              class="flex justify-end space-x-4 pt-6 border-t border-gray-200"
+            >
+              <button
+                type="button"
+                @click="showDeployModal = false"
+                class="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button type="submit" class="btn-deploy">
+                <Truck class="w-4 h-4 mr-2" />
+                Deploy Item
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   </div>
@@ -1006,8 +1714,24 @@ const showNotification = (message, type) => {
   @apply bg-gray-100 hover:bg-gray-200 text-gray-700 px-6 py-3 rounded-xl font-semibold transition-all duration-200;
 }
 
+.btn-upload {
+  @apply bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white px-6 py-3 rounded-xl flex items-center justify-center font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-0.5;
+}
+
 .btn-deploy {
   @apply bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-6 py-3 rounded-xl flex items-center justify-center font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-0.5;
+}
+
+.btn-template {
+  @apply bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-4 py-2 rounded-xl flex items-center justify-center font-medium shadow-md hover:shadow-lg transition-all duration-200;
+}
+
+.btn-file-select {
+  @apply bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-200 flex items-center justify-center;
+}
+
+.btn-upload-action {
+  @apply bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white px-6 py-3 rounded-xl flex items-center justify-center font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none;
 }
 
 .btn-pagination {

@@ -40,7 +40,26 @@ const setCache = async (cacheKey, cachedValue, expire = 60) => {
 };
 
 const invalidateCache = async (cacheKey) => {
-  return await invalidateCachePattern(`${cacheKey}:*`);
+  try {
+    const redis = await getRedisClient();
+    if (!redis) {
+      console.warn("Redis client not available");
+      return false;
+    }
+
+    // If it looks like a pattern (contains *), use pattern matching
+    if (cacheKey.includes("*")) {
+      return await invalidateCachePattern(cacheKey);
+    }
+
+    // Otherwise, delete the single key
+    const result = await redis.del(cacheKey);
+    console.log(`Invalidated cache key: ${cacheKey}`);
+    return result > 0;
+  } catch (error) {
+    console.error("Error invalidating cache:", error);
+    return false;
+  }
 };
 
 const invalidateCachePattern = async (pattern) => {
@@ -72,4 +91,5 @@ const invalidateCachePattern = async (pattern) => {
   }
 };
 
-export { getCached, setCache, invalidateCache };
+// In your cache service file - update the export line
+export { getCached, setCache, invalidateCache, invalidateCachePattern };

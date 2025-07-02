@@ -27,7 +27,10 @@ const Notification = sequelize.define(
         "CAMERA_OFFLINE",
         "CAMERA_ONLINE",
         "CAMERA_ADDED",
-        "CAMERA_REMOVED"
+        "CAMERA_REMOVED",
+        "SYSTEM_GENERATED", // Added for system notifications
+        "EXPIRING_SOON", // Added for expiry notifications
+        "LOW_STOCK" // Added for low stock notifications
       ),
       allowNull: false,
     },
@@ -36,7 +39,13 @@ const Notification = sequelize.define(
       defaultValue: false,
     },
     entityType: {
-      type: DataTypes.ENUM("User", "Inventory", "Camera"),
+      type: DataTypes.ENUM(
+        "User",
+        "Inventory",
+        "Camera",
+        "INVENTORY_ITEM", // Added for consistency
+        "BATCH" // Added for batch-related notifications
+      ),
       allowNull: false,
     },
     entityId: {
@@ -46,6 +55,17 @@ const Notification = sequelize.define(
     description: {
       type: DataTypes.TEXT,
       allowNull: false,
+    },
+    // Optional: Add priority field for better notification management
+    priority: {
+      type: DataTypes.ENUM("LOW", "MEDIUM", "HIGH"),
+      defaultValue: "MEDIUM",
+      allowNull: false,
+    },
+    // Optional: Add title field for better notification display
+    title: {
+      type: DataTypes.STRING,
+      allowNull: true,
     },
   },
   {
@@ -60,6 +80,7 @@ const Notification = sequelize.define(
       { fields: ["entityId"] },
       { fields: ["createdAt"] },
       { fields: ["deletedAt"] },
+      { fields: ["priority"] }, // Added index for priority
     ],
   }
 );

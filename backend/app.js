@@ -40,6 +40,13 @@ if (!fs.existsSync(uploadsDir)) {
   console.log("Created uploads directory");
 }
 
+const excelsDir = path.join(uploadsDir, "excels");
+
+if (!fs.existsSync(excelsDir)) {
+  fs.mkdirSync(excelsDir, { recursive: true });
+  console.log("Created excels uploads directory");
+}
+
 if (!fs.existsSync(incidentsDir)) {
   fs.mkdirSync(incidentsDir, { recursive: true });
   console.log("Created incidents uploads directory");

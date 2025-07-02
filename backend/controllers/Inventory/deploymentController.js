@@ -7,8 +7,8 @@ import {
   ForbiddenError,
   UnauthorizedError,
 } from "../../utils/Error.js";
-const { Deployment, InventoryItem, User, Notification } = models;
-
+import { invalidateItemsCache } from "./utils/cacheUtil.js";
+const { Deployment, InventoryItem, User, InventoryNotification } = models;
 const createDeployment = async (req, res, next) => {
   try {
     const {
@@ -63,7 +63,7 @@ const createDeployment = async (req, res, next) => {
     });
 
     // Create notification for deployment
-    await Notification.create({
+    await InventoryNotification.create({
       notification_type: "EQUIPMENT_ISSUE",
       inventory_item_id,
       user_id: deployed_by,
@@ -71,6 +71,7 @@ const createDeployment = async (req, res, next) => {
       message: `${item.name} (${quantity_deployed} ${item.unit_of_measure}) deployed to ${deployment_location}`,
       priority: "MEDIUM",
     });
+    await invalidateItemsCache();
 
     return res.status(StatusCodes.CREATED).json({
       success: true,

@@ -16,6 +16,9 @@ import {
   Clock,
   CheckCircle2,
   Ban,
+  User,
+  FileText,
+  ArrowLeft,
 } from "lucide-vue-next";
 import api from "../../../utils/axios";
 
@@ -58,21 +61,20 @@ const nonReturnableItems = [
 
 // Helper function to check if an item is returnable
 const isItemReturnable = (itemName) => {
-  if (!itemName) return true; // Default to returnable if no name
-
+  if (!itemName) return true;
   const lowerItemName = itemName.toLowerCase();
   return !nonReturnableItems.some((keyword) => lowerItemName.includes(keyword));
 };
 
 // Helper function to check if deployment should show return date
 const shouldShowReturnDate = (deployment) => {
-  const itemName = deployment.inventoryDeploymentItem?.name || "";
+  const itemName = deployment.inventoryItem?.name || "";
   return isItemReturnable(itemName) && deployment.expected_return_date;
 };
 
 // Helper function to check if status update buttons should be enabled
 const canUpdateStatus = (deployment) => {
-  const itemName = deployment.inventoryDeploymentItem?.name || "";
+  const itemName = deployment.inventoryItem?.name || "";
   return isItemReturnable(itemName) && deployment.status === "DEPLOYED";
 };
 
@@ -81,7 +83,6 @@ const fetchDeployments = async () => {
   try {
     loading.value = true;
     error.value = null;
-
     const response = await api.get("inventory/deployment", {
       params: {
         page: currentPage.value,
@@ -90,7 +91,6 @@ const fetchDeployments = async () => {
         search: searchQuery.value || undefined,
       },
     });
-
     deployments.value = response.data.data;
     totalPages.value = response.data.meta.pages;
   } catch (err) {
@@ -120,7 +120,6 @@ const fetchDeployment = async (id) => {
 const updateDeploymentStatus = async (status) => {
   try {
     isUpdating.value = true;
-
     const response = await api.put(
       `inventory/deployment/${currentDeployment.value.id}/status`,
       {
@@ -130,7 +129,6 @@ const updateDeploymentStatus = async (status) => {
         notes: `Status updated to ${status}`,
       }
     );
-
     currentDeployment.value = response.data.data;
     showNotification(`Deployment status updated to ${status}`, "success");
     closeModal();
@@ -151,30 +149,35 @@ const statusColor = (status) => {
         bg: "bg-blue-50",
         text: "text-blue-700",
         border: "border-blue-200",
+        icon: "text-blue-600",
       };
     case "RETURNED":
       return {
         bg: "bg-emerald-50",
         text: "text-emerald-700",
         border: "border-emerald-200",
+        icon: "text-emerald-600",
       };
     case "LOST":
       return {
         bg: "bg-red-50",
         text: "text-red-700",
         border: "border-red-200",
+        icon: "text-red-600",
       };
     case "DAMAGED":
       return {
         bg: "bg-amber-50",
         text: "text-amber-700",
         border: "border-amber-200",
+        icon: "text-amber-600",
       };
     default:
       return {
         bg: "bg-gray-50",
         text: "text-gray-700",
         border: "border-gray-200",
+        icon: "text-gray-600",
       };
   }
 };
@@ -200,13 +203,10 @@ const isOverdue = (deployment) => {
 const getDaysUntilReturn = (deployment) => {
   if (deployment.status !== "DEPLOYED") return null;
   if (!deployment.expected_return_date) return null;
-
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-
   const returnDate = new Date(deployment.expected_return_date);
   returnDate.setHours(0, 0, 0, 0);
-
   const diffTime = returnDate - today;
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   return diffDays;
@@ -231,7 +231,7 @@ const closeModal = () => {
   showModal.value = false;
   setTimeout(() => {
     currentDeployment.value = null;
-  }, 300); // Small delay to prevent UI flicker
+  }, 300);
 };
 
 // Handle status update
@@ -263,12 +263,10 @@ const visiblePages = computed(() => {
   const range = 2;
   let start = Math.max(1, currentPage.value - range);
   let end = Math.min(totalPages.value, currentPage.value + range);
-
   if (end - start < range * 2) {
     start = Math.max(1, end - range * 2);
     end = Math.min(totalPages.value, start + range * 2);
   }
-
   return Array.from({ length: end - start + 1 }, (_, i) => start + i);
 });
 
@@ -364,6 +362,7 @@ onMounted(fetchDeployments);
             </div>
           </div>
         </div>
+
         <div
           class="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg"
         >
@@ -381,6 +380,7 @@ onMounted(fetchDeployments);
             </div>
           </div>
         </div>
+
         <div
           class="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg"
         >
@@ -396,6 +396,7 @@ onMounted(fetchDeployments);
             </div>
           </div>
         </div>
+
         <div
           class="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg"
         >
@@ -523,9 +524,7 @@ onMounted(fetchDeployments);
                     <div
                       :class="[
                         'w-10 h-10 rounded-xl flex items-center justify-center mr-4',
-                        isItemReturnable(
-                          deployment.inventoryDeploymentItem?.name
-                        )
+                        isItemReturnable(deployment.inventoryItem?.name)
                           ? 'bg-gradient-to-r from-blue-500 to-indigo-600'
                           : 'bg-gradient-to-r from-gray-400 to-gray-600',
                       ]"
@@ -534,17 +533,10 @@ onMounted(fetchDeployments);
                     </div>
                     <div>
                       <div class="font-semibold text-gray-900">
-                        {{
-                          deployment.inventoryDeploymentItem?.name ||
-                          "Unknown Item"
-                        }}
+                        {{ deployment.inventoryItem?.name || "Unknown Item" }}
                       </div>
                       <div
-                        v-if="
-                          !isItemReturnable(
-                            deployment.inventoryDeploymentItem?.name
-                          )
-                        "
+                        v-if="!isItemReturnable(deployment.inventoryItem?.name)"
                         class="text-xs text-gray-500 flex items-center mt-1"
                       >
                         <Ban class="w-3 h-3 mr-1" />
@@ -704,221 +696,367 @@ onMounted(fetchDeployments);
         </button>
       </div>
 
-      <!-- Deployment Details Modal -->
+      <!-- Enhanced Deployment Details Modal -->
       <div
         v-if="showModal"
-        class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+        class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+        @click.self="closeModal"
       >
         <div
-          class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+          class="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[95vh] overflow-hidden transform transition-all duration-300 scale-100"
         >
+          <!-- Modal Header -->
           <div
-            class="p-8 border-b border-gray-100 flex justify-between items-center"
+            class="bg-gradient-to-r from-blue-50 to-indigo-50 px-8 py-6 border-b border-gray-100"
           >
-            <div class="flex items-center">
-              <div
-                :class="[
-                  'p-3 rounded-xl mr-4',
-                  currentDeployment &&
-                  isItemReturnable(
-                    currentDeployment.inventoryDeploymentItem?.name
-                  )
-                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600'
-                    : 'bg-gradient-to-r from-gray-400 to-gray-600',
-                ]"
-              >
-                <Truck class="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h3 class="text-2xl font-bold text-gray-900">
-                  Deployment Details
-                </h3>
-                <p
-                  v-if="
-                    currentDeployment &&
-                    !isItemReturnable(
-                      currentDeployment.inventoryDeploymentItem?.name
-                    )
-                  "
-                  class="text-sm text-gray-500 flex items-center mt-1"
+            <div class="flex items-center justify-between">
+              <div class="flex items-center">
+                <button
+                  @click="closeModal"
+                  class="mr-4 p-2 text-gray-400 hover:text-gray-600 hover:bg-white/50 rounded-xl transition-all duration-200"
                 >
-                  <Ban class="w-4 h-4 mr-1" />
-                  Non-returnable item
+                  <ArrowLeft class="w-5 h-5" />
+                </button>
+                <div
+                  :class="[
+                    'p-3 rounded-xl mr-4',
+                    currentDeployment &&
+                    isItemReturnable(currentDeployment.inventoryItem?.name)
+                      ? 'bg-gradient-to-r from-blue-500 to-indigo-600'
+                      : 'bg-gradient-to-r from-gray-400 to-gray-600',
+                  ]"
+                >
+                  <Package class="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h3 class="text-2xl font-bold text-gray-900">
+                    Deployment Details
+                  </h3>
+                  <p class="text-gray-600 mt-1">
+                    View and manage deployment information
+                  </p>
+                </div>
+              </div>
+              <button
+                @click="closeModal"
+                class="text-gray-400 hover:text-gray-600 p-2 hover:bg-white/50 rounded-xl transition-all duration-200"
+              >
+                <X class="w-6 h-6" />
+              </button>
+            </div>
+          </div>
+
+          <!-- Modal Content -->
+          <div class="overflow-y-auto max-h-[calc(95vh-120px)]">
+            <!-- Loading state for deployment details -->
+            <div
+              v-if="deploymentLoading"
+              class="p-12 flex flex-col items-center justify-center"
+            >
+              <div class="relative mb-4">
+                <div
+                  class="animate-spin rounded-full h-12 w-12 border-4 border-blue-200"
+                ></div>
+                <div
+                  class="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent absolute top-0 left-0"
+                ></div>
+              </div>
+              <p class="text-gray-600 font-medium">
+                Loading deployment details...
+              </p>
+            </div>
+
+            <!-- Deployment details content -->
+            <div v-else-if="currentDeployment" class="p-8">
+              <!-- Status Banner -->
+              <div
+                v-if="
+                  currentDeployment.status === 'DEPLOYED' &&
+                  isOverdue(currentDeployment)
+                "
+                class="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center"
+              >
+                <AlertTriangle class="w-5 h-5 text-red-600 mr-3" />
+                <div>
+                  <p class="font-semibold text-red-800">Overdue Return</p>
+                  <p class="text-sm text-red-600">
+                    This deployment is
+                    {{ Math.abs(getDaysUntilReturn(currentDeployment)) }} days
+                    overdue for return.
+                  </p>
+                </div>
+              </div>
+
+              <!-- Main Information Cards -->
+              <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                <!-- Item Information Card -->
+                <div
+                  class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-100"
+                >
+                  <div class="flex items-center mb-4">
+                    <Package class="w-5 h-5 text-blue-600 mr-2" />
+                    <h4 class="text-lg font-semibold text-gray-900">
+                      Item Information
+                    </h4>
+                  </div>
+                  <div class="space-y-4">
+                    <div>
+                      <p class="text-sm font-medium text-gray-600 mb-1">
+                        Item Name
+                      </p>
+                      <p class="text-lg font-semibold text-gray-900">
+                        {{
+                          currentDeployment.inventoryItem?.name ||
+                          "Unknown Item"
+                        }}
+                      </p>
+                      <div
+                        v-if="
+                          !isItemReturnable(
+                            currentDeployment.inventoryItem?.name
+                          )
+                        "
+                        class="flex items-center mt-2 text-sm text-gray-600"
+                      >
+                        <Ban class="w-4 h-4 mr-1" />
+                        Non-returnable item
+                      </div>
+                    </div>
+                    <div>
+                      <p class="text-sm font-medium text-gray-600 mb-1">
+                        Quantity Deployed
+                      </p>
+                      <p class="text-2xl font-bold text-blue-600">
+                        {{ currentDeployment.quantity_deployed }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Deployment Information Card -->
+                <div
+                  class="bg-gradient-to-br from-emerald-50 to-green-50 rounded-2xl p-6 border border-emerald-100"
+                >
+                  <div class="flex items-center mb-4">
+                    <MapPin class="w-5 h-5 text-emerald-600 mr-2" />
+                    <h4 class="text-lg font-semibold text-gray-900">
+                      Deployment Information
+                    </h4>
+                  </div>
+                  <div class="space-y-4">
+                    <div>
+                      <p class="text-sm font-medium text-gray-600 mb-1">
+                        Location
+                      </p>
+                      <p class="text-lg font-semibold text-gray-900">
+                        {{ currentDeployment.deployment_location }}
+                      </p>
+                    </div>
+                    <div>
+                      <p class="text-sm font-medium text-gray-600 mb-1">
+                        Current Status
+                      </p>
+                      <span
+                        :class="[
+                          'inline-flex items-center px-3 py-1 text-sm font-medium rounded-full border',
+                          statusColor(currentDeployment.status).bg,
+                          statusColor(currentDeployment.status).text,
+                          statusColor(currentDeployment.status).border,
+                        ]"
+                      >
+                        <div
+                          :class="[
+                            'w-2 h-2 rounded-full mr-2',
+                            statusColor(currentDeployment.status).icon.replace(
+                              'text-',
+                              'bg-'
+                            ),
+                          ]"
+                        ></div>
+                        {{ currentDeployment.status }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Timeline Card -->
+              <div
+                class="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-6 border border-amber-100 mb-8"
+              >
+                <div class="flex items-center mb-4">
+                  <Calendar class="w-5 h-5 text-amber-600 mr-2" />
+                  <h4 class="text-lg font-semibold text-gray-900">Timeline</h4>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <p class="text-sm font-medium text-gray-600 mb-1">
+                      Deployment Date
+                    </p>
+                    <div class="flex items-center">
+                      <div class="w-3 h-3 bg-blue-500 rounded-full mr-3"></div>
+                      <p class="text-gray-900 font-medium">
+                        {{ formatDate(currentDeployment.deployment_date) }}
+                      </p>
+                    </div>
+                  </div>
+                  <div>
+                    <p class="text-sm font-medium text-gray-600 mb-1">
+                      Expected Return Date
+                    </p>
+                    <div
+                      v-if="shouldShowReturnDate(currentDeployment)"
+                      class="flex items-center"
+                    >
+                      <div
+                        :class="[
+                          'w-3 h-3 rounded-full mr-3',
+                          isOverdue(currentDeployment)
+                            ? 'bg-red-500'
+                            : 'bg-emerald-500',
+                        ]"
+                      ></div>
+                      <div>
+                        <p class="text-gray-900 font-medium">
+                          {{
+                            formatDate(currentDeployment.expected_return_date)
+                          }}
+                        </p>
+                        <p
+                          v-if="currentDeployment.status === 'DEPLOYED'"
+                          :class="[
+                            'text-sm mt-1',
+                            isOverdue(currentDeployment)
+                              ? 'text-red-600'
+                              : 'text-emerald-600',
+                          ]"
+                        >
+                          {{
+                            isOverdue(currentDeployment)
+                              ? `${Math.abs(
+                                  getDaysUntilReturn(currentDeployment)
+                                )} days overdue`
+                              : getDaysUntilReturn(currentDeployment) === 0
+                              ? "Due today"
+                              : `${getDaysUntilReturn(
+                                  currentDeployment
+                                )} days remaining`
+                          }}
+                        </p>
+                      </div>
+                    </div>
+                    <div v-else class="flex items-center text-gray-500">
+                      <div class="w-3 h-3 bg-gray-400 rounded-full mr-3"></div>
+                      <p class="text-sm">Permanent deployment</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Notes Section -->
+              <div
+                v-if="currentDeployment.notes"
+                class="bg-gray-50 rounded-2xl p-6 border border-gray-200 mb-8"
+              >
+                <div class="flex items-center mb-3">
+                  <FileText class="w-5 h-5 text-gray-600 mr-2" />
+                  <h4 class="text-lg font-semibold text-gray-900">Notes</h4>
+                </div>
+                <p class="text-gray-700 leading-relaxed">
+                  {{ currentDeployment.notes }}
                 </p>
               </div>
-            </div>
-            <button
-              @click="closeModal"
-              class="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-xl transition-all duration-200"
-            >
-              <X class="w-6 h-6" />
-            </button>
-          </div>
 
-          <!-- Loading state for deployment details -->
-          <div
-            v-if="deploymentLoading"
-            class="p-8 flex justify-center items-center"
-          >
-            <div class="relative">
-              <div
-                class="animate-spin rounded-full h-8 w-8 border-2 border-blue-200"
-              ></div>
-              <div
-                class="animate-spin rounded-full h-8 w-8 border-2 border-blue-600 border-t-transparent absolute top-0 left-0"
-              ></div>
-            </div>
-          </div>
-
-          <!-- Deployment details content -->
-          <div v-else-if="currentDeployment" class="p-8">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-              <div class="space-y-4">
-                <div>
-                  <p class="text-sm font-semibold text-gray-500 mb-2">
-                    Item Name
-                  </p>
-                  <p class="text-lg font-semibold text-gray-900">
-                    {{
-                      currentDeployment.inventoryDeploymentItem?.name ||
-                      "Unknown Item"
-                    }}
-                  </p>
-                </div>
-                <div>
-                  <p class="text-sm font-semibold text-gray-500 mb-2">
-                    Location
-                  </p>
-                  <div class="flex items-center">
-                    <MapPin class="w-4 h-4 text-gray-400 mr-2" />
-                    <p class="text-gray-900 font-medium">
-                      {{ currentDeployment.deployment_location }}
-                    </p>
-                  </div>
-                </div>
-                <div>
-                  <p class="text-sm font-semibold text-gray-500 mb-2">
-                    Quantity Deployed
-                  </p>
-                  <p class="text-lg font-semibold text-gray-900">
-                    {{ currentDeployment.quantity_deployed }}
-                  </p>
-                </div>
-              </div>
-
-              <div class="space-y-4">
-                <div>
-                  <p class="text-sm font-semibold text-gray-500 mb-2">
-                    Current Status
-                  </p>
-                  <span
-                    :class="[
-                      'px-3 py-1 text-sm font-medium rounded-full border',
-                      statusColor(currentDeployment.status).bg,
-                      statusColor(currentDeployment.status).text,
-                      statusColor(currentDeployment.status).border,
-                    ]"
+              <!-- Action Buttons Section -->
+              <div class="border-t border-gray-200 pt-6">
+                <div v-if="canUpdateStatus(currentDeployment)">
+                  <h4
+                    class="text-lg font-semibold text-gray-900 mb-4 flex items-center"
                   >
-                    {{ currentDeployment.status }}
-                  </span>
-                </div>
-                <div>
-                  <p class="text-sm font-semibold text-gray-500 mb-2">
-                    Deployment Date
+                    <CheckCircle2 class="w-5 h-5 text-green-600 mr-2" />
+                    Update Status
+                  </h4>
+                  <p class="text-gray-600 mb-6">
+                    Update the deployment status to reflect the current
+                    situation.
                   </p>
-                  <div class="flex items-center">
-                    <Calendar class="w-4 h-4 text-gray-400 mr-2" />
-                    <p class="text-gray-900 font-medium">
-                      {{ formatDate(currentDeployment.deployment_date) }}
-                    </p>
+                  <div class="flex flex-wrap gap-3">
+                    <button
+                      v-if="currentDeployment.status !== 'RETURNED'"
+                      @click="handleStatusUpdate('RETURNED')"
+                      :disabled="isUpdating"
+                      class="btn-status-returned"
+                    >
+                      <Check class="w-4 h-4 mr-2" />
+                      {{ isUpdating ? "Updating..." : "Mark as Returned" }}
+                    </button>
+                    <button
+                      v-if="currentDeployment.status !== 'LOST'"
+                      @click="handleStatusUpdate('LOST')"
+                      :disabled="isUpdating"
+                      class="btn-status-lost"
+                    >
+                      <AlertTriangle class="w-4 h-4 mr-2" />
+                      {{ isUpdating ? "Updating..." : "Mark as Lost" }}
+                    </button>
+                    <button
+                      v-if="currentDeployment.status !== 'DAMAGED'"
+                      @click="handleStatusUpdate('DAMAGED')"
+                      :disabled="isUpdating"
+                      class="btn-status-damaged"
+                    >
+                      <AlertTriangle class="w-4 h-4 mr-2" />
+                      {{ isUpdating ? "Updating..." : "Mark as Damaged" }}
+                    </button>
                   </div>
                 </div>
-                <div>
-                  <p class="text-sm font-semibold text-gray-500 mb-2">
-                    Expected Return Date
-                  </p>
+
+                <!-- Non-returnable item notice -->
+                <div
+                  v-else-if="
+                    !isItemReturnable(currentDeployment.inventoryItem?.name)
+                  "
+                >
                   <div
-                    v-if="shouldShowReturnDate(currentDeployment)"
-                    class="flex items-center"
+                    class="bg-blue-50 rounded-2xl p-6 border border-blue-200"
                   >
-                    <Calendar class="w-4 h-4 text-gray-400 mr-2" />
-                    <p class="text-gray-900 font-medium">
-                      {{ formatDate(currentDeployment.expected_return_date) }}
-                    </p>
-                  </div>
-                  <div v-else class="flex items-center text-gray-500">
-                    <Ban class="w-4 h-4 mr-2" />
-                    <p class="text-sm">Permanent deployment</p>
+                    <div class="flex items-start">
+                      <Ban
+                        class="w-6 h-6 text-blue-600 mr-3 mt-1 flex-shrink-0"
+                      />
+                      <div>
+                        <h4 class="text-lg font-semibold text-blue-900 mb-2">
+                          Non-returnable Item
+                        </h4>
+                        <p class="text-blue-700 leading-relaxed">
+                          This item is classified as non-returnable and will
+                          remain permanently deployed at the specified location.
+                          No return date tracking or status updates are required
+                          for this deployment.
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
 
-            <div v-if="currentDeployment.notes" class="mb-8">
-              <p class="text-sm font-semibold text-gray-500 mb-2">Notes</p>
-              <div class="bg-gray-50 rounded-xl p-4">
-                <p class="text-gray-900">{{ currentDeployment.notes }}</p>
-              </div>
-            </div>
-
-            <!-- Status Update Section -->
-            <div
-              v-if="canUpdateStatus(currentDeployment)"
-              class="border-t border-gray-100 pt-6"
-            >
-              <p class="text-lg font-semibold text-gray-900 mb-4">
-                Update Status
-              </p>
-              <div class="flex flex-wrap gap-3">
-                <button
-                  v-if="currentDeployment.status !== 'RETURNED'"
-                  @click="handleStatusUpdate('RETURNED')"
-                  :disabled="isUpdating"
-                  class="btn-status-returned"
-                >
-                  <Check class="w-4 h-4 mr-2" />
-                  {{ isUpdating ? "Updating..." : "Mark as Returned" }}
-                </button>
-                <button
-                  v-if="currentDeployment.status !== 'LOST'"
-                  @click="handleStatusUpdate('LOST')"
-                  :disabled="isUpdating"
-                  class="btn-status-lost"
-                >
-                  <AlertTriangle class="w-4 h-4 mr-2" />
-                  {{ isUpdating ? "Updating..." : "Mark as Lost" }}
-                </button>
-                <button
-                  v-if="currentDeployment.status !== 'DAMAGED'"
-                  @click="handleStatusUpdate('DAMAGED')"
-                  :disabled="isUpdating"
-                  class="btn-status-damaged"
-                >
-                  <AlertTriangle class="w-4 h-4 mr-2" />
-                  {{ isUpdating ? "Updating..." : "Mark as Damaged" }}
-                </button>
-              </div>
-            </div>
-
-            <!-- Non-returnable item notice -->
-            <div
-              v-else-if="
-                !isItemReturnable(
-                  currentDeployment.inventoryDeploymentItem?.name
-                )
-              "
-              class="border-t border-gray-100 pt-6"
-            >
-              <div class="bg-gray-50 rounded-xl p-4 flex items-center">
-                <Ban class="w-5 h-5 text-gray-500 mr-3" />
-                <div>
-                  <p class="text-sm font-medium text-gray-700">
-                    Non-returnable Item
-                  </p>
-                  <p class="text-xs text-gray-500 mt-1">
-                    This item is not expected to be returned and will remain
-                    permanently deployed.
-                  </p>
+                <!-- Already processed status -->
+                <div v-else>
+                  <div
+                    class="bg-gray-50 rounded-2xl p-6 border border-gray-200"
+                  >
+                    <div class="flex items-center">
+                      <CheckCircle2 class="w-6 h-6 text-gray-600 mr-3" />
+                      <div>
+                        <h4 class="text-lg font-semibold text-gray-900 mb-1">
+                          Status Finalized
+                        </h4>
+                        <p class="text-gray-600">
+                          This deployment has been processed and no further
+                          actions are available.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -954,14 +1092,14 @@ onMounted(fetchDeployments);
 }
 
 .btn-status-returned {
-  @apply px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-sm font-medium hover:bg-emerald-100 transition-all duration-200 flex items-center disabled:opacity-50 disabled:cursor-not-allowed;
+  @apply px-6 py-3 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-sm font-medium hover:bg-emerald-100 transition-all duration-200 flex items-center disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md;
 }
 
 .btn-status-lost {
-  @apply px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-xl text-sm font-medium hover:bg-red-100 transition-all duration-200 flex items-center disabled:opacity-50 disabled:cursor-not-allowed;
+  @apply px-6 py-3 bg-red-50 text-red-700 border border-red-200 rounded-xl text-sm font-medium hover:bg-red-100 transition-all duration-200 flex items-center disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md;
 }
 
 .btn-status-damaged {
-  @apply px-4 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl text-sm font-medium hover:bg-amber-100 transition-all duration-200 flex items-center disabled:opacity-50 disabled:cursor-not-allowed;
+  @apply px-6 py-3 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl text-sm font-medium hover:bg-amber-100 transition-all duration-200 flex items-center disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md;
 }
 </style>

@@ -1,8 +1,8 @@
 import { Op } from "sequelize";
 
 import models from "../../models/index.js";
-const { User, InventoryItem, Category, Batch } = models;
-
+const { User, InventoryItem, Category, Batch, InventoryNotification } = models;
+import { invalidateItemsCache } from "./utils/cacheUtil.js";
 import {
   BadRequestError,
   NotFoundError,
@@ -14,6 +14,7 @@ import {
   getCached,
   setCache,
   invalidateCache,
+  invalidateCachePattern,
 } from "../../services/redis/cache.js";
 
 const createBatch = async (req, res, next) => {
@@ -72,7 +73,7 @@ const createBatch = async (req, res, next) => {
       );
 
       if (daysUntilExpiry <= 30) {
-        await Notification.create({
+        await InventoryNotification.create({
           notification_type: "EXPIRING_SOON",
           inventory_item_id,
           user_id: received_by,
@@ -251,7 +252,7 @@ const updateBatch = async (req, res, next) => {
       );
 
       if (daysUntilExpiry <= 30) {
-        await Notification.create({
+        await InventoryNotification.create({
           notification_type: "EXPIRING_SOON",
           inventory_item_id: batch.inventory_item_id,
           title: "Updated Batch Expiring Soon",
@@ -286,8 +287,8 @@ const deleteBatch = async (req, res, next) => {
     await item.decrement("quantity_in_stock", { by: batch.quantity });
 
     await batch.destroy();
-    const result = await invalidateCache("category");
-
+    const result = await invalidateCachePattern("batch:*");
+    await invalidateItemsCache();
     if (!result) {
       console.log("Failed to invalidate cache");
     }

@@ -227,11 +227,14 @@ const expiredBatches = computed(() => {
 
 const totalValue = computed(() => {
   const val = batches.value.reduce((sum, batch) => {
-    const cost = parseFloat(batch.cost) || 0; // 👈 convert to number safely
-    return sum + cost;
+    const cost = parseFloat(batch.cost) || 0;
+    const quantity = parseFloat(batch.quantity) || 0;
+    const batchValue = cost * quantity;
+    console.log(`Cost: ${cost}, Quantity: ${quantity}, Value: ${batchValue}`);
+    return sum + batchValue;
   }, 0);
-  console.log("VAL: ", val);
-  return val;
+  console.log("Total Inventory Value:", val);
+  return val.toFixed(2);
 });
 
 // Visible pages for pagination

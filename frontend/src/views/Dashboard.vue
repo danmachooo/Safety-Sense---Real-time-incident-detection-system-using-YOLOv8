@@ -23,7 +23,9 @@ import {
   WifiOff,
   AlertOctagon,
 } from "lucide-vue-next";
+
 import api from "../utils/axios";
+
 // Reactive data
 const loading = ref(true);
 const error = ref(null);
@@ -42,6 +44,8 @@ const summaryCards = computed(() => [
     value: dashboardData.value.data?.counts?.totalIncidents || 0,
     icon: AlertTriangle,
     color: "bg-red-500",
+    bgGradient: "from-red-500/10 via-red-500/5 to-transparent",
+    iconGradient: "from-red-500 to-red-600",
     trend: "+12%",
     trendUp: true,
   },
@@ -50,6 +54,8 @@ const summaryCards = computed(() => [
     value: dashboardData.value.data?.counts?.activeIncidents || 0,
     icon: Activity,
     color: "bg-orange-500",
+    bgGradient: "from-orange-500/10 via-orange-500/5 to-transparent",
+    iconGradient: "from-orange-500 to-orange-600",
     trend: "+5%",
     trendUp: true,
   },
@@ -58,6 +64,8 @@ const summaryCards = computed(() => [
     value: dashboardData.value.data?.counts?.totalUsers || 0,
     icon: Users,
     color: "bg-blue-500",
+    bgGradient: "from-blue-500/10 via-blue-500/5 to-transparent",
+    iconGradient: "from-blue-500 to-blue-600",
     trend: "+8%",
     trendUp: true,
   },
@@ -66,6 +74,8 @@ const summaryCards = computed(() => [
     value: dashboardData.value.data?.counts?.activeDeployments || 0,
     icon: Truck,
     color: "bg-green-500",
+    bgGradient: "from-green-500/10 via-green-500/5 to-transparent",
+    iconGradient: "from-green-500 to-green-600",
     trend: "+15%",
     trendUp: true,
   },
@@ -110,7 +120,6 @@ const fetchDashboardData = async () => {
   try {
     loading.value = true;
     error.value = null;
-
     // Fetch all dashboard data
     const [
       summaryResponse,
@@ -159,23 +168,23 @@ const formatDate = (dateString) => {
 
 const getStatusColor = (status) => {
   const colors = {
-    pending: "bg-yellow-100 text-yellow-800",
-    accepted: "bg-blue-100 text-blue-800",
-    ongoing: "bg-orange-100 text-orange-800",
-    resolved: "bg-green-100 text-green-800",
-    dismissed: "bg-gray-100 text-gray-800",
+    pending: "bg-amber-50 text-amber-700 border-amber-200",
+    accepted: "bg-blue-50 text-blue-700 border-blue-200",
+    ongoing: "bg-orange-50 text-orange-700 border-orange-200",
+    resolved: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    dismissed: "bg-gray-50 text-gray-700 border-gray-200",
   };
-  return colors[status] || "bg-gray-100 text-gray-800";
+  return colors[status] || "bg-gray-50 text-gray-700 border-gray-200";
 };
 
 const getIncidentTypeColor = (type) => {
   const colors = {
-    fire: "bg-red-100 text-red-800",
-    flood: "bg-blue-100 text-blue-800",
-    earthquake: "bg-orange-100 text-orange-800",
-    accident: "bg-purple-100 text-purple-800",
+    fire: "bg-red-50 text-red-700 border-red-200",
+    flood: "bg-blue-50 text-blue-700 border-blue-200",
+    earthquake: "bg-orange-50 text-orange-700 border-orange-200",
+    accident: "bg-purple-50 text-purple-700 border-purple-200",
   };
-  return colors[type] || "bg-gray-100 text-gray-800";
+  return colors[type] || "bg-gray-50 text-gray-700 border-gray-200";
 };
 
 onMounted(() => {
@@ -184,526 +193,884 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div
+    class="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30"
+  >
     <!-- Header -->
     <div
-      class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4"
+      class="relative top-0 z-50 bg-white/95 backdrop-blur-xl border-b border-gray-200/60 shadow-sm"
     >
-      <div>
-        <h1 class="text-3xl font-bold text-gray-900">Dashboard</h1>
-        <p class="text-gray-600 mt-1">
-          Welcome back! Here's what's happening with SafetySense.
-        </p>
-      </div>
-      <div class="flex items-center space-x-4">
-        <select
-          v-model="selectedTimeframe"
-          @change="fetchDashboardData"
-          class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-          :disabled="loading"
-        >
-          <option
-            v-for="option in timeframeOptions"
-            :key="option.value"
-            :value="option.value"
-          >
-            {{ option.label }}
-          </option>
-        </select>
-        <button
-          @click="refreshData"
-          class="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          :disabled="loading"
-        >
-          <RefreshCw
-            class="w-4 h-4 mr-2"
-            :class="{ 'animate-spin': loading }"
-          />
-          Refresh
-        </button>
-      </div>
-    </div>
-
-    <!-- Error State -->
-    <div
-      v-if="error && !loading"
-      class="bg-red-50 border border-red-200 rounded-lg p-6"
-    >
-      <div class="flex items-center">
-        <AlertOctagon class="w-6 h-6 text-red-500 mr-3" />
-        <div>
-          <h3 class="text-lg font-medium text-red-800">
-            Unable to Load Dashboard
-          </h3>
-          <p class="text-red-600 mt-1">{{ error }}</p>
-          <button
-            @click="refreshData"
-            class="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
-          >
-            Try Again
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Loading State -->
-    <div v-if="loading" class="space-y-6">
-      <!-- Loading Summary Cards -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div
-          v-for="i in 4"
-          :key="i"
-          class="bg-white rounded-xl shadow-sm border border-gray-200 p-6"
+          class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-6 py-8"
         >
-          <div class="animate-pulse">
-            <div class="flex items-center justify-between">
-              <div class="flex-1">
-                <div class="h-4 bg-gray-200 rounded w-3/4 mb-3"></div>
-                <div class="h-8 bg-gray-200 rounded w-1/2 mb-2"></div>
-                <div class="h-3 bg-gray-200 rounded w-2/3"></div>
-              </div>
-              <div class="w-12 h-12 bg-gray-200 rounded-lg"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Loading Content -->
-      <div class="flex justify-center items-center h-64">
-        <div class="text-center">
-          <div
-            class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"
-          ></div>
-          <p class="text-gray-500 mt-4">Loading dashboard data...</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- Dashboard Content -->
-    <div v-else-if="!error" class="space-y-6">
-      <!-- Summary Cards -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div
-          v-for="card in summaryCards"
-          :key="card.title"
-          class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-all duration-200 hover:scale-105"
-        >
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-sm font-medium text-gray-600">{{ card.title }}</p>
-              <p class="text-3xl font-bold text-gray-900 mt-2">
-                {{ card.value.toLocaleString() }}
-              </p>
-              <div class="flex items-center mt-2">
-                <TrendingUp
-                  v-if="card.trendUp"
-                  class="w-4 h-4 text-green-500 mr-1"
-                />
-                <TrendingDown v-else class="w-4 h-4 text-red-500 mr-1" />
-                <span
-                  :class="card.trendUp ? 'text-green-600' : 'text-red-600'"
-                  class="text-sm font-medium"
-                >
-                  {{ card.trend }}
-                </span>
-                <span class="text-gray-500 text-sm ml-1">vs last period</span>
-              </div>
-            </div>
-            <div :class="card.color" class="p-3 rounded-lg">
-              <component :is="card.icon" class="w-6 h-6 text-white" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Charts and Stats Row -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- Incident Statistics -->
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div class="flex items-center justify-between mb-6">
-            <h3 class="text-lg font-semibold text-gray-900">
-              Incident Statistics
-            </h3>
-            <BarChart3 class="w-5 h-5 text-gray-400" />
-          </div>
-
-          <div v-if="hasIncidentStats">
-            <!-- Incidents by Status -->
-            <div
-              class="space-y-4"
-              v-if="incidentStats.data?.incidentsByStatus?.length"
+          <div class="space-y-1">
+            <h1
+              class="text-4xl font-bold bg-gradient-to-r from-gray-900 via-gray-800 to-gray-700 bg-clip-text text-transparent"
             >
-              <h4 class="text-sm font-medium text-gray-700">By Status</h4>
-              <div class="space-y-2">
-                <div
-                  v-for="item in incidentStats.data.incidentsByStatus"
-                  :key="item.status"
-                  class="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <div class="flex items-center">
-                    <div
-                      class="w-3 h-3 rounded-full mr-3"
-                      :class="getStatusColor(item.status).split(' ')[0]"
-                    ></div>
-                    <span class="text-sm text-gray-600 capitalize">{{
-                      item.status
-                    }}</span>
-                  </div>
-                  <span class="text-sm font-medium text-gray-900">{{
-                    item.count
-                  }}</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Incidents by Type -->
-            <div
-              class="mt-6 space-y-4"
-              v-if="incidentStats.data?.incidentsByType?.length"
-            >
-              <h4 class="text-sm font-medium text-gray-700">By Type</h4>
-              <div class="space-y-2">
-                <div
-                  v-for="item in incidentStats.data.incidentsByType"
-                  :key="item.type"
-                  class="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <div class="flex items-center">
-                    <div
-                      class="w-3 h-3 rounded-full mr-3"
-                      :class="getIncidentTypeColor(item.type).split(' ')[0]"
-                    ></div>
-                    <span class="text-sm text-gray-600 capitalize">{{
-                      item.type
-                    }}</span>
-                  </div>
-                  <span class="text-sm font-medium text-gray-900">{{
-                    item.count
-                  }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Empty State for Incident Stats -->
-          <div v-else class="text-center py-8">
-            <BarChart3 class="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <h4 class="text-lg font-medium text-gray-500 mb-2">
-              No Incident Data
-            </h4>
-            <p class="text-gray-400 text-sm">
-              No incident statistics available for the selected timeframe.
+              Dashboard
+            </h1>
+            <p class="text-gray-600 text-base font-medium">
+              Welcome back! Here's what's happening with SafetySense.
             </p>
           </div>
-        </div>
-
-        <!-- User Activity Stats -->
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div class="flex items-center justify-between mb-6">
-            <h3 class="text-lg font-semibold text-gray-900">User Activity</h3>
-            <Users class="w-5 h-5 text-gray-400" />
+          <div class="flex items-center gap-4">
+            <select
+              v-model="selectedTimeframe"
+              @change="fetchDashboardData"
+              class="px-5 py-3 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white/80 backdrop-blur-sm shadow-sm transition-all duration-200 text-sm font-medium"
+              :disabled="loading"
+            >
+              <option
+                v-for="option in timeframeOptions"
+                :key="option.value"
+                :value="option.value"
+              >
+                {{ option.label }}
+              </option>
+            </select>
+            <button
+              @click="refreshData"
+              class="flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-2xl hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98] font-medium"
+              :disabled="loading"
+            >
+              <RefreshCw
+                class="w-4 h-4 mr-2"
+                :class="{ 'animate-spin': loading }"
+              />
+              Refresh
+            </button>
           </div>
+        </div>
+      </div>
+    </div>
 
-          <div class="space-y-6">
-            <!-- Key Metrics -->
-            <div class="grid grid-cols-2 gap-4">
-              <div
-                class="text-center p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
-              >
-                <p class="text-2xl font-bold text-blue-600">
-                  {{ userActivityStats.data?.acceptanceRate || 0 }}%
-                </p>
-                <p class="text-sm text-gray-600">Acceptance Rate</p>
-              </div>
-              <div
-                class="text-center p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
-              >
-                <p class="text-2xl font-bold text-green-600">
-                  {{ userActivityStats.data?.avgResponseTime || 0 }}m
-                </p>
-                <p class="text-sm text-gray-600">Avg Response</p>
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-10">
+      <!-- Error State -->
+      <div
+        v-if="error && !loading"
+        class="relative overflow-hidden bg-gradient-to-r from-red-50 via-red-50/80 to-red-100/60 border border-red-200/80 rounded-3xl p-8 shadow-lg"
+      >
+        <div
+          class="absolute inset-0 bg-gradient-to-r from-red-500/5 to-transparent"
+        ></div>
+        <div class="relative flex items-start gap-4">
+          <div class="flex-shrink-0">
+            <div
+              class="w-12 h-12 bg-gradient-to-r from-red-500 to-red-600 rounded-2xl flex items-center justify-center shadow-lg"
+            >
+              <AlertOctagon class="w-6 h-6 text-white" />
+            </div>
+          </div>
+          <div class="flex-1">
+            <h3 class="text-xl font-bold text-red-900 mb-2">
+              Unable to Load Dashboard
+            </h3>
+            <p class="text-red-700 mb-4 leading-relaxed">{{ error }}</p>
+            <button
+              @click="refreshData"
+              class="px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-2xl hover:from-red-700 hover:to-red-800 transition-all duration-200 text-sm font-medium shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98]"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Loading State -->
+      <div v-if="loading" class="space-y-10">
+        <!-- Loading Summary Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div
+            v-for="i in 4"
+            :key="i"
+            class="bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg border border-gray-200/60 p-8"
+          >
+            <div class="animate-pulse">
+              <div class="flex items-center justify-between">
+                <div class="flex-1 space-y-4">
+                  <div
+                    class="h-4 bg-gradient-to-r from-gray-200 to-gray-300 rounded-xl w-3/4"
+                  ></div>
+                  <div
+                    class="h-10 bg-gradient-to-r from-gray-200 to-gray-300 rounded-xl w-1/2"
+                  ></div>
+                  <div
+                    class="h-3 bg-gradient-to-r from-gray-200 to-gray-300 rounded-xl w-2/3"
+                  ></div>
+                </div>
+                <div
+                  class="w-14 h-14 bg-gradient-to-r from-gray-200 to-gray-300 rounded-2xl"
+                ></div>
               </div>
             </div>
+          </div>
+        </div>
 
-            <!-- Top Responders -->
-            <div>
-              <h4 class="text-sm font-medium text-gray-700 mb-3">
-                Top Responders
-              </h4>
-              <div v-if="hasTopResponders" class="space-y-2">
+        <!-- Loading Content -->
+        <div class="flex justify-center items-center h-80">
+          <div class="text-center space-y-6">
+            <div class="relative">
+              <div
+                class="animate-spin rounded-full h-20 w-20 border-4 border-blue-200 border-t-blue-600 mx-auto"
+              ></div>
+            </div>
+            <div class="space-y-2">
+              <p class="text-gray-700 font-semibold text-lg">
+                Loading dashboard data...
+              </p>
+              <p class="text-gray-500 text-sm">This may take a few moments</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dashboard Content -->
+      <div v-else-if="!error" class="space-y-10">
+        <!-- Summary Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div
+            v-for="card in summaryCards"
+            :key="card.title"
+            class="group relative overflow-hidden bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg border border-gray-200/60 p-8 hover:shadow-2xl transition-all duration-500 hover:scale-[1.02] cursor-pointer"
+          >
+            <!-- Background Gradient -->
+            <div
+              :class="`absolute inset-0 bg-gradient-to-br ${card.bgGradient} opacity-0 group-hover:opacity-100 transition-opacity duration-500`"
+            ></div>
+
+            <div class="relative z-10">
+              <div class="flex items-start justify-between mb-6">
+                <div class="flex-1 space-y-3">
+                  <p
+                    class="text-sm font-semibold text-gray-600 uppercase tracking-wide"
+                  >
+                    {{ card.title }}
+                  </p>
+                  <p class="text-4xl font-bold text-gray-900 leading-none">
+                    {{ card.value.toLocaleString() }}
+                  </p>
+                </div>
                 <div
-                  v-for="(
-                    responder, index
-                  ) in userActivityStats.data.topResponders.slice(0, 3)"
-                  :key="responder.id"
-                  class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                  :class="`bg-gradient-to-r ${card.iconGradient} p-4 rounded-2xl shadow-lg group-hover:scale-110 group-hover:rotate-3 transition-all duration-300`"
                 >
-                  <div class="flex items-center">
-                    <div
-                      class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3"
-                    >
-                      <span class="text-sm font-medium text-blue-600">{{
-                        index + 1
-                      }}</span>
-                    </div>
-                    <span class="text-sm text-gray-900">{{
-                      responder.name
-                    }}</span>
-                  </div>
-                  <span class="text-sm font-medium text-gray-600"
-                    >{{ responder.acceptedCount }} incidents</span
+                  <component :is="card.icon" class="w-7 h-7 text-white" />
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <TrendingUp
+                    v-if="card.trendUp"
+                    class="w-4 h-4 text-emerald-500"
+                  />
+                  <TrendingDown v-else class="w-4 h-4 text-red-500" />
+                  <span
+                    :class="card.trendUp ? 'text-emerald-600' : 'text-red-600'"
+                    class="text-sm font-bold"
+                  >
+                    {{ card.trend }}
+                  </span>
+                  <span class="text-gray-500 text-sm font-medium"
+                    >vs last period</span
                   >
                 </div>
               </div>
-              <div v-else class="text-center py-4">
-                <Users class="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                <p class="text-sm text-gray-500">No responder data available</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Charts and Stats Row -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-10">
+          <!-- Incident Statistics -->
+          <div
+            class="bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg border border-gray-200/60 p-8 hover:shadow-xl transition-all duration-300"
+          >
+            <div class="flex items-center justify-between mb-8">
+              <div class="space-y-1">
+                <h3 class="text-2xl font-bold text-gray-900">
+                  Incident Statistics
+                </h3>
+                <p class="text-gray-600 text-sm font-medium">
+                  Real-time breakdown and analysis
+                </p>
+              </div>
+              <div
+                class="p-3 bg-gradient-to-r from-red-500 to-orange-500 rounded-2xl shadow-lg"
+              >
+                <BarChart3 class="w-6 h-6 text-white" />
+              </div>
+            </div>
+
+            <div v-if="hasIncidentStats" class="space-y-8">
+              <!-- Incidents by Status -->
+              <div
+                class="space-y-4"
+                v-if="incidentStats.data?.incidentsByStatus?.length"
+              >
+                <h4
+                  class="text-sm font-bold text-gray-700 uppercase tracking-wide"
+                >
+                  By Status
+                </h4>
+                <div class="space-y-3">
+                  <div
+                    v-for="item in incidentStats.data.incidentsByStatus"
+                    :key="item.status"
+                    class="group flex items-center justify-between p-4 rounded-2xl hover:bg-gray-50/80 transition-all duration-200 cursor-pointer border border-transparent hover:border-gray-200/60"
+                  >
+                    <div class="flex items-center gap-4">
+                      <div
+                        class="w-8 h-8 rounded-xl flex items-center justify-center shadow-sm"
+                        :class="getStatusColor(item.status).split(' ')[0]"
+                      >
+                        <Clock
+                          v-if="item.status === 'pending'"
+                          class="w-4 h-4"
+                          :class="getStatusColor(item.status).split(' ')[1]"
+                        />
+                        <Activity
+                          v-else-if="item.status === 'ongoing'"
+                          class="w-4 h-4"
+                          :class="getStatusColor(item.status).split(' ')[1]"
+                        />
+                        <CheckCircle
+                          v-else-if="item.status === 'resolved'"
+                          class="w-4 h-4"
+                          :class="getStatusColor(item.status).split(' ')[1]"
+                        />
+                        <Eye
+                          v-else-if="item.status === 'accepted'"
+                          class="w-4 h-4"
+                          :class="getStatusColor(item.status).split(' ')[1]"
+                        />
+                        <XCircle
+                          v-else
+                          class="w-4 h-4"
+                          :class="getStatusColor(item.status).split(' ')[1]"
+                        />
+                      </div>
+                      <span
+                        class="text-sm font-semibold text-gray-700 capitalize"
+                        >{{ item.status }}</span
+                      >
+                    </div>
+                    <span
+                      class="text-lg font-bold text-gray-900 group-hover:scale-110 transition-transform duration-200"
+                      >{{ item.count }}</span
+                    >
+                  </div>
+                </div>
+              </div>
+
+              <!-- Incidents by Type -->
+              <div
+                class="space-y-4 pt-6 border-t border-gray-200/60"
+                v-if="incidentStats.data?.incidentsByType?.length"
+              >
+                <h4
+                  class="text-sm font-bold text-gray-700 uppercase tracking-wide"
+                >
+                  By Type
+                </h4>
+                <div class="space-y-3">
+                  <div
+                    v-for="item in incidentStats.data.incidentsByType"
+                    :key="item.type"
+                    class="group flex items-center justify-between p-4 rounded-2xl hover:bg-gray-50/80 transition-all duration-200 cursor-pointer border border-transparent hover:border-gray-200/60"
+                  >
+                    <div class="flex items-center gap-4">
+                      <div
+                        class="w-8 h-8 rounded-xl flex items-center justify-center shadow-sm"
+                        :class="getIncidentTypeColor(item.type).split(' ')[0]"
+                      >
+                        <AlertTriangle
+                          v-if="item.type === 'fire'"
+                          class="w-4 h-4"
+                          :class="getIncidentTypeColor(item.type).split(' ')[1]"
+                        />
+                        <Activity
+                          v-else-if="item.type === 'flood'"
+                          class="w-4 h-4"
+                          :class="getIncidentTypeColor(item.type).split(' ')[1]"
+                        />
+                        <AlertCircle
+                          v-else-if="item.type === 'earthquake'"
+                          class="w-4 h-4"
+                          :class="getIncidentTypeColor(item.type).split(' ')[1]"
+                        />
+                        <Truck
+                          v-else-if="item.type === 'accident'"
+                          class="w-4 h-4"
+                          :class="getIncidentTypeColor(item.type).split(' ')[1]"
+                        />
+                        <AlertTriangle
+                          v-else
+                          class="w-4 h-4"
+                          :class="getIncidentTypeColor(item.type).split(' ')[1]"
+                        />
+                      </div>
+                      <span
+                        class="text-sm font-semibold text-gray-700 capitalize"
+                        >{{ item.type }}</span
+                      >
+                    </div>
+                    <span
+                      class="text-lg font-bold text-gray-900 group-hover:scale-110 transition-transform duration-200"
+                      >{{ item.count }}</span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Empty State for Incident Stats -->
+            <div v-else class="text-center py-16">
+              <div
+                class="w-20 h-20 bg-gradient-to-r from-gray-100 to-gray-200 rounded-3xl flex items-center justify-center mx-auto mb-6"
+              >
+                <BarChart3 class="w-10 h-10 text-gray-400" />
+              </div>
+              <h4 class="text-xl font-bold text-gray-500 mb-3">
+                No Incident Data
+              </h4>
+              <p class="text-gray-400 text-sm max-w-sm mx-auto leading-relaxed">
+                No incident statistics available for the selected timeframe.
+              </p>
+            </div>
+          </div>
+
+          <!-- User Activity Stats -->
+          <div
+            class="bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg border border-gray-200/60 p-8 hover:shadow-xl transition-all duration-300"
+          >
+            <div class="flex items-center justify-between mb-8">
+              <div class="space-y-1">
+                <h3 class="text-2xl font-bold text-gray-900">User Activity</h3>
+                <p class="text-gray-600 text-sm font-medium">
+                  Team performance metrics
+                </p>
+              </div>
+              <div
+                class="p-3 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-2xl shadow-lg"
+              >
+                <Users class="w-6 h-6 text-white" />
+              </div>
+            </div>
+
+            <div class="space-y-8">
+              <!-- Key Metrics -->
+              <div class="grid grid-cols-2 gap-6">
+                <div
+                  class="group text-center p-6 bg-gradient-to-br from-blue-50/80 to-blue-100/60 rounded-2xl hover:from-blue-100/80 hover:to-blue-200/60 transition-all duration-300 border border-blue-200/40 cursor-pointer"
+                >
+                  <div
+                    class="w-12 h-12 bg-gradient-to-r from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300 shadow-lg"
+                  >
+                    <Activity class="w-6 h-6 text-white" />
+                  </div>
+                  <p class="text-3xl font-bold text-blue-600 mb-2">
+                    {{ userActivityStats.data?.acceptanceRate || 0 }}%
+                  </p>
+                  <p
+                    class="text-xs font-semibold text-blue-700 uppercase tracking-wide"
+                  >
+                    Acceptance Rate
+                  </p>
+                </div>
+                <div
+                  class="group text-center p-6 bg-gradient-to-br from-emerald-50/80 to-emerald-100/60 rounded-2xl hover:from-emerald-100/80 hover:to-emerald-200/60 transition-all duration-300 border border-emerald-200/40 cursor-pointer"
+                >
+                  <div
+                    class="w-12 h-12 bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300 shadow-lg"
+                  >
+                    <Clock class="w-6 h-6 text-white" />
+                  </div>
+                  <p class="text-3xl font-bold text-emerald-600 mb-2">
+                    {{ userActivityStats.data?.avgResponseTime || 0 }}m
+                  </p>
+                  <p
+                    class="text-xs font-semibold text-emerald-700 uppercase tracking-wide"
+                  >
+                    Avg Response
+                  </p>
+                </div>
+              </div>
+
+              <!-- Top Responders -->
+              <div>
+                <h4
+                  class="text-sm font-bold text-gray-700 uppercase tracking-wide mb-4"
+                >
+                  Top Responders
+                </h4>
+                <div v-if="hasTopResponders" class="space-y-3">
+                  <div
+                    v-for="(
+                      responder, index
+                    ) in userActivityStats.data.topResponders.slice(0, 3)"
+                    :key="responder.id"
+                    class="group flex items-center justify-between p-4 bg-gradient-to-r from-gray-50/80 to-gray-100/60 rounded-2xl hover:from-gray-100/80 hover:to-gray-200/60 transition-all duration-300 border border-gray-200/40 cursor-pointer"
+                  >
+                    <div class="flex items-center gap-4">
+                      <div class="relative">
+                        <div
+                          class="w-12 h-12 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300"
+                        >
+                          <span class="text-sm font-bold text-white">{{
+                            index + 1
+                          }}</span>
+                        </div>
+                        <div
+                          v-if="index === 0"
+                          class="absolute -top-1 -right-1 w-5 h-5 bg-gradient-to-r from-yellow-400 to-yellow-500 rounded-full flex items-center justify-center shadow-lg"
+                        >
+                          <span class="text-xs">👑</span>
+                        </div>
+                      </div>
+                      <span class="text-sm font-bold text-gray-900">{{
+                        responder.name
+                      }}</span>
+                    </div>
+                    <div class="text-right">
+                      <span class="text-sm font-bold text-gray-600">{{
+                        responder.acceptedCount
+                      }}</span>
+                      <p class="text-xs text-gray-500 font-medium">incidents</p>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="text-center py-12">
+                  <div
+                    class="w-16 h-16 bg-gray-100 rounded-3xl flex items-center justify-center mx-auto mb-4"
+                  >
+                    <Users class="w-8 h-8 text-gray-400" />
+                  </div>
+                  <p class="text-sm text-gray-500 font-medium">
+                    No responder data available
+                  </p>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- Recent Activity and Alerts Row -->
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <!-- Recent Incidents -->
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div class="flex items-center justify-between mb-6">
-            <h3 class="text-lg font-semibold text-gray-900">
-              Recent Incidents
-            </h3>
-            <AlertTriangle class="w-5 h-5 text-gray-400" />
-          </div>
-
-          <div v-if="hasRecentIncidents" class="space-y-3">
-            <div
-              v-for="incident in dashboardData.data.recentIncidents.slice(0, 5)"
-              :key="incident.id"
-              class="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
-            >
-              <div class="flex-shrink-0">
-                <AlertTriangle class="w-5 h-5 text-orange-500 mt-0.5" />
+        <!-- Recent Activity and Alerts Row -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <!-- Recent Incidents -->
+          <div
+            class="bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg border border-gray-200/60 p-8 hover:shadow-xl transition-all duration-300"
+          >
+            <div class="flex items-center justify-between mb-8">
+              <div class="space-y-1">
+                <h3 class="text-xl font-bold text-gray-900">
+                  Recent Incidents
+                </h3>
+                <p class="text-gray-600 text-sm font-medium">
+                  Latest emergency reports
+                </p>
               </div>
-              <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium text-gray-900 capitalize">
-                  {{ incident.type }} Incident
-                </p>
-                <p class="text-xs text-gray-500 mt-1">
-                  {{ formatDate(incident.createdAt) }}
-                </p>
-                <div class="mt-2">
+              <div
+                class="p-3 bg-gradient-to-r from-red-500 to-orange-500 rounded-2xl shadow-lg"
+              >
+                <AlertTriangle class="w-5 h-5 text-white" />
+              </div>
+            </div>
+
+            <div v-if="hasRecentIncidents" class="space-y-4">
+              <div
+                v-for="incident in dashboardData.data.recentIncidents.slice(
+                  0,
+                  5
+                )"
+                :key="incident.id"
+                class="group flex items-start gap-4 p-4 bg-gray-50/80 rounded-2xl hover:bg-gray-100/80 transition-all duration-200 cursor-pointer border border-transparent hover:border-gray-200/60"
+              >
+                <div class="flex-shrink-0">
+                  <div
+                    class="w-12 h-12 bg-orange-100 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300"
+                  >
+                    <AlertTriangle class="w-6 h-6 text-orange-600" />
+                  </div>
+                </div>
+                <div class="flex-1 min-w-0 space-y-2">
+                  <p class="text-sm font-bold text-gray-900 capitalize">
+                    {{ incident.type }} Incident
+                  </p>
+                  <p class="text-xs text-gray-500 font-medium">
+                    {{ formatDate(incident.createdAt) }}
+                  </p>
                   <span
                     :class="getStatusColor(incident.status)"
-                    class="inline-flex px-2 py-1 text-xs font-medium rounded-full"
+                    class="inline-flex px-3 py-1 text-xs font-semibold rounded-xl border"
                   >
                     {{ incident.status }}
                   </span>
                 </div>
               </div>
             </div>
-          </div>
 
-          <!-- Empty State for Recent Incidents -->
-          <div v-else class="text-center py-8">
-            <Inbox class="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <h4 class="text-lg font-medium text-gray-500 mb-2">
-              No Recent Incidents
-            </h4>
-            <p class="text-gray-400 text-sm">
-              All clear! No recent incidents to display.
-            </p>
-          </div>
-        </div>
-
-        <!-- Low Stock Alerts -->
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div class="flex items-center justify-between mb-6">
-            <h3 class="text-lg font-semibold text-gray-900">
-              Low Stock Alerts
-            </h3>
-            <Package class="w-5 h-5 text-gray-400" />
-          </div>
-
-          <div v-if="hasLowStockItems" class="space-y-3">
-            <div
-              v-for="item in dashboardData.data.lowStockItems.slice(0, 5)"
-              :key="item.id"
-              class="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-200 hover:bg-red-100 transition-colors"
-            >
-              <div class="flex items-center">
-                <AlertCircle class="w-5 h-5 text-red-500 mr-3" />
-                <div>
-                  <p class="text-sm font-medium text-gray-900">
-                    {{ item.name }}
-                  </p>
-                  <p class="text-xs text-gray-500">{{ item.category?.name }}</p>
-                </div>
+            <!-- Empty State for Recent Incidents -->
+            <div v-else class="text-center py-16">
+              <div
+                class="w-20 h-20 bg-gradient-to-r from-emerald-100 to-emerald-200 rounded-3xl flex items-center justify-center mx-auto mb-6"
+              >
+                <Inbox class="w-10 h-10 text-emerald-500" />
               </div>
-              <div class="text-right">
-                <p class="text-sm font-medium text-red-600">
-                  {{ item.quantity_in_stock }}
-                </p>
-                <p class="text-xs text-gray-500">
-                  Min: {{ item.min_stock_level }}
-                </p>
-              </div>
+              <h4 class="text-xl font-bold text-gray-500 mb-3">
+                No Recent Incidents
+              </h4>
+              <p class="text-gray-400 text-sm max-w-sm mx-auto leading-relaxed">
+                All clear! No recent incidents to display.
+              </p>
             </div>
           </div>
 
-          <!-- Empty State for Low Stock -->
-          <div v-else class="text-center py-8">
-            <CheckCircle class="w-12 h-12 text-green-300 mx-auto mb-4" />
-            <h4 class="text-lg font-medium text-gray-500 mb-2">
-              Stock Levels Good
-            </h4>
-            <p class="text-gray-400 text-sm">
-              All inventory items are adequately stocked.
-            </p>
-          </div>
-        </div>
-
-        <!-- Recent Deployments -->
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div class="flex items-center justify-between mb-6">
-            <h3 class="text-lg font-semibold text-gray-900">
-              Recent Deployments
-            </h3>
-            <Truck class="w-5 h-5 text-gray-400" />
-          </div>
-
-          <div v-if="hasRecentDeployments" class="space-y-3">
-            <div
-              v-for="deployment in dashboardData.data.recentDeployments.slice(
-                0,
-                5
-              )"
-              :key="deployment.id"
-              class="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
-            >
-              <div class="flex-shrink-0">
-                <Truck class="w-5 h-5 text-green-500 mt-0.5" />
+          <!-- Low Stock Alerts -->
+          <div
+            class="bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg border border-gray-200/60 p-8 hover:shadow-xl transition-all duration-300"
+          >
+            <div class="flex items-center justify-between mb-8">
+              <div class="space-y-1">
+                <h3 class="text-xl font-bold text-gray-900">
+                  Low Stock Alerts
+                </h3>
+                <p class="text-gray-600 text-sm font-medium">
+                  Items requiring attention
+                </p>
               </div>
-              <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium text-gray-900">
-                  {{ deployment.inventoryDeploymentItem?.name }}
+              <div
+                class="p-3 bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl shadow-lg"
+              >
+                <Package class="w-5 h-5 text-white" />
+              </div>
+            </div>
+
+            <div v-if="hasLowStockItems" class="space-y-4">
+              <div
+                v-for="item in dashboardData.data.lowStockItems.slice(0, 5)"
+                :key="item.id"
+                class="group flex items-center justify-between p-4 bg-gradient-to-r from-red-50/80 to-red-100/60 rounded-2xl border border-red-200/60 hover:from-red-100/80 hover:to-red-200/60 transition-all duration-300 cursor-pointer"
+              >
+                <div class="flex items-center gap-4">
+                  <div
+                    class="w-12 h-12 bg-gradient-to-r from-red-500 to-red-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-lg"
+                  >
+                    <AlertCircle class="w-6 h-6 text-red" />
+                  </div>
+                  <div class="space-y-1">
+                    <p class="text-sm font-bold text-gray-900">
+                      {{ item.name }}
+                    </p>
+                    <p class="text-xs text-gray-600 font-medium">
+                      {{ item.category?.name }}
+                    </p>
+                  </div>
+                </div>
+                <div class="text-right space-y-1">
+                  <p class="text-sm font-bold text-red-600">
+                    {{ item.quantity_in_stock }}
+                  </p>
+                  <p class="text-xs text-gray-500 font-medium">
+                    Min: {{ item.min_stock_level }}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Empty State for Low Stock -->
+            <div v-else class="text-center py-16">
+              <div
+                class="w-20 h-20 bg-gradient-to-r from-emerald-100 to-emerald-200 rounded-3xl flex items-center justify-center mx-auto mb-6"
+              >
+                <CheckCircle class="w-10 h-10 text-emerald-500" />
+              </div>
+              <h4 class="text-xl font-bold text-gray-500 mb-3">
+                Stock Levels Good
+              </h4>
+              <p class="text-gray-400 text-sm max-w-sm mx-auto leading-relaxed">
+                All inventory items are adequately stocked.
+              </p>
+            </div>
+          </div>
+
+          <!-- Recent Deployments -->
+          <div
+            class="bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg border border-gray-200/60 p-8 hover:shadow-xl transition-all duration-300"
+          >
+            <div class="flex items-center justify-between mb-8">
+              <div class="space-y-1">
+                <h3 class="text-xl font-bold text-gray-900">
+                  Recent Deployments
+                </h3>
+                <p class="text-gray-600 text-sm font-medium">
+                  Recent equipment activity
                 </p>
-                <p class="text-xs text-gray-500 mt-1">
-                  {{ deployment.deployer?.firstname }}
-                  {{ deployment.deployer?.lastname }}
-                </p>
-                <p class="text-xs text-gray-500">
-                  {{ formatDate(deployment.deployment_date) }}
-                </p>
-                <div class="mt-2">
+              </div>
+              <div
+                class="p-3 bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl shadow-lg"
+              >
+                <Truck class="w-5 h-5 text-white" />
+              </div>
+            </div>
+
+            <div v-if="hasRecentDeployments" class="space-y-4">
+              <div
+                v-for="deployment in dashboardData.data.recentDeployments.slice(
+                  0,
+                  5
+                )"
+                :key="deployment.id"
+                class="group flex items-start gap-4 p-4 bg-gray-50/80 rounded-2xl hover:bg-gray-100/80 transition-all duration-200 cursor-pointer border border-transparent hover:border-gray-200/60"
+              >
+                <div class="flex-shrink-0">
+                  <div
+                    class="w-12 h-12 bg-green-100 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300"
+                  >
+                    <Truck class="w-6 h-6 text-green-600" />
+                  </div>
+                </div>
+                <div class="flex-1 min-w-0 space-y-2">
+                  <p class="text-sm font-bold text-gray-900">
+                    {{ deployment.inventoryDeploymentItem?.name }}
+                  </p>
+                  <p class="text-xs text-gray-600 font-medium">
+                    {{ deployment.deployer?.firstname }}
+                    {{ deployment.deployer?.lastname }}
+                  </p>
+                  <p class="text-xs text-gray-500 font-medium">
+                    {{ formatDate(deployment.deployment_date) }}
+                  </p>
                   <span
-                    class="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800"
+                    class="inline-flex px-3 py-1 text-xs font-semibold rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200"
                   >
                     {{ deployment.status }}
                   </span>
                 </div>
               </div>
             </div>
-          </div>
 
-          <!-- Empty State for Recent Deployments -->
-          <div v-else class="text-center py-8">
-            <Database class="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <h4 class="text-lg font-medium text-gray-500 mb-2">
-              No Recent Deployments
-            </h4>
-            <p class="text-gray-400 text-sm">
-              No equipment deployments in the selected timeframe.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Inventory Overview -->
-      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div class="flex items-center justify-between mb-6">
-          <h3 class="text-lg font-semibold text-gray-900">
-            Inventory Overview
-          </h3>
-          <PieChart class="w-5 h-5 text-gray-400" />
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div
-            class="text-center p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
-          >
-            <Package class="w-8 h-8 text-blue-500 mx-auto mb-2" />
-            <p class="text-2xl font-bold text-blue-600">
-              {{ inventoryStats.data?.totalItems || 0 }}
-            </p>
-            <p class="text-sm text-gray-600">Total Items</p>
-          </div>
-          <div
-            class="text-center p-4 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
-          >
-            <AlertTriangle class="w-8 h-8 text-red-500 mx-auto mb-2" />
-            <p class="text-2xl font-bold text-red-600">
-              {{ inventoryStats.data?.lowStockItems || 0 }}
-            </p>
-            <p class="text-sm text-gray-600">Low Stock</p>
-          </div>
-          <div
-            class="text-center p-4 bg-yellow-50 rounded-lg hover:bg-yellow-100 transition-colors"
-          >
-            <Clock class="w-8 h-8 text-yellow-500 mx-auto mb-2" />
-            <p class="text-2xl font-bold text-yellow-600">
-              {{ inventoryStats.data?.maintenanceItems || 0 }}
-            </p>
-            <p class="text-sm text-gray-600">Need Maintenance</p>
-          </div>
-          <div
-            class="text-center p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
-          >
-            <CheckCircle class="w-8 h-8 text-green-500 mx-auto mb-2" />
-            <p class="text-2xl font-bold text-green-600">
-              ${{ (inventoryStats.data?.totalValue || 0).toLocaleString() }}
-            </p>
-            <p class="text-sm text-gray-600">Total Value</p>
-          </div>
-        </div>
-
-        <!-- Items by Category -->
-        <div class="mt-8">
-          <h4 class="text-sm font-medium text-gray-700 mb-4">
-            Items by Category
-          </h4>
-          <div
-            v-if="hasInventoryCategories"
-            class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
-          >
-            <div
-              v-for="category in inventoryStats.data.itemsByCategory"
-              :key="category.categoryName"
-              class="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-            >
-              <div>
-                <p class="text-sm font-medium text-gray-900">
-                  {{ category.categoryName }}
-                </p>
-                <p class="text-xs text-gray-500">
-                  {{ category.itemCount }} items
-                </p>
+            <!-- Empty State for Recent Deployments -->
+            <div v-else class="text-center py-16">
+              <div
+                class="w-20 h-20 bg-gradient-to-r from-gray-100 to-gray-200 rounded-3xl flex items-center justify-center mx-auto mb-6"
+              >
+                <Database class="w-10 h-10 text-gray-400" />
               </div>
-              <p class="text-sm font-medium text-gray-600">
-                {{ category.totalQuantity }}
+              <h4 class="text-xl font-bold text-gray-500 mb-3">
+                No Recent Deployments
+              </h4>
+              <p class="text-gray-400 text-sm max-w-sm mx-auto leading-relaxed">
+                No equipment deployments in the selected timeframe.
               </p>
             </div>
           </div>
-          <div v-else class="text-center py-8">
-            <Package class="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <h4 class="text-lg font-medium text-gray-500 mb-2">
-              No Categories
+        </div>
+
+        <!-- Inventory Overview -->
+        <div
+          class="bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg border border-gray-200/60 p-10 hover:shadow-xl transition-all duration-300"
+        >
+          <div class="flex items-center justify-between mb-10">
+            <div class="space-y-2">
+              <h3 class="text-3xl font-bold text-gray-900">
+                Inventory Overview
+              </h3>
+              <p class="text-gray-600 text-base font-medium">
+                Complete equipment and supply status
+              </p>
+            </div>
+            <div
+              class="p-3 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl shadow-lg"
+            >
+              <PieChart class="w-7 h-7 text-white" />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
+            <div
+              class="group text-center p-8 bg-gradient-to-br from-blue-50/80 to-blue-100/60 rounded-3xl hover:from-blue-100/80 hover:to-blue-200/60 transition-all duration-300 border border-blue-200/40 cursor-pointer"
+            >
+              <div
+                class="w-16 h-16 bg-gradient-to-r from-blue-500 to-blue-600 rounded-3xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-300 shadow-lg"
+              >
+                <Package class="w-8 h-8 text-white" />
+              </div>
+              <p class="text-4xl font-bold text-blue-600 mb-3">
+                {{ inventoryStats.data?.totalItems || 0 }}
+              </p>
+              <p
+                class="text-sm font-bold text-blue-700 uppercase tracking-wide"
+              >
+                Total Items
+              </p>
+            </div>
+            <div
+              class="group text-center p-8 bg-gradient-to-br from-red-50/80 to-red-100/60 rounded-3xl hover:from-red-100/80 hover:to-red-200/60 transition-all duration-300 border border-red-200/40 cursor-pointer"
+            >
+              <div
+                class="w-16 h-16 bg-gradient-to-r from-red-500 to-red-600 rounded-3xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-300 shadow-lg"
+              >
+                <AlertTriangle class="w-8 h-8 text-white" />
+              </div>
+              <p class="text-4xl font-bold text-red-600 mb-3">
+                {{ inventoryStats.data?.lowStockItems || 0 }}
+              </p>
+              <p class="text-sm font-bold text-red-700 uppercase tracking-wide">
+                Low Stock
+              </p>
+            </div>
+            <div
+              class="group text-center p-8 bg-gradient-to-br from-amber-50/80 to-amber-100/60 rounded-3xl hover:from-amber-100/80 hover:to-amber-200/60 transition-all duration-300 border border-amber-200/40 cursor-pointer"
+            >
+              <div
+                class="w-16 h-16 bg-gradient-to-r from-amber-500 to-amber-600 rounded-3xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-300 shadow-lg"
+              >
+                <Clock class="w-8 h-8 text-white" />
+              </div>
+              <p class="text-4xl font-bold text-amber-600 mb-3">
+                {{ inventoryStats.data?.maintenanceItems || 0 }}
+              </p>
+              <p
+                class="text-sm font-bold text-amber-700 uppercase tracking-wide"
+              >
+                Need Maintenance
+              </p>
+            </div>
+            <div
+              class="group text-center p-8 bg-gradient-to-br from-emerald-50/80 to-emerald-100/60 rounded-3xl hover:from-emerald-100/80 hover:to-emerald-200/60 transition-all duration-300 border border-emerald-200/40 cursor-pointer"
+            >
+              <div
+                class="w-16 h-16 bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-3xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-300 shadow-lg"
+              >
+                <CheckCircle class="w-8 h-8 text-white" />
+              </div>
+              <p class="text-4xl font-bold text-emerald-600 mb-3">
+                ₱{{
+                  Number(inventoryStats.data?.totalValue || 0).toLocaleString(
+                    "en-PH",
+                    { minimumFractionDigits: 2 }
+                  )
+                }}
+              </p>
+
+              <p
+                class="text-sm font-bold text-emerald-700 uppercase tracking-wide"
+              >
+                Total Value
+              </p>
+            </div>
+          </div>
+
+          <!-- Items by Category -->
+          <div>
+            <h4 class="text-xl font-bold text-gray-900 mb-8">
+              Items by Category
             </h4>
-            <p class="text-gray-400 text-sm">
-              No inventory categories available to display.
-            </p>
+
+            <div
+              v-if="hasInventoryCategories"
+              class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+            >
+              <div
+                v-for="category in inventoryStats.data.itemsByCategory"
+                :key="category.categoryName"
+                class="group flex items-center justify-between p-6 bg-gradient-to-r from-gray-50/80 to-gray-100/60 rounded-3xl hover:from-gray-100/80 hover:to-gray-200/60 transition-all duration-300 border border-gray-200/40 cursor-pointer"
+              >
+                <div class="flex items-center gap-4">
+                  <div
+                    class="w-14 h-14 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-lg"
+                  >
+                    <Package class="w-7 h-7 text-white" />
+                  </div>
+                  <div class="space-y-1">
+                    <p class="text-sm font-bold text-gray-900">
+                      {{ category.categoryName }}
+                    </p>
+                    <p class="text-xs text-gray-600 font-medium">
+                      {{ category.itemCount }} items
+                    </p>
+                  </div>
+                </div>
+                <p
+                  class="text-xl font-bold text-gray-900 group-hover:scale-110 transition-transform duration-200"
+                >
+                  {{ category.totalQuantity }}
+                </p>
+              </div>
+            </div>
+
+            <div v-else class="text-center py-20">
+              <div
+                class="w-24 h-24 bg-gradient-to-r from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-8"
+              >
+                <Package class="w-12 h-12 text-gray-400" />
+              </div>
+              <h4 class="text-2xl font-bold text-gray-500 mb-4">
+                No Categories
+              </h4>
+              <p
+                class="text-gray-400 text-base max-w-md mx-auto leading-relaxed"
+              >
+                No inventory categories available to display.
+              </p>
+            </div>
           </div>
         </div>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+/* Enhanced scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f8fafc;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom, #cbd5e1, #94a3b8);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(to bottom, #94a3b8, #64748b);
+}
+
+/* Smooth animations */
+* {
+  transition-property: transform, opacity, background-color, border-color, color,
+    fill, stroke, box-shadow;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Enhanced glass morphism */
+.backdrop-blur-sm {
+  backdrop-filter: blur(12px);
+}
+
+.backdrop-blur-xl {
+  backdrop-filter: blur(24px);
+}
+
+/* Custom gradient animations */
+@keyframes gradient-shift {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient-shift 3s ease infinite;
+}
+</style>

@@ -270,7 +270,7 @@ onUnmounted(() => {
   >
     <!-- Left side - Page Title -->
     <div>
-      <h1 class="text-xl font-semibold text-white">Admin Panel</h1>
+      <h1 class="text-xl font-semibold text-white"></h1>
     </div>
 
     <!-- Right side - Notifications and User Profile -->
@@ -293,7 +293,7 @@ onUnmounted(() => {
         <!-- Enhanced Notifications Dropdown -->
         <div
           v-if="showNotifications"
-          class="notifications-dropdown absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-lg border border-gray-200 z-50"
+          class="notifications-dropdown absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-lg border border-gray-200 z-[50]"
         >
           <!-- Header with Tabs -->
           <div class="p-4 border-b border-gray-200">

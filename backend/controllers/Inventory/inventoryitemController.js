@@ -11,7 +11,7 @@ import models from "../../models/index.js";
 const { User, InventoryItem, Category, Notification } = models;
 
 import { BadRequestError, NotFoundError } from "../../utils/Error.js";
-import { StatusCodes } from "http-status-codes";
+import { getStatusCode, StatusCodes } from "http-status-codes";
 import Batch from "../../models/Inventory/Batch.js";
 
 // Helper function to invalidate all items-related cache
@@ -89,7 +89,6 @@ const createItem = async (req, res, next) => {
 };
 
 const uploadExcelFile = async (req, res, next) => {
-  console.log("EXCEL USER: ", req.user.id);
   try {
     if (!req.file) throw new BadRequestError("No file uploaded.");
     const result = await processExcelFile(req.file.path, req.user.id);
@@ -97,7 +96,7 @@ const uploadExcelFile = async (req, res, next) => {
     // Invalidate cache after bulk upload
     await invalidateItemsCache();
 
-    return res.status(200).json({
+    return res.status(StatusCodes.OK).json({
       success: true,
       message: "Excel file processed.",
       data: result,

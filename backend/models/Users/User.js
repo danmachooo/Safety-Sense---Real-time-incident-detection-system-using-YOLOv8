@@ -7,6 +7,12 @@ import sequelize from "../../config/database.js";
 const User = sequelize.define(
   "Users",
   {
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4, // generates a random UUID
+      primaryKey: true,
+      allowNull: false,
+    },
     email: {
       type: DataTypes.STRING,
       unique: true,

@@ -61,8 +61,8 @@ app.use("/api", apiRouter);
 // Error handler
 app.use(errorHandlerMiddleware);
 
-// Setup cron jobs
-setupCronJobs();
+// // Setup cron jobs
+// setupCronJobs();
 
 // Start backend
 const PORT = process.env.PORT || 3000;

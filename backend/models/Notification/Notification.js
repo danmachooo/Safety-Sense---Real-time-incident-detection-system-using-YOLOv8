@@ -5,7 +5,7 @@ const Notification = sequelize.define(
   "Notification",
   {
     userId: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.UUID,
       allowNull: true,
       references: {
         model: "users",
@@ -49,7 +49,7 @@ const Notification = sequelize.define(
       allowNull: false,
     },
     entityId: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.UUID,
       allowNull: true,
     },
     description: {

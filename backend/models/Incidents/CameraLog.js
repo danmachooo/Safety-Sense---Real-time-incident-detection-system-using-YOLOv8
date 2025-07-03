@@ -19,7 +19,7 @@ const CameraLog = sequelize.define(
       onDelete: "CASCADE",
     },
     userId: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.UUID,
       allowNull: true,
       references: {
         model: "users", // Use table name instead of model reference

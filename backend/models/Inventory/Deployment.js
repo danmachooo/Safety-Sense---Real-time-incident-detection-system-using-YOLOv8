@@ -17,7 +17,7 @@ const Deployment = sequelize.define(
       },
     },
     deployed_by: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.UUID,
       references: {
         model: "users", // Use table name
         key: "id",

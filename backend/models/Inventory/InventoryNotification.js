@@ -27,7 +27,7 @@ const InventoryNotification = sequelize.define(
       },
     },
     user_id: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.UUID,
       references: {
         model: "users", // Use table name
         key: "id",

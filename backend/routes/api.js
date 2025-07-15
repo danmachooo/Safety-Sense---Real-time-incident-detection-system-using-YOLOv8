@@ -10,6 +10,7 @@ import cameraRouter from "./CameraRoutes.js";
 import incidents from "./IncidentRoutes.js";
 import fcmRouter from "./FcmRoutes.js";
 import dashboardRouter from "./dashboardRoutes.js";
+import reportRouter from "./reportRoutes.js";
 
 router.use("/auth", authenticationRouter);
 router.use("/authorization", authorizationRouter);
@@ -20,5 +21,6 @@ router.use("/camera", cameraRouter);
 router.use("/system", systemRouter);
 router.use("/fcm", fcmRouter);
 router.use("/dashboard", dashboardRouter);
+router.use("/reports", reportRouter);
 
 export default router;

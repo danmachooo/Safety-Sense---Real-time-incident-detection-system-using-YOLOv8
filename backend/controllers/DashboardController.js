@@ -1,11 +1,3 @@
-// const { Op } = require("sequelize");
-// // Import models from the index file to ensure associations are loaded
-// const models = require("../models/index");
-
-// const { BadRequestError, NotFoundError } = require("../utils/Error");
-// const { StatusCodes } = require("http-status-codes");
-// const sequelize = require("../config/database");
-
 import { Op } from "sequelize";
 import { BadRequestError, NotFoundError } from "../utils/Error.js";
 import { StatusCodes } from "http-status-codes";
@@ -822,26 +814,9 @@ const getActivityFeed = async (req, res, next) => {
 const getMapData = async (req, res, next) => {
   try {
     const { timeframe } = req.query;
-    let startDate = new Date();
 
-    // Set timeframe based on query parameter
-    switch (timeframe) {
-      case "day":
-        startDate.setDate(startDate.getDate() - 1);
-        break;
-      case "week":
-        startDate.setDate(startDate.getDate() - 7);
-        break;
-      case "month":
-        startDate.setMonth(startDate.getMonth() - 1);
-        break;
-      default:
-        // Default to last 24 hours
-        startDate.setDate(startDate.getDate() - 1);
-    }
-
-    // Get active incidents with location data
-    const incidents = await Incident.findAll({
+    // First, let's get all incidents to see what we're working with
+    const allIncidents = await Incident.findAll({
       attributes: [
         "id",
         "type",
@@ -852,13 +827,6 @@ const getMapData = async (req, res, next) => {
         "snapshotUrl",
         "description",
       ],
-      where: {
-        createdAt: { [Op.gte]: startDate },
-        status: {
-          [Op.in]: ["pending", "accepted", "ongoing"],
-        },
-        deletedAt: null,
-      },
       include: [
         {
           model: Camera,
@@ -867,18 +835,59 @@ const getMapData = async (req, res, next) => {
           required: false,
         },
       ],
+      order: [["createdAt", "DESC"]],
+      limit: 10, // Just get latest 10 for debugging
     });
 
-    // Get camera locations
+    console.log(
+      "Latest incidents:",
+      allIncidents.map((i) => ({
+        id: i.id,
+        status: i.status,
+        createdAt: i.createdAt,
+        type: i.type,
+      }))
+    );
+
+    // Now apply time filtering
+    let filteredIncidents = allIncidents;
+
+    if (timeframe) {
+      let startDate = new Date();
+
+      switch (timeframe) {
+        case "day":
+          startDate.setDate(startDate.getDate() - 1);
+          break;
+        case "week":
+          startDate.setDate(startDate.getDate() - 7);
+          break;
+        case "month":
+          startDate.setMonth(startDate.getMonth() - 1);
+          break;
+        default:
+          startDate.setDate(startDate.getDate() - 1);
+      }
+
+      filteredIncidents = allIncidents.filter(
+        (incident) => new Date(incident.createdAt) >= startDate
+      );
+    }
+
+    // Filter by status
+    const validStatuses = ["pending", "accepted", "ongoing", "resolved"];
+    filteredIncidents = filteredIncidents.filter((incident) =>
+      validStatuses.includes(incident.status)
+    );
+
+    // Get cameras and deployments as before
     const cameras = await Camera.findAll({
       attributes: ["id", "name", "location", "status", "longitude", "latitude"],
       where: {
         status: "active",
-        deletedAt: null,
       },
     });
 
-    // Get active deployments with location data
     const deployments = await Deployment.findAll({
       attributes: [
         "id",
@@ -889,8 +898,6 @@ const getMapData = async (req, res, next) => {
       ],
       where: {
         status: "DEPLOYED",
-        deletedAt: null,
-        deployment_date: { [Op.gte]: startDate },
       },
       include: [
         {
@@ -905,14 +912,18 @@ const getMapData = async (req, res, next) => {
       success: true,
       message: "Map data retrieved successfully",
       data: {
-        incidents,
+        incidents: filteredIncidents,
         cameras,
         deployments,
-        timeframe: timeframe || "day",
+        timeframe: timeframe || "all",
+        debug: {
+          totalIncidentsFound: allIncidents.length,
+          filteredIncidents: filteredIncidents.length,
+        },
       },
     });
   } catch (error) {
-    console.error("An error occurred: " + error);
+    console.error("An error occurred in getMapDataAlternative:", error);
     next(error);
   }
 };

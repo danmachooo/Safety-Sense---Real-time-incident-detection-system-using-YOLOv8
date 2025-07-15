@@ -36,12 +36,18 @@ import {
   XCircle,
   Clock,
   RefreshCw,
+  User,
+  Users,
+  Mail,
+  Phone,
+  Badge,
 } from "lucide-vue-next";
 import api from "../../../utils/axios";
 
 // Reactive state
 const items = ref([]);
 const categories = ref([]);
+const users = ref([]); // Added users array
 const loading = ref(true);
 const error = ref(null);
 const showModal = ref(false);
@@ -80,7 +86,7 @@ const newItem = ref({
   notes: "",
 });
 
-// Updated deployment state
+// Updated deployment state with deployed_to field
 const deploymentDetails = ref({
   inventory_item_id: null,
   deployment_type: "EMERGENCY",
@@ -89,6 +95,7 @@ const deploymentDetails = ref({
   deployment_date: new Date().toISOString().split("T")[0],
   expected_return_date: null,
   incident_type: "",
+  deployed_to: "", // Added deployed_to field
   notes: "",
 });
 
@@ -104,7 +111,7 @@ const columns = [
 
 // Fetch initial data
 onMounted(async () => {
-  await Promise.all([fetchItems(), fetchCategories()]);
+  await Promise.all([fetchItems(), fetchCategories(), fetchUsers()]);
 });
 
 // Data fetching
@@ -114,6 +121,23 @@ const fetchCategories = async () => {
     categories.value = response.data.data;
   } catch (err) {
     showNotification("Failed to fetch categories", "error");
+  }
+};
+
+// Updated fetchUsers function
+const fetchUsers = async () => {
+  try {
+    const response = await api.get("manage-user/get-all", {
+      params: {
+        limit: 100, // Get more users for selection
+        sortBy: "firstname",
+        sortOrder: "asc",
+      },
+    });
+    users.value = response.data.data || [];
+  } catch (err) {
+    console.error("Failed to fetch users:", err);
+    showNotification("Failed to fetch users", "error");
   }
 };
 
@@ -167,19 +191,16 @@ const handleFileSelect = (event) => {
       "application/vnd.ms-excel",
       "text/csv",
     ];
-
     if (!allowedTypes.includes(file.type)) {
       uploadError.value =
         "Please select a valid Excel file (.xlsx, .xls) or CSV file";
       return;
     }
-
     // Validate file size (max 10MB)
     if (file.size > 10 * 1024 * 1024) {
       uploadError.value = "File size must be less than 10MB";
       return;
     }
-
     selectedFile.value = file;
     uploadError.value = null;
   }
@@ -190,22 +211,18 @@ const uploadExcelFile = async () => {
     uploadError.value = "Please select a file to upload";
     return;
   }
-
   try {
     uploadLoading.value = true;
     uploadProgress.value = 0;
     uploadError.value = null;
-
     const formData = new FormData();
     formData.append("file", selectedFile.value);
-
     // Simulate progress for better UX
     const progressInterval = setInterval(() => {
       if (uploadProgress.value < 90) {
         uploadProgress.value += Math.random() * 10;
       }
     }, 200);
-
     const response = await api.post("inventory/upload-excel", formData, {
       headers: {
         "Content-Type": "multipart/form-data",
@@ -217,20 +234,15 @@ const uploadExcelFile = async () => {
         uploadProgress.value = percentCompleted;
       },
     });
-
     clearInterval(progressInterval);
     uploadProgress.value = 100;
-
     // Debug: Log the actual response structure
     console.log("Upload response:", response.data);
-
     // Handle the response structure - adjust based on your actual API response
     const responseData = response.data.data || response.data;
-
     // Check different possible response structures
     let successItems = [];
     let errorItems = [];
-
     if (responseData.success && Array.isArray(responseData.success)) {
       successItems = responseData.success;
     } else if (
@@ -244,7 +256,6 @@ const uploadExcelFile = async () => {
     ) {
       successItems = responseData.successItems;
     }
-
     if (responseData.errors && Array.isArray(responseData.errors)) {
       errorItems = responseData.errors;
     } else if (responseData.failed && Array.isArray(responseData.failed)) {
@@ -255,7 +266,6 @@ const uploadExcelFile = async () => {
     ) {
       errorItems = responseData.errorItems;
     }
-
     uploadResults.value = {
       successful: successItems.length,
       failed: errorItems.length,
@@ -263,10 +273,8 @@ const uploadExcelFile = async () => {
       successItems: successItems,
       errors: errorItems,
     };
-
     // Show success notification
     const { successful, failed } = uploadResults.value;
-
     if (successful > 0 && failed === 0) {
       showNotification(
         `Upload completed successfully: ${successful} items processed`,
@@ -288,7 +296,6 @@ const uploadExcelFile = async () => {
         "warning"
       );
     }
-
     // Refresh the items list
     await fetchItems();
   } catch (err) {
@@ -306,11 +313,9 @@ const downloadTemplate = async () => {
     const response = await api.get("inventory/download-template", {
       responseType: "blob",
     });
-
     const blob = new Blob([response.data], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
-
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -319,7 +324,6 @@ const downloadTemplate = async () => {
     link.click();
     document.body.removeChild(link);
     window.URL.revokeObjectURL(url);
-
     showNotification("Template downloaded successfully", "success");
   } catch (err) {
     showNotification("Failed to download template", "error");
@@ -331,6 +335,14 @@ const closeUploadModal = () => {
   setTimeout(() => {
     resetUploadState();
   }, 300);
+};
+
+//Handle unexpected values for dates
+const handleDateChange = (e) => {
+  const date = e.target.value;
+  if (!date || isNaN(Date.parse(date))) {
+    deploymentDetails.value.expected_return_date = null;
+  }
 };
 
 // Sorting
@@ -404,7 +416,7 @@ const deleteItem = async (id) => {
   }
 };
 
-// Deployment
+// Enhanced Deployment with user selection
 const openDeployModal = (item) => {
   deploymentDetails.value = {
     inventory_item_id: item.id,
@@ -414,6 +426,7 @@ const openDeployModal = (item) => {
     deployment_date: new Date().toISOString().split("T")[0],
     expected_return_date: null,
     incident_type: "",
+    deployed_to: "", // Reset deployed_to field
     notes: "",
   };
   showDeployModal.value = true;
@@ -462,6 +475,13 @@ const showNotification = (message, type) => {
 const currentDeployItem = computed(() => {
   return items.value.find(
     (item) => item.id === deploymentDetails.value.inventory_item_id
+  );
+});
+
+// Get selected user for deployment
+const selectedUser = computed(() => {
+  return users.value.find(
+    (user) => user.id === deploymentDetails.value.deployed_to
   );
 });
 
@@ -1010,7 +1030,6 @@ const formatFileSize = (bytes) => {
                   @change="handleFileSelect"
                   class="hidden"
                 />
-
                 <div v-if="!selectedFile">
                   <FileSpreadsheet
                     class="w-16 h-16 text-gray-400 mx-auto mb-4"
@@ -1027,7 +1046,6 @@ const formatFileSize = (bytes) => {
                     Select File
                   </button>
                 </div>
-
                 <div v-else class="flex items-center justify-center">
                   <FileSpreadsheet class="w-8 h-8 text-emerald-600 mr-3" />
                   <div class="text-left">
@@ -1452,14 +1470,14 @@ const formatFileSize = (bytes) => {
       </div>
     </div>
 
-    <!-- Enhanced Deployment Modal -->
+    <!-- Enhanced Deployment Modal with User Selection -->
     <div
       v-if="showDeployModal"
       class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50"
       @click.self="showDeployModal = false"
     >
       <div
-        class="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[95vh] overflow-hidden"
+        class="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[95vh] overflow-hidden"
       >
         <!-- Modal Header -->
         <div
@@ -1525,6 +1543,66 @@ const formatFileSize = (bytes) => {
                       Available: {{ currentDeployItem?.quantity_in_stock }}
                       {{ currentDeployItem?.unit_of_measure }}
                     </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Recipient Selection -->
+            <div class="mb-8">
+              <div class="flex items-center mb-6">
+                <Users class="w-5 h-5 text-purple-600 mr-2" />
+                <h4 class="text-lg font-semibold text-gray-900">
+                  Recipient Information
+                </h4>
+              </div>
+              <div
+                class="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 border border-purple-100"
+              >
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div>
+                    <label
+                      class="block text-sm font-semibold text-gray-700 mb-3"
+                    >
+                      <User class="w-4 h-4 inline mr-1" />
+                      Select Recipient *
+                    </label>
+                    <select
+                      v-model="deploymentDetails.deployed_to"
+                      required
+                      class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200"
+                    >
+                      <option value="" disabled>
+                        Choose who will receive this item
+                      </option>
+                      <option
+                        v-for="user in users"
+                        :key="user.id"
+                        :value="user.id"
+                      >
+                        {{ user.firstname }} {{ user.lastname }} -
+                        {{ user.role }}
+                      </option>
+                    </select>
+                  </div>
+                  <div v-if="selectedUser" class="flex items-center">
+                    <div
+                      class="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-600 rounded-xl flex items-center justify-center mr-4"
+                    >
+                      <User class="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <h5 class="font-semibold text-gray-900">
+                        {{ selectedUser.firstname }} {{ selectedUser.lastname }}
+                      </h5>
+                      <p class="text-sm text-gray-600">
+                        {{ selectedUser.role }}
+                      </p>
+                      <div class="flex items-center mt-1 text-xs text-gray-500">
+                        <Mail class="w-3 h-3 mr-1" />
+                        <span>{{ selectedUser.email }}</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1641,6 +1719,7 @@ const formatFileSize = (bytes) => {
                     </label>
                     <input
                       v-model="deploymentDetails.expected_return_date"
+                      @change="handleDateChange"
                       type="date"
                       class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-200"
                     />
@@ -1664,6 +1743,69 @@ const formatFileSize = (bytes) => {
                   placeholder="Add deployment notes, special instructions, contact information, or other relevant details..."
                   class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-500 focus:border-gray-500 transition-all duration-200 resize-none"
                 ></textarea>
+              </div>
+            </div>
+
+            <!-- Deployment Summary -->
+            <div class="mb-8">
+              <div
+                class="bg-gradient-to-br from-gray-50 to-slate-50 rounded-2xl p-6 border border-gray-200"
+              >
+                <div class="flex items-center mb-4">
+                  <Badge class="w-5 h-5 text-gray-600 mr-2" />
+                  <h4 class="text-lg font-semibold text-gray-900">
+                    Deployment Summary
+                  </h4>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div class="space-y-2">
+                    <div class="flex justify-between">
+                      <span class="text-gray-600">Item:</span>
+                      <span class="font-medium">{{
+                        currentDeployItem?.name
+                      }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span class="text-gray-600">Quantity:</span>
+                      <span class="font-medium"
+                        >{{ deploymentDetails.quantity_deployed }}
+                        {{ currentDeployItem?.unit_of_measure }}</span
+                      >
+                    </div>
+                    <div class="flex justify-between">
+                      <span class="text-gray-600">Type:</span>
+                      <span class="font-medium capitalize">{{
+                        deploymentDetails.deployment_type
+                          .toLowerCase()
+                          .replace("_", " ")
+                      }}</span>
+                    </div>
+                  </div>
+                  <div class="space-y-2">
+                    <div class="flex justify-between">
+                      <span class="text-gray-600">Recipient:</span>
+                      <span class="font-medium">
+                        {{
+                          selectedUser
+                            ? `${selectedUser.firstname} ${selectedUser.lastname}`
+                            : "Not selected"
+                        }}
+                      </span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span class="text-gray-600">Location:</span>
+                      <span class="font-medium">{{
+                        deploymentDetails.deployment_location || "Not specified"
+                      }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span class="text-gray-600">Date:</span>
+                      <span class="font-medium">{{
+                        deploymentDetails.deployment_date
+                      }}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 

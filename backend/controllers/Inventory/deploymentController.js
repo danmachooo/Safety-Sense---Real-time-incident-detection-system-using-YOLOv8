@@ -9,6 +9,7 @@ import {
 } from "../../utils/Error.js";
 import { invalidateItemsCache } from "./utils/cacheUtil.js";
 const { Deployment, InventoryItem, User, InventoryNotification } = models;
+
 const createDeployment = async (req, res, next) => {
   try {
     const {
@@ -20,9 +21,9 @@ const createDeployment = async (req, res, next) => {
       expected_return_date,
       incident_type,
       notes,
+      deployed_to,
     } = req.body;
 
-    // Assuming user ID is available in req.user.id from auth middleware
     const deployed_by = req.user.id;
 
     if (
@@ -47,6 +48,7 @@ const createDeployment = async (req, res, next) => {
     const deployment = await Deployment.create({
       inventory_item_id,
       deployed_by,
+      deployed_to,
       deployment_type,
       quantity_deployed,
       deployment_location,
@@ -112,10 +114,11 @@ const getAllDeployments = async (req, res, next) => {
       whereClause[Op.or] = [
         { id: { [Op.like]: `%${search}%` } },
         { status: { [Op.like]: `%${search}%` } },
+        { deployment_location: { [Op.like]: `%${search}%` } },
+        { deployed_to: { [Op.like]: `%${search}%` } },
         { "$inventoryItem.name$": { [Op.like]: `%${search}%` } },
         { "$deployer.firstname$": { [Op.like]: `%${search}%` } },
         { "$deployer.lastname$": { [Op.like]: `%${search}%` } },
-        ,
       ];
     }
 
@@ -131,6 +134,12 @@ const getAllDeployments = async (req, res, next) => {
           model: User,
           as: "deployer",
           attributes: ["id", "firstname", "lastname"],
+        },
+        {
+          model: User,
+          as: "receiver",
+          attributes: ["id", "firstname", "lastname"],
+          required: false, // Left join in case deployed_to is null
         },
       ],
       limit: parseInt(limit),
@@ -167,6 +176,12 @@ const getDeploymentById = async (req, res, next) => {
           model: User,
           as: "deployer",
           attributes: ["id", "firstname", "lastname"],
+        },
+        {
+          model: User,
+          as: "receiver",
+          attributes: ["id", "firstname", "lastname"],
+          required: false, // Left join in case deployed_to is null
         },
       ],
     });
@@ -211,7 +226,7 @@ const updateDeploymentStatus = async (req, res, next) => {
       });
 
       // Create notification for return
-      await Notification.create({
+      await InventoryNotification.create({
         notification_type: "EQUIPMENT_ISSUE",
         inventory_item_id: deployment.inventory_item_id,
         user_id: req.user.id,
@@ -220,6 +235,8 @@ const updateDeploymentStatus = async (req, res, next) => {
         priority: "LOW",
       });
     }
+
+    await invalidateItemsCache();
 
     return res.status(StatusCodes.OK).json({
       success: true,
@@ -255,6 +272,12 @@ const getOverdueDeployments = async (req, res, next) => {
             model: User,
             as: "deployer",
             attributes: ["id", "firstname", "lastname"],
+          },
+          {
+            model: User,
+            as: "deployedToUser",
+            attributes: ["id", "firstname", "lastname"],
+            required: false, // Left join in case deployed_to is null
           },
         ],
         limit: parseInt(limit),

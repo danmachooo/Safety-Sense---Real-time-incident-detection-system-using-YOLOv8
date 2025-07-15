@@ -55,10 +55,10 @@ const setupAssociations = () => {
     as: "receiver",
   });
 
-  // User <-> Deployment
+  // User <-> Deployment (deployed_by)
   User.hasMany(Deployment, {
     foreignKey: "deployed_by",
-    as: "deployments",
+    as: "deploymentsMade", // Changed alias to avoid conflict
   });
 
   Deployment.belongsTo(User, {
@@ -66,6 +66,16 @@ const setupAssociations = () => {
     as: "deployer",
   });
 
+  // User <-> Deployment (deployed_to)
+  User.hasMany(Deployment, {
+    foreignKey: "deployed_to",
+    as: "deploymentsReceived", // Changed alias to avoid conflict
+  });
+
+  Deployment.belongsTo(User, {
+    foreignKey: "deployed_to",
+    as: "receiver",
+  });
   // User <-> InventoryNotification
   User.hasMany(InventoryNotification, {
     foreignKey: "user_id",

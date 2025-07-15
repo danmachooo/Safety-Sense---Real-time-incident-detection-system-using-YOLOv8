@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   Ban,
   User,
+  Users,
   FileText,
   ArrowLeft,
 } from "lucide-vue-next";
@@ -28,6 +29,7 @@ const loading = ref(true);
 const error = ref(null);
 const currentPage = ref(1);
 const totalPages = ref(1);
+const totalDeployments = ref(0);
 const itemsPerPage = ref(10);
 const searchQuery = ref("");
 const statusFilter = ref("");
@@ -93,6 +95,7 @@ const fetchDeployments = async () => {
     });
     deployments.value = response.data.data;
     totalPages.value = response.data.meta.pages;
+    totalDeployments.value = response.data.meta.total;
   } catch (err) {
     console.error("Error fetching deployments:", err);
     error.value = err;
@@ -256,8 +259,6 @@ const overdueCount = computed(() => {
   }).length;
 });
 
-const totalDeployments = computed(() => deployments.value.length);
-
 // Visible pages for pagination
 const visiblePages = computed(() => {
   const range = 2;
@@ -338,7 +339,7 @@ onMounted(fetchDeployments);
                 Deployment Management
               </h1>
               <p class="text-gray-600 mt-1 text-lg">
-                Track and manage inventory deployments with smart caching
+                Track and manage inventory deployments with user assignments
               </p>
             </div>
           </div>
@@ -362,7 +363,6 @@ onMounted(fetchDeployments);
             </div>
           </div>
         </div>
-
         <div
           class="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg"
         >
@@ -380,7 +380,6 @@ onMounted(fetchDeployments);
             </div>
           </div>
         </div>
-
         <div
           class="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg"
         >
@@ -396,7 +395,6 @@ onMounted(fetchDeployments);
             </div>
           </div>
         </div>
-
         <div
           class="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg"
         >
@@ -499,6 +497,11 @@ onMounted(fetchDeployments);
                 <th
                   class="px-6 py-4 text-left text-sm font-semibold text-gray-700"
                 >
+                  Personnel
+                </th>
+                <th
+                  class="px-6 py-4 text-left text-sm font-semibold text-gray-700"
+                >
                   Status
                 </th>
                 <th
@@ -557,6 +560,35 @@ onMounted(fetchDeployments);
                   <span class="font-semibold text-gray-900">{{
                     deployment.quantity_deployed
                   }}</span>
+                </td>
+                <td class="px-6 py-4">
+                  <div class="space-y-2">
+                    <!-- Deployed By -->
+                    <div class="flex items-center text-sm">
+                      <User class="w-3 h-3 text-gray-400 mr-1" />
+                      <span class="text-gray-600">By:</span>
+                      <span class="ml-1 font-medium text-gray-900">
+                        {{
+                          deployment.deployer
+                            ? `${deployment.deployer.firstname} ${deployment.deployer.lastname}`
+                            : "Unknown"
+                        }}
+                      </span>
+                    </div>
+                    <!-- Deployed To -->
+                    <div
+                      v-if="deployment.receiver"
+                      class="flex items-center text-sm"
+                    >
+                      <User class="w-3 h-3 text-blue-400 mr-1" />
+                      <span class="text-gray-600">To:</span>
+                      <span class="ml-1 font-medium text-blue-900">
+                        {{
+                          `${deployment.receiver.firstname} ${deployment.receiver.lastname}`
+                        }}
+                      </span>
+                    </div>
+                  </div>
                 </td>
                 <td class="px-6 py-4">
                   <span
@@ -703,7 +735,7 @@ onMounted(fetchDeployments);
         @click.self="closeModal"
       >
         <div
-          class="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[95vh] overflow-hidden transform transition-all duration-300 scale-100"
+          class="bg-white rounded-3xl shadow-2xl w-full max-w-5xl max-h-[95vh] overflow-hidden transform transition-all duration-300 scale-100"
         >
           <!-- Modal Header -->
           <div
@@ -833,7 +865,65 @@ onMounted(fetchDeployments);
                   </div>
                 </div>
 
-                <!-- Deployment Information Card -->
+                <!-- Personnel Information Card -->
+                <div
+                  class="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 border border-purple-100"
+                >
+                  <div class="flex items-center mb-4">
+                    <Users class="w-5 h-5 text-purple-600 mr-2" />
+                    <h4 class="text-lg font-semibold text-gray-900">
+                      Personnel Information
+                    </h4>
+                  </div>
+                  <div class="space-y-4">
+                    <!-- Deployed By -->
+                    <div>
+                      <p class="text-sm font-medium text-gray-600 mb-1">
+                        Deployed By
+                      </p>
+                      <div class="flex items-center">
+                        <div
+                          class="w-8 h-8 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center mr-3"
+                        >
+                          <User class="w-4 h-4 text-white" />
+                        </div>
+                        <div>
+                          <p class="font-semibold text-gray-900">
+                            {{
+                              currentDeployment.deployer
+                                ? `${currentDeployment.deployer.firstname} ${currentDeployment.deployer.lastname}`
+                                : "Unknown User"
+                            }}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <!-- Deployed To -->
+                    <div v-if="currentDeployment.receiver">
+                      <p class="text-sm font-medium text-gray-600 mb-1">
+                        Deployed To
+                      </p>
+                      <div class="flex items-center">
+                        <div
+                          class="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-600 rounded-lg flex items-center justify-center mr-3"
+                        >
+                          <User class="w-4 h-4 text-white" />
+                        </div>
+                        <div>
+                          <p class="font-semibold text-gray-900">
+                            {{
+                              `${currentDeployment.receiver.firstname} ${currentDeployment.receiver.lastname}`
+                            }}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Deployment Information Card -->
+              <div class="mb-8">
                 <div
                   class="bg-gradient-to-br from-emerald-50 to-green-50 rounded-2xl p-6 border border-emerald-100"
                 >
@@ -843,7 +933,7 @@ onMounted(fetchDeployments);
                       Deployment Information
                     </h4>
                   </div>
-                  <div class="space-y-4">
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                       <p class="text-sm font-medium text-gray-600 mb-1">
                         Location

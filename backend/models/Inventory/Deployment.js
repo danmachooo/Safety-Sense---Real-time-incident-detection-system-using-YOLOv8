@@ -1,4 +1,4 @@
-import { DataTypes } from "sequelize";
+import { DataTypes, UUID } from "sequelize";
 import sequelize from "../../config/database.js";
 
 const Deployment = sequelize.define(
@@ -20,6 +20,13 @@ const Deployment = sequelize.define(
       type: DataTypes.UUID,
       references: {
         model: "users", // Use table name
+        key: "id",
+      },
+    },
+    deployed_to: {
+      type: DataTypes.UUID,
+      references: {
+        model: "users",
         key: "id",
       },
     },
@@ -74,6 +81,7 @@ const Deployment = sequelize.define(
     indexes: [
       { fields: ["inventory_item_id"] },
       { fields: ["deployed_by"] },
+      { fields: ["deployed_to"] },
       { fields: ["deployment_type"] },
       { fields: ["status"] },
       { fields: ["deployment_date"] },

@@ -12,6 +12,8 @@
     "@heroicons/vue": "^1.0.6",
     "@tanstack/vue-query": "^5.79.0",
     "axios": "^1.7.9",
+    "chart.js": "^4.5.0",
+    "chartjs": "^0.3.24",
     "frontend": "file:",
     "lucide-vue-next": "^0.475.0",
     "pinia": "^3.0.1",

@@ -1,5 +1,3 @@
-// const { getRedisClient } = require("../../config/redis");
-
 import getRedisClient from "../../config/redis.js";
 
 const getCached = async (cachedKey) => {
@@ -18,7 +16,7 @@ const getCached = async (cachedKey) => {
   }
 };
 
-const setCache = async (cacheKey, cachedValue, expire = 60) => {
+const setCache = async (cacheKey, cachedValue, expire = 30) => {
   try {
     const redis = await getRedisClient();
     if (!redis) {
@@ -69,9 +67,11 @@ const invalidateCachePattern = async (pattern) => {
       console.warn("Redis client not available");
       return false;
     }
+
     const keys = await redis.keys(pattern);
 
     if (keys.length > 0) {
+      // Use pipeline for better performance
       const pipeline = redis.multi();
       keys.forEach((key) => {
         pipeline.del(key);
@@ -91,5 +91,82 @@ const invalidateCachePattern = async (pattern) => {
   }
 };
 
-// In your cache service file - update the export line
-export { getCached, setCache, invalidateCache, invalidateCachePattern };
+// New utility function to invalidate multiple patterns at once
+const invalidateMultiplePatterns = async (patterns) => {
+  try {
+    const redis = await getRedisClient();
+    if (!redis) {
+      console.warn("Redis client not available");
+      return false;
+    }
+
+    const allKeys = new Set();
+
+    // Collect all keys matching all patterns
+    for (const pattern of patterns) {
+      const keys = await redis.keys(pattern);
+      keys.forEach((key) => allKeys.add(key));
+    }
+
+    if (allKeys.size > 0) {
+      const pipeline = redis.multi();
+      allKeys.forEach((key) => {
+        pipeline.del(key);
+      });
+      await pipeline.exec();
+      console.log(
+        `Invalidated ${
+          allKeys.size
+        } cache keys matching patterns: ${patterns.join(", ")}`
+      );
+      return true;
+    } else {
+      console.log(
+        `No cache keys found matching patterns: ${patterns.join(", ")}`
+      );
+      return true;
+    }
+  } catch (error) {
+    console.error("Error invalidating multiple cache patterns:", error);
+    return false;
+  }
+};
+
+// Cache invalidation helpers for specific entities
+const invalidateBatchCache = async (itemId = null) => {
+  const patterns = ["batch:*"];
+
+  if (itemId) {
+    patterns.push(`inventory:item:${itemId}*`);
+  }
+
+  patterns.push("inventory:*");
+
+  return await invalidateMultiplePatterns(patterns);
+};
+
+const invalidateInventoryCache = async (itemId = null) => {
+  const patterns = ["inventory:*", "category:*"];
+
+  if (itemId) {
+    patterns.push(`inventory:item:${itemId}*`);
+  }
+
+  return await invalidateMultiplePatterns(patterns);
+};
+
+const invalidateCategoryCache = async () => {
+  return await invalidateMultiplePatterns(["category:*", "inventory:*"]);
+};
+
+// Export all functions
+export {
+  getCached,
+  setCache,
+  invalidateCache,
+  invalidateCachePattern,
+  invalidateMultiplePatterns,
+  invalidateBatchCache,
+  invalidateInventoryCache,
+  invalidateCategoryCache,
+};

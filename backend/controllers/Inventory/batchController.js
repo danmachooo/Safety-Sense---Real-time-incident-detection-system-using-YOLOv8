@@ -13,8 +13,9 @@ import { StatusCodes } from "http-status-codes";
 import {
   getCached,
   setCache,
-  invalidateCache,
-  invalidateCachePattern,
+  invalidateBatchCache,
+  invalidateInventoryCache,
+  invalidateCategoryCache,
 } from "../../services/redis/cache.js";
 
 const createBatch = async (req, res, next) => {
@@ -83,11 +84,12 @@ const createBatch = async (req, res, next) => {
         });
       }
     }
-    const result = await invalidateCache("category");
 
-    if (!result) {
-      console.log("Failed to invalidate cache");
-    }
+    // ✅ FIXED: Invalidate relevant caches
+    await invalidateBatchCache(inventory_item_id);
+    await invalidateInventoryCache(inventory_item_id);
+    await invalidateItemsCache(); // Your existing cache invalidation
+
     return res.status(StatusCodes.CREATED).json({
       success: true,
       message: "A batch has been created!",
@@ -130,7 +132,14 @@ const getAllBatches = async (req, res, next) => {
   if (search) {
     whereClause.batch_number = { [Op.like]: `%${search}%` };
   }
-  const cacheKey = `batch:all:${JSON.stringify(req.query)}`;
+
+  // ✅ FIXED: Create a more specific cache key
+  const cacheKey = `batch:all:${JSON.stringify({
+    ...req.query,
+    page: Number.parseInt(page),
+    limit: Number.parseInt(limit),
+  })}`;
+
   try {
     const cached = await getCached(cacheKey);
     if (cached) {
@@ -170,7 +179,9 @@ const getAllBatches = async (req, res, next) => {
         currentPage: Number.parseInt(page),
       },
     };
-    await setCache(cacheKey, response, 60);
+
+    // ✅ FIXED: Set cache with shorter expiry for frequently changing data
+    await setCache(cacheKey, response, 120); // 2 minutes
 
     return res.status(StatusCodes.OK).json(response);
   } catch (error) {
@@ -181,7 +192,17 @@ const getAllBatches = async (req, res, next) => {
 
 const getBatchById = async (req, res, next) => {
   try {
-    const batch = await Batch.findByPk(req.params.id, {
+    const batchId = req.params.id;
+    const cacheKey = `batch:single:${batchId}`;
+
+    // ✅ FIXED: Add caching for single batch
+    const cached = await getCached(cacheKey);
+    if (cached) {
+      console.log("Serving single batch from redis...");
+      return res.status(StatusCodes.OK).json(cached);
+    }
+
+    const batch = await Batch.findByPk(batchId, {
       include: [
         {
           model: InventoryItem,
@@ -198,11 +219,15 @@ const getBatchById = async (req, res, next) => {
 
     if (!batch) throw new NotFoundError("Batch not found.");
 
-    return res.status(StatusCodes.OK).json({
+    const response = {
       success: true,
       message: "Batch found successfully.",
       data: batch,
-    });
+    };
+
+    await setCache(cacheKey, response, 300); // 5 minutes
+
+    return res.status(StatusCodes.OK).json(response);
   } catch (error) {
     console.error("Get batch by id error: ", error.message);
     next(error);
@@ -211,7 +236,8 @@ const getBatchById = async (req, res, next) => {
 
 const updateBatch = async (req, res, next) => {
   try {
-    const batch = await Batch.findByPk(req.params.id);
+    const batchId = req.params.id;
+    const batch = await Batch.findByPk(batchId);
     if (!batch) throw new NotFoundError("Batch not found");
 
     const {
@@ -261,11 +287,12 @@ const updateBatch = async (req, res, next) => {
         });
       }
     }
-    const result = await invalidateCache("category");
 
-    if (!result) {
-      console.log("Failed to invalidate cache");
-    }
+    // ✅ FIXED: Invalidate relevant caches
+    await invalidateBatchCache(batch.inventory_item_id);
+    await invalidateInventoryCache(batch.inventory_item_id);
+    await invalidateItemsCache();
+
     return res.status(StatusCodes.OK).json({
       success: true,
       data: batch,
@@ -279,19 +306,23 @@ const updateBatch = async (req, res, next) => {
 
 const deleteBatch = async (req, res, next) => {
   try {
-    const batch = await Batch.findByPk(req.params.id);
+    const batchId = req.params.id;
+    const batch = await Batch.findByPk(batchId);
     if (!batch) throw new NotFoundError("Batch not found");
 
+    const inventoryItemId = batch.inventory_item_id;
+
     // Update inventory item quantity before deleting
-    const item = await InventoryItem.findByPk(batch.inventory_item_id);
+    const item = await InventoryItem.findByPk(inventoryItemId);
     await item.decrement("quantity_in_stock", { by: batch.quantity });
 
     await batch.destroy();
-    const result = await invalidateCachePattern("batch:*");
+
+    // ✅ FIXED: Proper cache invalidation after deletion
+    await invalidateBatchCache(inventoryItemId);
+    await invalidateInventoryCache(inventoryItemId);
     await invalidateItemsCache();
-    if (!result) {
-      console.log("Failed to invalidate cache");
-    }
+
     return res.status(StatusCodes.OK).json({
       success: true,
       message: "Batch deleted successfully",
@@ -304,7 +335,8 @@ const deleteBatch = async (req, res, next) => {
 
 const restoreBatch = async (req, res, next) => {
   try {
-    const batch = await Batch.findByPk(req.params.id, { paranoid: false }); // Include soft-deleted records
+    const batchId = req.params.id;
+    const batch = await Batch.findByPk(batchId, { paranoid: false }); // Include soft-deleted records
     if (!batch) throw new NotFoundError("Batch not found");
 
     if (!batch.deletedAt) {
@@ -322,11 +354,12 @@ const restoreBatch = async (req, res, next) => {
     if (!item) throw new NotFoundError("Inventory item not found");
 
     await item.increment("quantity_in_stock", { by: batch.quantity });
-    const result = await invalidateCache("category");
 
-    if (!result) {
-      console.log("Failed to invalidate cache");
-    }
+    // ✅ FIXED: Invalidate relevant caches
+    await invalidateBatchCache(batch.inventory_item_id);
+    await invalidateInventoryCache(batch.inventory_item_id);
+    await invalidateItemsCache();
+
     return res.status(StatusCodes.OK).json({
       success: true,
       message: "Batch restored successfully",
@@ -341,6 +374,14 @@ const getExpiringBatches = async (req, res, next) => {
   try {
     const { days = 30, page = 1, limit = 10 } = req.query;
     const offset = (page - 1) * limit;
+
+    // ✅ FIXED: Add caching for expiring batches
+    const cacheKey = `batch:expiring:${days}:${page}:${limit}`;
+    const cached = await getCached(cacheKey);
+    if (cached) {
+      console.log("Serving expiring batches from redis...");
+      return res.status(StatusCodes.OK).json(cached);
+    }
 
     const expiryDate = new Date();
     expiryDate.setDate(expiryDate.getDate() + Number.parseInt(days));
@@ -368,7 +409,7 @@ const getExpiringBatches = async (req, res, next) => {
       order: [["expiry_date", "ASC"]],
     });
 
-    return res.status(StatusCodes.OK).json({
+    const response = {
       success: true,
       message: "Fetching Expiring Batches",
       data: batches,
@@ -377,7 +418,12 @@ const getExpiringBatches = async (req, res, next) => {
         pages: Math.ceil(count / limit),
         currentPage: Number.parseInt(page),
       },
-    });
+    };
+
+    // Cache for shorter time since this is time-sensitive data
+    await setCache(cacheKey, response, 300); // 5 minutes
+
+    return res.status(StatusCodes.OK).json(response);
   } catch (error) {
     console.error("Expiring Batches error: ", error.message);
     next(error);

@@ -1,21 +1,3 @@
-// const express = require("express");
-// const authMiddleware = require("../middlewares/authMiddleware");
-// const adminMiddleware = require("../middlewares/adminMiddleware");
-// const loginRateLimiter = require("../middlewares/loginRateLimiter");
-
-// const {
-//   loginUser,
-//   logoutUser,
-//   registerUser,
-//   verifyEmail,
-//   resetPassword,
-//   requestPasswordReset,
-//   changePassword,
-//   updateFcmToken,
-
-//   refreshAccessToken,
-// } = require("../controllers/Users/authentication");
-// const { getLoginHistory } = require("../controllers/Users/LoginHistory");
 import {
   loginUser,
   logoutUser,

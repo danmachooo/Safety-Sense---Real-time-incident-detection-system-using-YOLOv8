@@ -264,44 +264,51 @@ const getDaysSinceArchived = (dateString) => {
 
       <!-- Header -->
       <div
-        class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8"
+        class="bg-white/80 mb-8 backdrop-blur-sm shadow-lg border-b border-gray-200/50 sticky top-0 z-10"
       >
-        <div class="mb-6 lg:mb-0">
-          <div class="flex items-center mb-2">
-            <div
-              class="p-2 bg-gradient-to-r from-gray-500 to-gray-700 rounded-xl mr-4"
-            >
-              <Archive class="w-8 h-8 text-white" />
-            </div>
-            <div>
-              <h1
-                class="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent"
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div
+            class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-6 py-8"
+          >
+            <!-- Left: Icon + Title + Subtitle -->
+            <div class="flex items-center space-x-4">
+              <div
+                class="p-2 bg-gradient-to-r from-gray-500 to-gray-700 rounded-xl"
               >
-                Archived Users
-              </h1>
-              <p class="text-gray-600 mt-1 text-lg">
-                Manage and restore archived user accounts
-              </p>
+                <Archive class="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h1
+                  class="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent"
+                >
+                  Archived Users
+                </h1>
+                <p class="text-gray-600 mt-1 text-base font-medium">
+                  Manage and restore archived user accounts
+                </p>
+              </div>
+            </div>
+
+            <!-- Right: Total + Refresh Button -->
+            <div class="flex items-center gap-4">
+              <span
+                class="px-5 py-3 bg-white/70 backdrop-blur-sm border border-white/20 rounded-2xl text-gray-700 font-medium text-sm"
+              >
+                Total: {{ totalUsers }}
+              </span>
+              <button
+                @click="fetchUsers"
+                :disabled="isRefreshing"
+                class="flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-2xl hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98] font-medium"
+              >
+                <RefreshCw
+                  class="w-4 h-4 mr-2"
+                  :class="{ 'animate-spin': isRefreshing }"
+                />
+                {{ isRefreshing ? "Refreshing..." : "Refresh" }}
+              </button>
             </div>
           </div>
-        </div>
-        <div class="flex items-center space-x-3">
-          <span
-            class="px-4 py-2 bg-white/70 backdrop-blur-sm border border-white/20 rounded-xl text-gray-700 font-medium"
-          >
-            Total: {{ totalUsers }}
-          </span>
-          <button
-            @click="fetchUsers"
-            :disabled="isRefreshing"
-            class="btn-refresh"
-          >
-            <RefreshCw
-              class="w-5 h-5 mr-2"
-              :class="{ 'animate-spin': isRefreshing }"
-            />
-            {{ isRefreshing ? "Refreshing..." : "Refresh" }}
-          </button>
         </div>
       </div>
 

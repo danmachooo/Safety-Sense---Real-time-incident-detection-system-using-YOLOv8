@@ -101,17 +101,26 @@ export const useAuthStore = defineStore("auth", () => {
 
   const login = async (email, password) => {
     try {
-      const response = await api.post("/auth/login", { email, password });
-      if (response.data.success) {
-        const { user: userData, access } = response.data.data;
+      const loginSource = "web";
+      const response = await api.post("/auth/login", {
+        email,
+        password,
+        loginSource,
+      });
+
+      const { data } = response;
+      if (data.success && data.data) {
+        const { user: userData, access } = data.data;
 
         user.value = userData;
         updateToken(access);
 
         localStorage.setItem("authUser", JSON.stringify(userData));
+        localStorage.setItem("accessToken", access);
 
         return true;
       }
+
       return false;
     } catch (err) {
       console.error("Login failed:", err.response?.data?.message || err);

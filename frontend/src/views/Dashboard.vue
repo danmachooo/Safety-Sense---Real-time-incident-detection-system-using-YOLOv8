@@ -22,6 +22,7 @@ import {
   Database,
   WifiOff,
   AlertOctagon,
+  Gauge,
 } from "lucide-vue-next";
 
 import api from "../utils/axios";
@@ -198,22 +199,32 @@ onMounted(() => {
   >
     <!-- Header -->
     <div
-      class="relative top-0 z-0 bg-white/95 backdrop-blur-xl border-b border-gray-200/60 shadow-sm"
+      class="bg-white/80 backdrop-blur-sm shadow-lg border-b border-gray-200/50 sticky top-0 z-10"
     >
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div
           class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-6 py-8"
         >
-          <div class="space-y-1">
-            <h1
-              class="text-4xl font-bold bg-gradient-to-r from-gray-900 via-gray-800 to-gray-700 bg-clip-text text-transparent"
+          <!-- LEFT: Icon + Text -->
+          <div class="flex items-center space-x-4">
+            <div
+              class="p-3 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl shadow-lg"
             >
-              Dashboard
-            </h1>
-            <p class="text-gray-600 text-base font-medium">
-              Welcome back! Here's what's happening with SafetySense.
-            </p>
+              <Gauge class="w-8 h-8 text-white" />
+            </div>
+            <div class="space-y-1">
+              <h1
+                class="text-4xl font-bold bg-gradient-to-r from-gray-900 via-gray-800 to-gray-700 bg-clip-text text-transparent"
+              >
+                Dashboard
+              </h1>
+              <p class="text-gray-600 text-base font-medium">
+                Welcome back! Here's what's happening with SafetySense.
+              </p>
+            </div>
           </div>
+
+          <!-- RIGHT: Select + Refresh -->
           <div class="flex items-center gap-4">
             <select
               v-model="selectedTimeframe"

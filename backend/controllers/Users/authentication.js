@@ -49,17 +49,21 @@ if (!JWT_SECRET) {
 
 const loginUser = async (req, res, next) => {
   try {
-    const { email, password, fcmToken } = req.body;
+    const { email, password, fcmToken, loginSource } = req.body;
 
-    if (!email || !password) {
-      throw new BadRequestError("Invalid email and password");
+    console.log("Request body: ", req.body.loginSource);
+
+    if (!email || !password || !loginSource) {
+      throw new BadRequestError(
+        "Email, password, and login source are required"
+      );
     }
 
     const user = await User.findOne({ where: { email } });
 
     if (!user || user.isSoftDeleted()) {
       throw new NotFoundError(
-        "That email and password doesn't exists in our records."
+        "That email and password doesn't exist in our records."
       );
     }
 
@@ -76,7 +80,7 @@ const loginUser = async (req, res, next) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       throw new NotFoundError(
-        "That email and password doesn't exists in our records."
+        "That email and password doesn't exist in our records."
       );
     }
 
@@ -86,9 +90,14 @@ const loginUser = async (req, res, next) => {
       );
     }
 
-    // if (user.role === "admin" && fcmToken) {
-    //   throw new ForbiddenError("Admin shouldn't use the app.");
-    // }
+    // Role-source validation
+    if (loginSource === "web" && user.role !== "admin") {
+      throw new ForbiddenError("Only admins can log in from the web.");
+    }
+
+    if (loginSource === "app" && user.role !== "rescuer") {
+      throw new ForbiddenError("Only rescuers can log in from the app.");
+    }
 
     const accessToken = jwt.sign(
       { userId: user.id, role: user.role, isBlocked: user.isBlocked },

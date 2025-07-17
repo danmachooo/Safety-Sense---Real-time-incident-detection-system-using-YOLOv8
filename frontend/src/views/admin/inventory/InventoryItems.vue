@@ -538,40 +538,47 @@ const formatFileSize = (bytes) => {
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <!-- Header -->
       <div
-        class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8"
+        class="bg-white/80 mb-8 backdrop-blur-sm shadow-lg border-b border-gray-200/50 sticky top-0 z-10"
       >
-        <div class="mb-6 lg:mb-0">
-          <div class="flex items-center mb-2">
-            <div
-              class="p-2 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl mr-4"
-            >
-              <Package class="w-8 h-8 text-white" />
-            </div>
-            <div>
-              <h1
-                class="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent"
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div
+            class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-6 py-8"
+          >
+            <!-- Left: Icon + Title + Subtitle -->
+            <div class="flex items-center space-x-4">
+              <div
+                class="p-2 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl"
               >
-                Inventory Management
-              </h1>
-              <p class="text-gray-600 mt-1 text-lg">
-                Manage your inventory items and stock levels
-              </p>
+                <Package class="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h1
+                  class="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent"
+                >
+                  Inventory Management
+                </h1>
+                <p class="text-gray-600 mt-1 text-base font-medium">
+                  Manage your inventory items and stock levels
+                </p>
+              </div>
+            </div>
+
+            <!-- Right: Action Buttons -->
+            <div class="flex flex-col sm:flex-row gap-3">
+              <button @click="openUploadModal()" class="btn-upload group">
+                <Upload
+                  class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform duration-200"
+                />
+                Upload Excel
+              </button>
+              <button @click="openEditModal()" class="btn-primary group">
+                <PlusCircle
+                  class="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform duration-200"
+                />
+                Add New Item
+              </button>
             </div>
           </div>
-        </div>
-        <div class="flex flex-col sm:flex-row gap-3">
-          <button @click="openUploadModal()" class="btn-upload group">
-            <Upload
-              class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform duration-200"
-            />
-            Upload Excel
-          </button>
-          <button @click="openEditModal()" class="btn-primary group">
-            <PlusCircle
-              class="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform duration-200"
-            />
-            Add New Item
-          </button>
         </div>
       </div>
 

@@ -5,17 +5,7 @@ import sequelize from "../config/database.js";
 import { validateReportParams } from "../utils/reports/reportHelper.js";
 import models from "../models/index.js";
 
-const {
-  User,
-  Incident,
-  Camera,
-  InventoryItem,
-  Batch,
-  Deployment,
-  Category,
-  IncidentDismissal,
-  IncidentAcceptance,
-} = models;
+const { User, Incident, InventoryItem, Batch, Deployment, Category } = models;
 
 /**
  * Generate Inventory Summary Report
@@ -1275,7 +1265,6 @@ const generateCombinedReport = async (req, res, next) => {
     // Generate each requested report
     for (const reportType of requestedReports) {
       try {
-        let reportData;
         switch (reportType) {
           case "inventory_summary":
             const inventoryReq = { query: { startDate, endDate } };

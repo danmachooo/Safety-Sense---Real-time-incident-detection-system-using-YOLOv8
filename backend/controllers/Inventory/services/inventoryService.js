@@ -4,10 +4,78 @@ import models from "../../../models/index.js";
 import { BadRequestError } from "../../../utils/Error.js";
 const { InventoryItem, Category, Batch, Notification } = models;
 
+// Helper function to convert Excel dates
+const convertExcelDate = (excelDate) => {
+  if (!excelDate) return null;
+
+  // If it's already a Date object, return it
+  if (excelDate instanceof Date) {
+    return excelDate;
+  }
+
+  // If it's a string that looks like a date, try to parse it
+  if (typeof excelDate === "string") {
+    const parsed = new Date(excelDate);
+    // Check if it's a valid date
+    if (!isNaN(parsed.getTime())) {
+      return parsed;
+    }
+  }
+
+  // If it's a number (Excel serial date), convert it
+  if (typeof excelDate === "number") {
+    // Excel's epoch starts on January 1, 1900 (but there's a leap year bug)
+    // JavaScript's epoch starts on January 1, 1970
+    const excelEpoch = new Date(1900, 0, 1);
+    const jsDate = new Date(
+      excelEpoch.getTime() + (excelDate - 1) * 24 * 60 * 60 * 1000
+    );
+
+    // Handle Excel's leap year bug (it thinks 1900 is a leap year)
+    if (excelDate > 59) {
+      jsDate.setTime(jsDate.getTime() - 24 * 60 * 60 * 1000);
+    }
+
+    return jsDate;
+  }
+
+  return null;
+};
+
+// Alternative: Use xlsx's built-in date conversion
+const convertExcelDateBuiltIn = (excelDate) => {
+  if (!excelDate) return null;
+
+  // If it's already a Date object, return it
+  if (excelDate instanceof Date) {
+    return excelDate;
+  }
+
+  // If it's a number (Excel serial date), use xlsx's conversion
+  if (typeof excelDate === "number") {
+    return xlsx.SSF.parse_date_code(excelDate);
+  }
+
+  // If it's a string, try to parse it
+  if (typeof excelDate === "string") {
+    const parsed = new Date(excelDate);
+    if (!isNaN(parsed.getTime())) {
+      return parsed;
+    }
+  }
+
+  return null;
+};
+
 export const processExcelFile = async (filePath, userId) => {
   const workbook = xlsx.readFile(filePath);
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
+
+  // Option 1: Use raw data and convert dates manually
   const data = xlsx.utils.sheet_to_json(sheet);
+
+  // Option 2: Use cellDates option to automatically convert dates
+  // const data = xlsx.utils.sheet_to_json(sheet, { cellDates: true });
 
   const results = { success: [], errors: [] };
 
@@ -81,17 +149,20 @@ export const processExcelFile = async (filePath, userId) => {
         });
       }
 
+      // 🔧 FIXED: Convert Excel date properly
+      const expiryDate = convertExcelDate(row.expiry_date);
       // ✅ Create batch if quantity exists
       if (row.quantity !== undefined && row.quantity > 0) {
         const batchNumber = `${item.name
           .slice(0, 3)
           .toUpperCase()}${Date.now()}`;
+
         const batch = await Batch.create({
           inventory_item_id: item.id,
           quantity: row.quantity,
           batch_number: batchNumber,
           supplier: row.supplier || "Unknown",
-          expiry_date: row.expiry_date ? new Date(row.expiry_date) : null,
+          expiry_date: expiryDate,
           received_by: userId,
           received_date: new Date(),
           funding_source: row.funding_source || null,
@@ -142,6 +213,7 @@ export const processExcelFile = async (filePath, userId) => {
         quantity_added: row.quantity || 0,
         category: category.name,
         current_stock: item.quantity_in_stock,
+        expiry_date: expiryDate ? expiryDate.toISOString().split("T")[0] : null, // Add this for debugging
       });
     } catch (err) {
       console.error(`Error processing row:`, row, err.message);
@@ -151,6 +223,7 @@ export const processExcelFile = async (filePath, userId) => {
           category: row.category || "Unknown",
           unit_price: row.unit_price,
           quantity: row.quantity,
+          expiry_date: row.expiry_date, // Add this for debugging
         },
         error: err.message,
       });

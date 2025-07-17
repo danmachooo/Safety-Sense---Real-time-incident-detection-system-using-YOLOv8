@@ -19,6 +19,7 @@ import Notifications from "../views/admin/inventory/Notifications.vue";
 import ManageCamera from "../views/admin/camera/ManageCamera.vue";
 import CameraDetail from "../views/admin/camera/CameraDetail.vue";
 import ArchivedCamera from "../views/admin/camera/ArchivedCamera.vue";
+import Reports from "../views/Reports.vue";
 
 const routes = [
   {
@@ -28,7 +29,7 @@ const routes = [
       // Dashboard route - added as the default/index route
       { path: "", redirect: "dashboard" }, // Redirect /admin to /admin/dashboard
       { path: "dashboard", component: Dashboard },
-
+      { path: "reports", component: Reports },
       // User Management routes
       { path: "users/view", component: ViewUsers },
       { path: "users/create", component: CreateUser },

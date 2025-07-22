@@ -10,24 +10,60 @@ import {
   generateResponderPerformanceReport,
   generateCombinedReport,
 } from "../controllers/reportController.js";
+import authMiddleware from "../middlewares/authMiddleware.js";
+import adminMiddleware from "../middlewares/adminMiddleware.js";
 
 const router = express.Router();
 
 // Inventory Reports
-router.get("/inventory/summary", generateInventorySummaryReport);
-router.get("/inventory/deployments", generateItemDeploymentReport);
-router.get("/inventory/batch-additions", generateBatchAdditionsReport);
-router.get("/inventory/stock-movements", generateStockMovementReport);
+router.get(
+  "/inventory/summary",
+  authMiddleware,
+  adminMiddleware,
+  generateInventorySummaryReport
+);
+router.get(
+  "/inventory/deployments",
+  authMiddleware,
+  adminMiddleware,
+  generateItemDeploymentReport
+);
+router.get(
+  "/inventory/batch-additions",
+  authMiddleware,
+  adminMiddleware,
+  generateBatchAdditionsReport
+);
+router.get(
+  "/inventory/stock-movements",
+  authMiddleware,
+  adminMiddleware,
+  generateStockMovementReport
+);
 
 // Incident Reports
-router.get("/incidents/summary", generateIncidentSummaryReport);
-router.get("/incidents/top-locations", generateTopLocationsByIncidentsReport);
+router.get(
+  "/incidents/summary",
+  authMiddleware,
+  adminMiddleware,
+  generateIncidentSummaryReport
+);
+router.get(
+  "/incidents/top-locations",
+  authMiddleware,
+  adminMiddleware,
+  generateTopLocationsByIncidentsReport
+);
 router.get(
   "/incidents/resolved-vs-unresolved",
+  authMiddleware,
+  adminMiddleware,
   generateResolvedVsUnresolvedReport
 );
 router.get(
   "/incidents/responder-performance",
+  authMiddleware,
+  adminMiddleware,
   generateResponderPerformanceReport
 );
 

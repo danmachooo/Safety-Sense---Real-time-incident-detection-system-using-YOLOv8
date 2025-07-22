@@ -15,12 +15,12 @@ import {
   getMapData,
 } from "../controllers/DashboardController.js";
 
-router.get("/summary", getDashboardSummary);
-router.get("/incidents", getIncidentStats);
-router.get("/inventory", getInventoryStats);
-router.get("/deployments", getDeploymentStats);
-router.get("/users", getUserActivityStats);
-router.get("/activity", getActivityFeed);
-router.get("/map", getMapData);
+router.get("/summary", authMiddleware, getDashboardSummary);
+router.get("/incidents", authMiddleware, getIncidentStats);
+router.get("/inventory", authMiddleware, getInventoryStats);
+router.get("/deployments", authMiddleware, getDeploymentStats);
+router.get("/users", authMiddleware, getUserActivityStats);
+router.get("/activity", authMiddleware, getActivityFeed);
+router.get("/map", authMiddleware, getMapData);
 
 export default router;

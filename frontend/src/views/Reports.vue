@@ -28,7 +28,7 @@
           </div>
           <div class="flex items-center space-x-3">
             <button
-              @click="exportReport"
+              @click="showExportPreview"
               :disabled="!hasReportData || loading"
               class="inline-flex items-center px-6 py-3 border border-gray-300 rounded-xl shadow-sm text-sm font-semibold text-gray-700 bg-white hover:bg-gray-50 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:scale-105"
             >
@@ -49,6 +49,416 @@
       </div>
     </div>
 
+    <!-- Export Preview Modal -->
+    <div
+      v-if="showPreview"
+      class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      @click="closePreview"
+    >
+      <div
+        class="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+        @click.stop
+      >
+        <!-- Modal Header -->
+        <div
+          class="px-8 py-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 flex-shrink-0"
+        >
+          <div class="flex items-center justify-between">
+            <div>
+              <h2 class="text-2xl font-bold text-gray-900">Export Preview</h2>
+              <p class="text-sm text-gray-600 mt-1">
+                Choose your export format and preview the report
+              </p>
+            </div>
+            <button
+              @click="closePreview"
+              class="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+            >
+              <X class="w-6 h-6 text-gray-500" />
+            </button>
+          </div>
+
+          <!-- Format Selection -->
+          <div class="flex items-center space-x-4 mt-4">
+            <button
+              @click="selectedExportFormat = 'pdf'"
+              :class="[
+                'px-4 py-2 rounded-lg font-semibold transition-all duration-200',
+                selectedExportFormat === 'pdf'
+                  ? 'bg-red-100 text-red-800 border-2 border-red-300'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+              ]"
+            >
+              <FileText class="w-4 h-4 inline mr-2" />
+              PDF Report
+            </button>
+            <button
+              @click="selectedExportFormat = 'excel'"
+              :class="[
+                'px-4 py-2 rounded-lg font-semibold transition-all duration-200',
+                selectedExportFormat === 'excel'
+                  ? 'bg-green-100 text-green-800 border-2 border-green-300'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+              ]"
+            >
+              <Grid class="w-4 h-4 inline mr-2" />
+              Excel Report
+            </button>
+          </div>
+        </div>
+
+        <!-- Preview Content -->
+        <div class="flex-1 overflow-y-auto min-h-0">
+          <!-- PDF Preview -->
+          <div v-if="selectedExportFormat === 'pdf'" class="p-8">
+            <div
+              ref="pdfPreview"
+              class="bg-white max-w-4xl mx-auto"
+              style="min-height: 800px"
+            >
+              <!-- PDF Header -->
+              <div class="text-center mb-8 pb-6 border-b-2 border-gray-300">
+                <div class="flex items-center justify-center mb-4">
+                  <div
+                    class="p-3 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl shadow-lg mr-4"
+                  >
+                    <BarChart3 class="w-8 h-8 text-white" />
+                  </div>
+                  <h1 class="text-3xl font-bold text-gray-900">
+                    {{ getReportTitle() }}
+                  </h1>
+                </div>
+                <p class="text-gray-600 text-lg">
+                  Comprehensive Analysis & Strategic Insights
+                </p>
+                <p class="text-sm text-gray-500 mt-2">
+                  Generated on {{ formatDate(new Date()) }}
+                </p>
+              </div>
+
+              <!-- Executive Summary -->
+              <div class="mb-8">
+                <h2
+                  class="text-2xl font-bold text-gray-900 mb-4 flex items-center"
+                >
+                  <Lightbulb class="w-6 h-6 mr-3 text-yellow-600" />
+                  Executive Summary
+                </h2>
+                <div
+                  class="bg-blue-50 p-6 rounded-lg border-l-4 border-blue-500"
+                >
+                  <p class="text-gray-800 leading-relaxed mb-4">
+                    This {{ selectedPeriod.toLowerCase() }}
+                    {{
+                      selectedReportType === "combined"
+                        ? "comprehensive"
+                        : selectedReportType
+                    }}
+                    report provides detailed insights into our operational
+                    performance from
+                    {{ formatDate(reportData?.dateRange?.startDate) }} to
+                    {{ formatDate(reportData?.dateRange?.endDate) }}.
+                  </p>
+                  <p class="text-gray-800 leading-relaxed">
+                    {{ getExecutiveSummary() }}
+                  </p>
+                </div>
+              </div>
+
+              <!-- Key Performance Indicators -->
+              <div class="mb-8">
+                <h2
+                  class="text-2xl font-bold text-gray-900 mb-4 flex items-center"
+                >
+                  <Activity class="w-6 h-6 mr-3 text-green-600" />
+                  Key Performance Indicators
+                </h2>
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+                  <div
+                    v-for="metric in getKeyMetrics()"
+                    :key="metric.label"
+                    class="bg-gray-50 p-4 rounded-lg border"
+                  >
+                    <div class="text-2xl font-bold text-gray-900">
+                      {{ metric.value }}
+                    </div>
+                    <div class="text-sm font-semibold text-gray-600">
+                      {{ metric.label }}
+                    </div>
+                    <div
+                      v-if="metric.change"
+                      class="text-xs text-green-600 mt-1"
+                    >
+                      {{ metric.change }}
+                    </div>
+                  </div>
+                </div>
+                <p class="text-gray-700 leading-relaxed">
+                  {{ getKPIAnalysis() }}
+                </p>
+              </div>
+
+              <!-- Inventory Analysis (if applicable) -->
+              <div v-if="showInventoryCharts" class="mb-8">
+                <h2
+                  class="text-2xl font-bold text-gray-900 mb-4 flex items-center"
+                >
+                  <Package class="w-6 h-6 mr-3 text-blue-600" />
+                  Inventory Management Analysis
+                </h2>
+                <div class="space-y-4">
+                  <div
+                    class="bg-yellow-50 p-4 rounded-lg border-l-4 border-yellow-500"
+                  >
+                    <h3 class="font-bold text-yellow-800 mb-2">
+                      Current Status
+                    </h3>
+                    <p class="text-yellow-700">{{ getInventoryInsight() }}</p>
+                  </div>
+
+                  <div
+                    v-if="criticalItems.length > 0"
+                    class="bg-red-50 p-4 rounded-lg border-l-4 border-red-500"
+                  >
+                    <h3 class="font-bold text-red-800 mb-2">
+                      Critical Items Requiring Attention
+                    </h3>
+                    <ul class="text-red-700 space-y-1">
+                      <li
+                        v-for="item in criticalItems.slice(0, 5)"
+                        :key="item.id"
+                        class="flex justify-between"
+                      >
+                        <span>{{ item.name }}</span>
+                        <span class="font-semibold"
+                          >{{ item.quantity_in_stock }} units (Min:
+                          {{ item.min_stock_level }})</span
+                        >
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div
+                    class="bg-blue-50 p-4 rounded-lg border-l-4 border-blue-500"
+                  >
+                    <h3 class="font-bold text-blue-800 mb-2">
+                      Deployment Performance
+                    </h3>
+                    <p class="text-blue-700">{{ getDeploymentInsight() }}</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Incident Analysis (if applicable) -->
+              <div v-if="showIncidentCharts" class="mb-8">
+                <h2
+                  class="text-2xl font-bold text-gray-900 mb-4 flex items-center"
+                >
+                  <Shield class="w-6 h-6 mr-3 text-red-600" />
+                  Security & Incident Analysis
+                </h2>
+                <div class="space-y-4">
+                  <div
+                    class="bg-orange-50 p-4 rounded-lg border-l-4 border-orange-500"
+                  >
+                    <h3 class="font-bold text-orange-800 mb-2">
+                      Incident Overview
+                    </h3>
+                    <p class="text-orange-700">{{ getSecurityInsight() }}</p>
+                  </div>
+
+                  <div
+                    v-if="topIncidentLocations.length > 0"
+                    class="bg-red-50 p-4 rounded-lg border-l-4 border-red-500"
+                  >
+                    <h3 class="font-bold text-red-800 mb-2">
+                      High-Risk Locations
+                    </h3>
+                    <ul class="text-red-700 space-y-1">
+                      <li
+                        v-for="location in topIncidentLocations.slice(0, 3)"
+                        :key="location.location"
+                        class="flex justify-between"
+                      >
+                        <span>{{ location.location }}</span>
+                        <span class="font-semibold"
+                          >{{ location.incidentCount }} incidents</span
+                        >
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div
+                    class="bg-green-50 p-4 rounded-lg border-l-4 border-green-500"
+                  >
+                    <h3 class="font-bold text-green-800 mb-2">
+                      Response Performance
+                    </h3>
+                    <p class="text-green-700">{{ getPerformanceInsight() }}</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Strategic Recommendations -->
+              <div class="mb-8">
+                <h2
+                  class="text-2xl font-bold text-gray-900 mb-4 flex items-center"
+                >
+                  <TrendingUp class="w-6 h-6 mr-3 text-purple-600" />
+                  Strategic Recommendations
+                </h2>
+                <div class="space-y-4">
+                  <div
+                    class="bg-purple-50 p-4 rounded-lg border-l-4 border-purple-500"
+                  >
+                    <h3 class="font-bold text-purple-800 mb-2">
+                      Immediate Actions
+                    </h3>
+                    <ul class="text-purple-700 space-y-1 list-disc list-inside">
+                      <li v-for="action in getImmediateActions()" :key="action">
+                        {{ action }}
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div
+                    class="bg-indigo-50 p-4 rounded-lg border-l-4 border-indigo-500"
+                  >
+                    <h3 class="font-bold text-indigo-800 mb-2">
+                      Long-term Strategy
+                    </h3>
+                    <ul class="text-indigo-700 space-y-1 list-disc list-inside">
+                      <li
+                        v-for="strategy in getLongTermStrategies()"
+                        :key="strategy"
+                      >
+                        {{ strategy }}
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Conclusion -->
+              <div class="mb-8">
+                <h2
+                  class="text-2xl font-bold text-gray-900 mb-4 flex items-center"
+                >
+                  <CheckCircle class="w-6 h-6 mr-3 text-green-600" />
+                  Conclusion
+                </h2>
+                <div class="bg-gray-50 p-6 rounded-lg">
+                  <p class="text-gray-800 leading-relaxed">
+                    {{ getConclusion() }}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Excel Preview -->
+          <div v-else-if="selectedExportFormat === 'excel'" class="p-8">
+            <div class="bg-white max-w-4xl mx-auto">
+              <h3 class="text-xl font-bold text-gray-900 mb-4">
+                Excel Export Preview
+              </h3>
+              <div class="bg-green-50 p-6 rounded-lg border border-green-200">
+                <p class="text-green-800 mb-4">
+                  The Excel export will include the following sheets:
+                </p>
+                <ul class="text-green-700 space-y-2 list-disc list-inside">
+                  <li>
+                    <strong>Summary:</strong> Key metrics and performance
+                    indicators
+                  </li>
+                  <li v-if="showInventoryCharts">
+                    <strong>Inventory Data:</strong> Detailed inventory analysis
+                    and critical items
+                  </li>
+                  <li v-if="showInventoryCharts">
+                    <strong>Deployments:</strong> Recent deployments and
+                    location analysis
+                  </li>
+                  <li v-if="showIncidentCharts">
+                    <strong>Incidents:</strong> Incident data and location
+                    breakdown
+                  </li>
+                  <li>
+                    <strong>Recommendations:</strong> Strategic insights and
+                    action items
+                  </li>
+                </ul>
+                <div class="mt-4 p-4 bg-white rounded border">
+                  <h4 class="font-semibold text-gray-900 mb-2">
+                    Sample Data Structure:
+                  </h4>
+                  <table class="min-w-full text-sm">
+                    <thead class="bg-gray-100">
+                      <tr>
+                        <th class="px-3 py-2 text-left">Metric</th>
+                        <th class="px-3 py-2 text-left">Value</th>
+                        <th class="px-3 py-2 text-left">Change</th>
+                        <th class="px-3 py-2 text-left">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr
+                        v-for="metric in getKeyMetrics().slice(0, 3)"
+                        :key="metric.label"
+                        class="border-t"
+                      >
+                        <td class="px-3 py-2">{{ metric.label }}</td>
+                        <td class="px-3 py-2">{{ metric.value }}</td>
+                        <td class="px-3 py-2">{{ metric.change || "N/A" }}</td>
+                        <td class="px-3 py-2">
+                          <span
+                            class="px-2 py-1 bg-green-100 text-green-800 rounded text-xs"
+                            >Good</span
+                          >
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div
+          class="px-8 py-6 border-t border-gray-200 bg-gray-50 flex justify-between items-center flex-shrink-0"
+        >
+          <div class="text-sm text-gray-600">
+            <span v-if="selectedExportFormat === 'pdf'"
+              >PDF will be optimized for printing and sharing</span
+            >
+            <span v-else
+              >Excel file will include multiple sheets with detailed data</span
+            >
+          </div>
+          <div class="flex space-x-3">
+            <button
+              @click="closePreview"
+              class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors duration-200"
+            >
+              Cancel
+            </button>
+            <button
+              @click="downloadReport"
+              :disabled="exportLoading"
+              class="px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 disabled:opacity-50"
+            >
+              <span v-if="exportLoading">Generating...</span>
+              <span v-else
+                >Download {{ selectedExportFormat.toUpperCase() }}</span
+              >
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Enhanced Configuration Panel -->
     <div class="px-6 py-8">
       <div
@@ -62,7 +472,6 @@
           </div>
           <h2 class="text-xl font-bold text-gray-900">Report Configuration</h2>
         </div>
-
         <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
           <!-- Enhanced Time Period Selection -->
           <div class="space-y-3">
@@ -79,7 +488,6 @@
               <option value="yearly">📈 Yearly Report</option>
             </select>
           </div>
-
           <!-- Enhanced Report Type Selection -->
           <div class="space-y-3">
             <label class="block text-sm font-semibold text-gray-800 mb-3">
@@ -95,7 +503,6 @@
               <option value="incidents">🚨 Incident Reports</option>
             </select>
           </div>
-
           <!-- Enhanced Date Range -->
           <div class="space-y-3">
             <label class="block text-sm font-semibold text-gray-800 mb-3">
@@ -117,7 +524,6 @@
           </div>
         </div>
       </div>
-
       <!-- Error State -->
       <div
         v-if="error && !loading"
@@ -151,7 +557,6 @@
           </div>
         </div>
       </div>
-
       <!-- Enhanced Loading State -->
       <div
         v-if="loading"
@@ -188,7 +593,6 @@
           </div>
         </div>
       </div>
-
       <!-- Enhanced Report Content -->
       <div v-else-if="hasReportData" class="space-y-8">
         <!-- Enhanced Report Summary -->
@@ -220,7 +624,6 @@
               >
             </div>
           </div>
-
           <!-- Enhanced Key Metrics Grid -->
           <div
             class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8"
@@ -272,7 +675,6 @@
             </div>
           </div>
         </div>
-
         <!-- Enhanced Charts Section -->
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
           <!-- Enhanced Inventory Chart -->
@@ -298,7 +700,6 @@
                 <RefreshCw class="w-4 h-4 text-gray-500" />
               </button>
             </div>
-
             <div
               v-if="inventoryData?.itemsByCategory?.length > 0"
               class="h-80 mb-6 relative"
@@ -316,7 +717,6 @@
                 </p>
               </div>
             </div>
-
             <div class="grid grid-cols-3 gap-4 text-center">
               <div
                 class="p-3 bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors duration-200"
@@ -359,7 +759,6 @@
               </div>
             </div>
           </div>
-
           <!-- Enhanced Incident Chart -->
           <div
             v-if="showIncidentCharts"
@@ -383,7 +782,6 @@
                 <RefreshCw class="w-4 h-4 text-gray-500" />
               </button>
             </div>
-
             <div
               v-if="incidentData?.incidentsByType?.length > 0"
               class="h-80 mb-6 relative"
@@ -401,7 +799,6 @@
                 </p>
               </div>
             </div>
-
             <div class="grid grid-cols-3 gap-4 text-center">
               <div
                 class="p-3 bg-red-50 rounded-xl hover:bg-red-100 transition-colors duration-200"
@@ -444,7 +841,6 @@
               </div>
             </div>
           </div>
-
           <!-- Enhanced Deployment Chart -->
           <div
             v-if="showInventoryCharts"
@@ -468,7 +864,6 @@
                 <RefreshCw class="w-4 h-4 text-gray-500" />
               </button>
             </div>
-
             <div
               v-if="deploymentData?.topLocations?.length > 0"
               class="h-80 mb-6 relative"
@@ -486,7 +881,6 @@
                 </p>
               </div>
             </div>
-
             <div class="grid grid-cols-3 gap-4 text-center">
               <div
                 class="p-3 bg-purple-50 rounded-xl hover:bg-purple-100 transition-colors duration-200"
@@ -529,7 +923,6 @@
               </div>
             </div>
           </div>
-
           <!-- Enhanced Stock Movement Chart -->
           <div
             v-if="showInventoryCharts"
@@ -553,7 +946,6 @@
                 <RefreshCw class="w-4 h-4 text-gray-500" />
               </button>
             </div>
-
             <div
               v-if="stockMovementData?.movementSummary?.length > 0"
               class="h-80"
@@ -572,7 +964,6 @@
               </div>
             </div>
           </div>
-
           <!-- Enhanced Performance Chart -->
           <div
             v-if="showIncidentCharts"
@@ -596,7 +987,6 @@
                 <RefreshCw class="w-4 h-4 text-gray-500" />
               </button>
             </div>
-
             <div v-if="incidentData?.incidentsByTime?.length > 0" class="h-80">
               <canvas ref="performanceChart" class="rounded-xl"></canvas>
             </div>
@@ -612,7 +1002,6 @@
               </div>
             </div>
           </div>
-
           <!-- Enhanced Deployment Status Chart -->
           <div
             v-if="showInventoryCharts"
@@ -636,7 +1025,6 @@
                 <RefreshCw class="w-4 h-4 text-gray-500" />
               </button>
             </div>
-
             <div
               v-if="deploymentData?.deploymentStats?.length > 0"
               class="h-80"
@@ -656,7 +1044,6 @@
             </div>
           </div>
         </div>
-
         <!-- Enhanced Tables Section -->
         <div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
           <!-- Enhanced Critical Items Table -->
@@ -686,7 +1073,6 @@
                 </div>
               </div>
             </div>
-
             <div
               v-if="criticalItems.length > 0"
               class="overflow-x-auto max-h-96"
@@ -764,7 +1150,6 @@
               </p>
             </div>
           </div>
-
           <!-- Enhanced Recent Deployments Table -->
           <div
             v-if="showInventoryCharts"
@@ -792,7 +1177,6 @@
                 </div>
               </div>
             </div>
-
             <div
               v-if="recentDeployments.length > 0"
               class="overflow-x-auto max-h-96"
@@ -877,7 +1261,6 @@
               <p class="text-gray-500 font-medium">No recent deployments</p>
             </div>
           </div>
-
           <!-- Enhanced High-Risk Locations Table -->
           <div
             v-if="showIncidentCharts"
@@ -905,7 +1288,6 @@
                 </div>
               </div>
             </div>
-
             <div
               v-if="topIncidentLocations.length > 0"
               class="overflow-x-auto max-h-96"
@@ -983,7 +1365,6 @@
             </div>
           </div>
         </div>
-
         <!-- Enhanced Insights Section -->
         <div
           class="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/50 p-8"
@@ -1012,7 +1393,6 @@
                 {{ getInventoryInsight() }}
               </p>
             </div>
-
             <div
               class="group p-6 bg-gradient-to-br from-purple-50 to-indigo-50 rounded-2xl border-2 border-purple-100 hover:border-purple-300 transition-all duration-300 hover:shadow-lg"
             >
@@ -1026,7 +1406,6 @@
                 {{ getDeploymentInsight() }}
               </p>
             </div>
-
             <div
               class="group p-6 bg-gradient-to-br from-orange-50 to-red-50 rounded-2xl border-2 border-orange-100 hover:border-orange-300 transition-all duration-300 hover:shadow-lg"
             >
@@ -1040,7 +1419,6 @@
                 {{ getSecurityInsight() }}
               </p>
             </div>
-
             <div
               class="group p-6 bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl border-2 border-green-100 hover:border-green-300 transition-all duration-300 hover:shadow-lg"
             >
@@ -1055,7 +1433,6 @@
           </div>
         </div>
       </div>
-
       <!-- Enhanced Empty State -->
       <div
         v-else
@@ -1124,6 +1501,9 @@ import {
   Grid,
 } from "lucide-vue-next";
 import Chart from "chart.js/auto";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
+import * as XLSX from "xlsx";
 import api from "../utils/axios";
 
 // Reactive state
@@ -1143,6 +1523,12 @@ const responderData = ref(null);
 const topIncidentLocations = ref([]);
 const criticalItems = ref([]);
 const recentDeployments = ref([]);
+
+// Export preview state
+const showPreview = ref(false);
+const selectedExportFormat = ref("pdf");
+const exportLoading = ref(false);
+const pdfPreview = ref(null);
 
 // Chart refs
 const inventoryChart = ref(null);
@@ -1176,6 +1562,612 @@ const showIncidentCharts = computed(() => {
     selectedReportType.value === "incidents"
   );
 });
+
+// Export preview functions
+const showExportPreview = () => {
+  if (!hasReportData.value) return;
+  showPreview.value = true;
+};
+
+const closePreview = () => {
+  showPreview.value = false;
+  selectedExportFormat.value = "pdf";
+};
+
+const downloadReport = async () => {
+  exportLoading.value = true;
+  try {
+    if (selectedExportFormat.value === "pdf") {
+      await generatePDFReport();
+    } else if (selectedExportFormat.value === "excel") {
+      await generateExcelReport();
+    }
+  } catch (error) {
+    console.error("Export error:", error);
+    alert("Failed to generate report. Please try again.");
+  } finally {
+    exportLoading.value = false;
+  }
+};
+
+// Enhanced PDF Report Generation Functions - Fixed Version with Smart Breaks
+const generatePDFReport = async () => {
+  if (!pdfPreview.value) return;
+
+  const pdf = new jsPDF("p", "mm", "a4");
+  const pageWidth = 210; // A4 width in mm
+  const pageHeight = 297; // A4 height in mm
+  const margin = 15; // 15mm margins
+  const contentWidth = pageWidth - 2 * margin; // Width for content
+  const contentHeight = pageHeight - 2 * margin; // Height for content
+  const headerHeight = 20; // Reserve space for headers
+  const footerHeight = 15; // Reserve space for footers
+  const usableHeight = contentHeight - headerHeight - footerHeight;
+
+  try {
+    // Capture the content as canvas with higher quality - SAME AS ORIGINAL
+    const canvas = await html2canvas(pdfPreview.value, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: "#ffffff",
+      logging: false,
+      height: pdfPreview.value.scrollHeight,
+      windowHeight: pdfPreview.value.scrollHeight,
+    });
+
+    const imgData = canvas.toDataURL("image/png");
+    const imgWidth = contentWidth;
+    const imgHeight = (canvas.height * contentWidth) / canvas.width;
+
+    // Convert usable height to canvas pixels for accurate calculations
+    const usableHeightInPixels = (usableHeight * canvas.width) / contentWidth;
+
+    // Calculate how many pages we need
+    const totalPages = Math.ceil(imgHeight / usableHeight);
+
+    // Smart break detection - find good cut points
+    const breakPoints = findSmartBreakPoints(
+      canvas,
+      usableHeightInPixels,
+      totalPages
+    );
+
+    // Add content page by page - KEEPING ORIGINAL STRUCTURE
+    for (let pageNum = 0; pageNum < totalPages; pageNum++) {
+      if (pageNum > 0) {
+        pdf.addPage();
+      }
+
+      // Add header to each page - SAME AS ORIGINAL
+      pdf.setFontSize(10);
+      pdf.setTextColor(100, 100, 100);
+      pdf.text(getReportTitle(), margin, margin + 5);
+      pdf.text(
+        `Generated: ${formatDate(new Date())}`,
+        pageWidth - margin - 50,
+        margin + 5
+      );
+
+      // Draw header line - SAME AS ORIGINAL
+      pdf.setDrawColor(200, 200, 200);
+      pdf.line(margin, margin + 8, pageWidth - margin, margin + 8);
+
+      // Calculate the portion of image for this page using smart breaks
+      let sourceY, sourceHeight;
+
+      if (pageNum === 0) {
+        // First page
+        sourceY = 0;
+        sourceHeight = breakPoints[0];
+      } else if (pageNum === totalPages - 1) {
+        // Last page
+        sourceY = breakPoints[pageNum - 1];
+        sourceHeight = canvas.height - sourceY;
+      } else {
+        // Middle pages
+        sourceY = breakPoints[pageNum - 1];
+        sourceHeight = breakPoints[pageNum] - sourceY;
+      }
+
+      // Ensure we don't exceed canvas bounds
+      sourceHeight = Math.min(sourceHeight, canvas.height - sourceY);
+
+      // Only add image if there's content to show
+      if (sourceHeight > 0) {
+        // Create a temporary canvas for this page's content - SAME AS ORIGINAL
+        const pageCanvas = document.createElement("canvas");
+        const pageCtx = pageCanvas.getContext("2d");
+
+        // Set canvas dimensions to match the slice we want
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = Math.ceil(sourceHeight);
+
+        // Fill with white background to avoid transparency issues
+        pageCtx.fillStyle = "#ffffff";
+        pageCtx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+
+        // Draw the portion of the original canvas for this page
+        pageCtx.drawImage(
+          canvas,
+          0, // source x
+          sourceY, // source y
+          canvas.width, // source width
+          sourceHeight, // source height
+          0, // destination x
+          0, // destination y
+          canvas.width, // destination width
+          sourceHeight // destination height
+        );
+
+        const pageImgData = pageCanvas.toDataURL("image/png");
+
+        // Calculate the height in mm for this page's content
+        const pageImgHeightMM = (sourceHeight * contentWidth) / canvas.width;
+
+        // Add the image to PDF with proper positioning - SAME AS ORIGINAL
+        pdf.addImage(
+          pageImgData,
+          "PNG",
+          margin,
+          margin + headerHeight,
+          imgWidth,
+          pageImgHeightMM
+        );
+
+        // Clean up the temporary canvas
+        pageCanvas.remove();
+      }
+
+      // Add footer to each page - SAME AS ORIGINAL
+      const footerY = pageHeight - margin - 5;
+      pdf.setFontSize(8);
+      pdf.setTextColor(150, 150, 150);
+
+      // Draw footer line
+      pdf.line(margin, footerY - 5, pageWidth - margin, footerY - 5);
+
+      // Page number and confidentiality notice
+      pdf.text(`Page ${pageNum + 1} of ${totalPages}`, margin, footerY);
+      pdf.text("Confidential Report", pageWidth - margin - 30, footerY);
+
+      // Add company/system identifier
+      pdf.text("Generated by Reports & Analytics System", margin, footerY + 4);
+    }
+
+    // Generate filename with timestamp - SAME AS ORIGINAL
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/[:.]/g, "-")
+      .split("T")[0];
+    const fileName = `${getReportTitle().replace(
+      /\s+/g,
+      "_"
+    )}_${timestamp}.pdf`;
+
+    // Save the PDF - SAME AS ORIGINAL
+    pdf.save(fileName);
+    closePreview();
+  } catch (error) {
+    console.error("PDF generation error:", error);
+    throw new Error("Failed to generate PDF. Please try again.");
+  }
+};
+
+// Helper function to find smart break points
+function findSmartBreakPoints(canvas, usableHeightInPixels, totalPages) {
+  const breakPoints = [];
+  const ctx = canvas.getContext("2d");
+  const searchBuffer = 30; // pixels to search around ideal break point
+
+  for (let page = 1; page < totalPages; page++) {
+    const idealBreak = page * usableHeightInPixels;
+    let bestBreak = idealBreak;
+    let bestScore = 0;
+
+    // Search around the ideal break point for better locations
+    const searchStart = Math.max(0, idealBreak - searchBuffer);
+    const searchEnd = Math.min(canvas.height, idealBreak + searchBuffer);
+
+    for (let y = searchStart; y < searchEnd; y += 2) {
+      const score = calculateBreakScore(ctx, y, canvas.width);
+      if (score > bestScore) {
+        bestScore = score;
+        bestBreak = y;
+      }
+    }
+
+    breakPoints.push(bestBreak);
+  }
+
+  return breakPoints;
+}
+
+// Calculate how good a particular Y position is for a page break
+function calculateBreakScore(ctx, y, width) {
+  if (y <= 0 || y >= ctx.canvas.height - 1) return 0;
+
+  let score = 0;
+  const sampleWidth = Math.min(width, 200); // Sample a portion of the width
+
+  try {
+    // Sample the current line
+    const currentLine = ctx.getImageData(0, y, sampleWidth, 1);
+    const currentPixels = currentLine.data;
+
+    // Sample lines above and below
+    const aboveLine = ctx.getImageData(0, Math.max(0, y - 1), sampleWidth, 1);
+    const belowLine = ctx.getImageData(
+      0,
+      Math.min(ctx.canvas.height - 1, y + 1),
+      sampleWidth,
+      1
+    );
+    const abovePixels = aboveLine.data;
+    const belowPixels = belowLine.data;
+
+    let whitePixels = 0;
+    let totalPixels = currentPixels.length / 4;
+
+    // Check for white/light pixels (good for breaking)
+    for (let i = 0; i < currentPixels.length; i += 4) {
+      const r = currentPixels[i];
+      const g = currentPixels[i + 1];
+      const b = currentPixels[i + 2];
+
+      // Consider pixel "white" if it's light
+      if (r > 240 && g > 240 && b > 240) {
+        whitePixels++;
+      }
+    }
+
+    // Higher score for more white pixels (empty space)
+    score += (whitePixels / totalPixels) * 100;
+
+    // Check for horizontal lines or borders (often good break points)
+    let horizontalLineScore = 0;
+    for (let i = 0; i < currentPixels.length; i += 4) {
+      const currentGray =
+        (currentPixels[i] + currentPixels[i + 1] + currentPixels[i + 2]) / 3;
+      const aboveGray =
+        (abovePixels[i] + abovePixels[i + 1] + abovePixels[i + 2]) / 3;
+      const belowGray =
+        (belowPixels[i] + belowPixels[i + 1] + belowPixels[i + 2]) / 3;
+
+      // Look for contrast indicating borders or separators
+      if (
+        Math.abs(currentGray - aboveGray) > 50 ||
+        Math.abs(currentGray - belowGray) > 50
+      ) {
+        horizontalLineScore++;
+      }
+    }
+
+    score += (horizontalLineScore / totalPixels) * 50;
+
+    // Bonus for consistent horizontal patterns (like table borders)
+    let patternBonus = 0;
+    for (let i = 0; i < currentPixels.length - 12; i += 12) {
+      const pixel1Gray =
+        (currentPixels[i] + currentPixels[i + 1] + currentPixels[i + 2]) / 3;
+      const pixel2Gray =
+        (currentPixels[i + 12] +
+          currentPixels[i + 13] +
+          currentPixels[i + 14]) /
+        3;
+
+      if (Math.abs(pixel1Gray - pixel2Gray) < 20) {
+        patternBonus++;
+      }
+    }
+    score += (patternBonus / (totalPixels / 4)) * 20;
+  } catch (error) {
+    // If there's an error reading pixels, return low score
+    return 0;
+  }
+
+  return score;
+}
+// Enhanced Excel report generation with better formatting
+const generateExcelReport = () => {
+  const workbook = XLSX.utils.book_new();
+
+  // Enhanced Summary Sheet
+  const summaryData = [
+    ["COMPREHENSIVE REPORT SUMMARY"],
+    [""],
+    ["Report Information", ""],
+    ["Title", getReportTitle()],
+    ["Generated On", formatDate(new Date())],
+    ["Report Period", selectedPeriod.value.toUpperCase()],
+    ["Report Type", selectedReportType.value.toUpperCase()],
+    ["Date Range", `${customStartDate.value} to ${customEndDate.value}`],
+    [""],
+    ["Executive Summary", ""],
+    [getExecutiveSummary().substring(0, 500) + "..."],
+    [""],
+    ["Key Performance Metrics", "Metric", "Value", "Change", "Status"],
+    ...getKeyMetrics().map((metric) => [
+      "",
+      metric.label,
+      metric.value,
+      metric.change || "N/A",
+      metric.trend === "up" ? "↑" : metric.trend === "down" ? "↓" : "-",
+    ]),
+  ];
+
+  const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
+
+  // Set column widths
+  summarySheet["!cols"] = [
+    { wch: 25 },
+    { wch: 20 },
+    { wch: 15 },
+    { wch: 15 },
+    { wch: 10 },
+  ];
+
+  XLSX.utils.book_append_sheet(workbook, summarySheet, "Executive Summary");
+
+  // Enhanced Inventory Sheet (if applicable)
+  if (showInventoryCharts.value && criticalItems.value.length > 0) {
+    const inventoryData = [
+      ["CRITICAL INVENTORY ITEMS"],
+      ["Items requiring immediate attention"],
+      [""],
+      [
+        "Item Name",
+        "Category",
+        "Current Stock",
+        "Minimum Level",
+        "Shortage",
+        "Status",
+        "Priority",
+      ],
+      ...criticalItems.value.map((item) => [
+        item.name || "N/A",
+        item.category?.name || "Unknown",
+        item.quantity_in_stock || 0,
+        item.min_stock_level || 0,
+        Math.max(
+          0,
+          (item.min_stock_level || 0) - (item.quantity_in_stock || 0)
+        ),
+        "REORDER REQUIRED",
+        (item.quantity_in_stock || 0) === 0 ? "CRITICAL" : "HIGH",
+      ]),
+    ];
+
+    const inventorySheet = XLSX.utils.aoa_to_sheet(inventoryData);
+    inventorySheet["!cols"] = [
+      { wch: 25 },
+      { wch: 15 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 10 },
+      { wch: 18 },
+      { wch: 10 },
+    ];
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      inventorySheet,
+      "Critical Inventory"
+    );
+  }
+
+  // Enhanced Deployments Sheet (if applicable)
+  if (showInventoryCharts.value && recentDeployments.value.length > 0) {
+    const deploymentData = [
+      ["RECENT DEPLOYMENTS"],
+      ["Latest deployment activities"],
+      [""],
+      ["Item", "Location", "Quantity", "Status", "Date", "Time", "Notes"],
+      ...recentDeployments.value.map((deployment) => {
+        const deploymentDate = new Date(deployment.created_at);
+        return [
+          deployment.inventoryItem?.name || "N/A",
+          deployment.deployment_location || "Unknown",
+          deployment.quantity_deployed || 0,
+          deployment.status || "Pending",
+          deploymentDate.toLocaleDateString(),
+          deploymentDate.toLocaleTimeString(),
+          `Deployed by system on ${deploymentDate.toDateString()}`,
+        ];
+      }),
+    ];
+
+    const deploymentSheet = XLSX.utils.aoa_to_sheet(deploymentData);
+    deploymentSheet["!cols"] = [
+      { wch: 20 },
+      { wch: 20 },
+      { wch: 10 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 30 },
+    ];
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      deploymentSheet,
+      "Recent Deployments"
+    );
+  }
+
+  // Enhanced Incidents Sheet (if applicable)
+  if (showIncidentCharts.value && topIncidentLocations.value.length > 0) {
+    const incidentData = [
+      ["HIGH-RISK LOCATIONS"],
+      ["Locations with significant incident activity"],
+      [""],
+      [
+        "Location",
+        "Total Incidents",
+        "Primary Type",
+        "Risk Level",
+        "Recommendation",
+      ],
+      ...topIncidentLocations.value.map((location) => [
+        location.location || "Unknown",
+        location.incidentCount || 0,
+        getPrimaryIncidentType(location.incidentTypes),
+        getRiskLevel(location.incidentCount),
+        location.incidentCount >= 10
+          ? "IMMEDIATE ATTENTION REQUIRED"
+          : location.incidentCount >= 5
+          ? "Enhanced monitoring recommended"
+          : "Continue standard protocols",
+      ]),
+    ];
+
+    const incidentSheet = XLSX.utils.aoa_to_sheet(incidentData);
+    incidentSheet["!cols"] = [
+      { wch: 25 },
+      { wch: 15 },
+      { wch: 15 },
+      { wch: 12 },
+      { wch: 35 },
+    ];
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      incidentSheet,
+      "High-Risk Locations"
+    );
+  }
+
+  // Enhanced Recommendations Sheet
+  const recommendationsData = [
+    ["STRATEGIC RECOMMENDATIONS"],
+    ["Action items and strategic initiatives"],
+    [""],
+    ["Priority", "Category", "Recommendation", "Timeline", "Impact"],
+    ["HIGH", "Immediate Actions", "", "", ""],
+    ...getImmediateActions().map((action, index) => [
+      "HIGH",
+      "Immediate",
+      action,
+      "0-30 days",
+      "Critical",
+    ]),
+    ["", "", "", "", ""],
+    ["MEDIUM", "Long-term Strategy", "", "", ""],
+    ...getLongTermStrategies().map((strategy, index) => [
+      "MEDIUM",
+      "Strategic",
+      strategy,
+      "3-12 months",
+      "Significant",
+    ]),
+  ];
+
+  const recommendationsSheet = XLSX.utils.aoa_to_sheet(recommendationsData);
+  recommendationsSheet["!cols"] = [
+    { wch: 10 },
+    { wch: 18 },
+    { wch: 50 },
+    { wch: 15 },
+    { wch: 12 },
+  ];
+
+  XLSX.utils.book_append_sheet(
+    workbook,
+    recommendationsSheet,
+    "Recommendations"
+  );
+
+  // Save the workbook
+  const fileName = `${getReportTitle().replace(/\s+/g, "_")}_${
+    new Date().toISOString().split("T")[0]
+  }.xlsx`;
+  XLSX.writeFile(workbook, fileName);
+
+  closePreview();
+};
+// Narrative content functions
+const getExecutiveSummary = () => {
+  const metrics = getKeyMetrics();
+  const totalItems = metrics.find((m) => m.label === "Total Items")?.value || 0;
+  const incidents =
+    metrics.find((m) => m.label === "Total Incidents")?.value || 0;
+
+  return `During this reporting period, our operations maintained ${totalItems} inventory items with ${incidents} security incidents recorded. 
+  ${getInventoryInsight()} ${getSecurityInsight()} Overall performance indicators suggest ${getPerformanceStatus()} operational efficiency.`;
+};
+
+const getKPIAnalysis = () => {
+  const metrics = getKeyMetrics();
+  const analysis = [];
+
+  if (showInventoryCharts.value) {
+    analysis.push(
+      "Inventory management shows stable performance with proactive monitoring of stock levels."
+    );
+  }
+
+  if (showIncidentCharts.value) {
+    analysis.push(
+      "Security incident response times remain within acceptable parameters."
+    );
+  }
+
+  analysis.push(
+    "Key performance indicators demonstrate consistent operational excellence across all measured areas."
+  );
+
+  return analysis.join(" ");
+};
+
+const getImmediateActions = () => {
+  const actions = [];
+
+  if (criticalItems.value.length > 0) {
+    actions.push(
+      `Restock ${criticalItems.value.length} critical inventory items immediately`
+    );
+  }
+
+  if (topIncidentLocations.value.length > 0) {
+    actions.push(
+      `Implement enhanced security measures at ${topIncidentLocations.value[0]?.location}`
+    );
+  }
+
+  actions.push("Review and update standard operating procedures");
+  actions.push("Conduct team performance assessment");
+
+  return actions;
+};
+
+const getLongTermStrategies = () => {
+  return [
+    "Implement predictive analytics for inventory management",
+    "Develop comprehensive risk assessment protocols",
+    "Establish automated monitoring and alert systems",
+    "Create cross-training programs for operational resilience",
+    "Invest in advanced security infrastructure",
+  ];
+};
+
+const getConclusion = () => {
+  return `This ${selectedPeriod.value.toLowerCase()} analysis demonstrates our commitment to operational excellence and continuous improvement. 
+  The data reveals both strengths in our current processes and opportunities for enhancement. By implementing the recommended actions, 
+  we can further optimize our operations, reduce risks, and improve overall efficiency. Regular monitoring and assessment will ensure 
+  we maintain high standards while adapting to evolving operational requirements.`;
+};
+
+const getPerformanceStatus = () => {
+  const metrics = getKeyMetrics();
+  const positiveChanges = metrics.filter(
+    (m) => m.change && m.change.includes("+")
+  ).length;
+  const totalMetrics = metrics.filter((m) => m.change).length;
+
+  if (positiveChanges > totalMetrics / 2) return "strong";
+  if (positiveChanges === totalMetrics / 2) return "stable";
+  return "improving";
+};
 
 // Enhanced utility functions for styling
 const getMetricGradient = (index) => {
@@ -1232,10 +2224,6 @@ const retryGeneration = () => {
 };
 
 const refreshChart = (chartType) => {
-  // Refresh specific chart
-  //   if (chartInstances.value[chartType]) {
-  //     chartInstances.value[chartType].update();
-  //   }
   console.log("Refreshed Chart Clicked!");
 };
 
@@ -1257,10 +2245,8 @@ const getDateRange = () => {
       endDate: customEndDate.value,
     };
   }
-
   const now = new Date();
   let startDate, endDate;
-
   switch (selectedPeriod.value) {
     case "weekly":
       startDate = new Date(now.setDate(now.getDate() - 7));
@@ -1276,7 +2262,6 @@ const getDateRange = () => {
       endDate = new Date();
       break;
   }
-
   return {
     startDate: startDate.toISOString().split("T")[0],
     endDate: endDate.toISOString().split("T")[0],
@@ -1297,7 +2282,6 @@ const getReportTitle = () => {
 
 const getKeyMetrics = () => {
   const metrics = [];
-
   if (showInventoryCharts.value && inventoryData.value) {
     metrics.push({
       label: "Total Items",
@@ -1316,7 +2300,6 @@ const getKeyMetrics = () => {
       change: "-2.1%",
     });
   }
-
   if (showInventoryCharts.value && deploymentData.value) {
     metrics.push({
       label: "Total Deployments",
@@ -1327,7 +2310,6 @@ const getKeyMetrics = () => {
       change: "+12.3%",
     });
   }
-
   if (showIncidentCharts.value && incidentData.value) {
     metrics.push({
       label: "Total Incidents",
@@ -1346,7 +2328,6 @@ const getKeyMetrics = () => {
       change: "-15.4%",
     });
   }
-
   return metrics;
 };
 
@@ -1402,10 +2383,8 @@ const getDeploymentStatusClass = (status) => {
 // Insight functions
 const getInventoryInsight = () => {
   if (!inventoryData.value) return "No inventory data available.";
-
   const lowStockCount = inventoryData.value.summary?.totalLowStockItems || 0;
   const totalItems = inventoryData.value.summary?.totalItems || 0;
-
   if (lowStockCount === 0) {
     return "All inventory items are adequately stocked. Maintain current procurement schedule.";
   } else if (lowStockCount > totalItems * 0.2) {
@@ -1417,11 +2396,9 @@ const getInventoryInsight = () => {
 
 const getDeploymentInsight = () => {
   if (!deploymentData.value) return "No deployment data available.";
-
   const totalDeployments = deploymentData.value.summary?.totalDeployments || 0;
   const totalQuantity =
     deploymentData.value.summary?.totalQuantityDeployed || 0;
-
   if (totalDeployments === 0) {
     return "No deployments recorded during this period. Consider reviewing deployment schedules.";
   } else if (totalQuantity > 100) {
@@ -1433,10 +2410,8 @@ const getDeploymentInsight = () => {
 
 const getSecurityInsight = () => {
   if (!incidentData.value) return "No incident data available.";
-
   const totalIncidents = incidentData.value.summary?.totalIncidents || 0;
   const avgResponseTime = incidentData.value.summary?.avgResponseTime || 0;
-
   if (totalIncidents === 0) {
     return "No security incidents reported during this period. Continue monitoring protocols.";
   } else if (avgResponseTime > 30) {
@@ -1452,9 +2427,7 @@ const getSecurityInsight = () => {
 
 const getPerformanceInsight = () => {
   if (!responderData.value) return "Performance data being analyzed.";
-
   const avgResolutionRate = responderData.value.summary?.avgResolutionRate || 0;
-
   if (avgResolutionRate > 85) {
     return "Excellent team performance. Current protocols are highly effective.";
   } else if (avgResolutionRate > 70) {
@@ -1622,26 +2595,21 @@ const fetchIncidentReports = async (dateRange) => {
 const generateReport = async () => {
   loading.value = true;
   error.value = null;
-
   try {
     const dateRange = getDateRange();
-
     if (
       selectedReportType.value === "combined" ||
       selectedReportType.value === "inventory"
     ) {
       await fetchInventoryReports(dateRange);
     }
-
     if (
       selectedReportType.value === "combined" ||
       selectedReportType.value === "incidents"
     ) {
       await fetchIncidentReports(dateRange);
     }
-
     loadingStep.value = "generating charts";
-
     reportData.value = {
       generatedAt: new Date(),
       period: selectedPeriod.value,
@@ -2089,18 +3057,15 @@ onMounted(() => {
 .overflow-x-auto::-webkit-scrollbar {
   height: 8px;
 }
-
 .overflow-x-auto::-webkit-scrollbar-track {
   background: linear-gradient(90deg, #f1f5f9, #e2e8f0);
   border-radius: 4px;
 }
-
 .overflow-x-auto::-webkit-scrollbar-thumb {
   background: linear-gradient(90deg, #cbd5e1, #94a3b8);
   border-radius: 4px;
   border: 1px solid #e2e8f0;
 }
-
 .overflow-x-auto::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(90deg, #94a3b8, #64748b);
 }
@@ -2116,7 +3081,6 @@ onMounted(() => {
     transform: translateY(0);
   }
 }
-
 @keyframes countUp {
   from {
     opacity: 0;
@@ -2127,11 +3091,9 @@ onMounted(() => {
     transform: scale(1);
   }
 }
-
 .animate-fadeInUp {
   animation: fadeInUp 0.6s ease-out forwards;
 }
-
 .animate-countUp {
   animation: countUp 0.8s ease-out forwards;
 }
@@ -2157,7 +3119,6 @@ onMounted(() => {
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
     0 10px 10px -5px rgba(0, 0, 0, 0.04);
 }
-
 .shadow-2xl {
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
 }
@@ -2172,7 +3133,6 @@ onMounted(() => {
     opacity: 0.5;
   }
 }
-
 .animate-pulse {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }

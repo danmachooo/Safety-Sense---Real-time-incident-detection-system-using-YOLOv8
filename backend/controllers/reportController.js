@@ -4,7 +4,7 @@ import { StatusCodes } from "http-status-codes";
 import sequelize from "../config/database.js";
 import { validateReportParams } from "../utils/reports/reportHelper.js";
 import models from "../models/index.js";
-
+import axios from "axios";
 const { User, Incident, InventoryItem, Batch, Deployment, Category } = models;
 
 /**
@@ -788,6 +788,485 @@ const generateTopLocationsByIncidentsReport = async (req, res, next) => {
 
     const { startDate, endDate, incidentType, limit = 10 } = req.query;
 
+    // Socorro Municipality Barangay Database
+    const getSocorroLocation = (lat, lng) => {
+      const numLat = parseFloat(lat);
+      const numLng = parseFloat(lng);
+
+      // Define Socorro barangays with their approximate boundaries
+      // Socorro is located at approximately 121°20' longitude and 13°03' latitude
+      const socorroBarangays = [
+        // Central/Poblacion area
+        {
+          name: "Zone I",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 13.045,
+            maxLat: 13.055,
+            minLng: 121.33,
+            maxLng: 121.34,
+          },
+          population: 1114,
+        },
+        {
+          name: "Zone II",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 13.04,
+            maxLat: 13.05,
+            minLng: 121.335,
+            maxLng: 121.345,
+          },
+          population: 950,
+        },
+        {
+          name: "Zone III",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 13.035,
+            maxLat: 13.045,
+            minLng: 121.34,
+            maxLng: 121.35,
+          },
+          population: 800,
+        },
+        {
+          name: "Zone IV",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 13.03,
+            maxLat: 13.04,
+            minLng: 121.345,
+            maxLng: 121.355,
+          },
+          population: 1200,
+        },
+
+        // Northern barangays (near Naujan Lake)
+        {
+          name: "Subaan",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 13.06,
+            maxLat: 13.08,
+            minLng: 121.32,
+            maxLng: 121.35,
+          },
+          population: 2772,
+        },
+        {
+          name: "Bagsok",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 13.05,
+            maxLat: 13.07,
+            minLng: 121.3,
+            maxLng: 121.33,
+          },
+          population: 1884,
+        },
+        {
+          name: "Malugay",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 13.07,
+            maxLat: 13.09,
+            minLng: 121.31,
+            maxLng: 121.34,
+          },
+          population: 734,
+        },
+
+        // Eastern barangays (towards Pola boundary)
+        {
+          name: "Bayuin",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 13.02,
+            maxLat: 13.045,
+            minLng: 121.36,
+            maxLng: 121.39,
+          },
+          population: 1500,
+        },
+        {
+          name: "Catiningan",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 13.03,
+            maxLat: 13.06,
+            minLng: 121.37,
+            maxLng: 121.4,
+          },
+          population: 2100,
+        },
+        {
+          name: "Ma. Concepcion",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 13.01,
+            maxLat: 13.04,
+            minLng: 121.38,
+            maxLng: 121.41,
+          },
+          population: 1800,
+        },
+
+        // Western barangays (towards Occidental Mindoro boundary)
+        {
+          name: "Fortuna",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 13.0,
+            maxLat: 13.03,
+            minLng: 121.28,
+            maxLng: 121.31,
+          },
+          population: 1600,
+        },
+        {
+          name: "Kilo-kilo",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 13.01,
+            maxLat: 13.04,
+            minLng: 121.29,
+            maxLng: 121.32,
+          },
+          population: 1300,
+        },
+        {
+          name: "Leuteboro",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 12.99,
+            maxLat: 13.02,
+            minLng: 121.3,
+            maxLng: 121.33,
+          },
+          population: 1400,
+        },
+
+        // Southern barangays (towards Pinamalayan boundary)
+        {
+          name: "Calubcub",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 12.96,
+            maxLat: 12.99,
+            minLng: 121.32,
+            maxLng: 121.35,
+          },
+          population: 1100,
+        },
+        {
+          name: "Cabugao",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 12.97,
+            maxLat: 13.0,
+            minLng: 121.31,
+            maxLng: 121.34,
+          },
+          population: 1250,
+        },
+        {
+          name: "Bulaklakan",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 12.98,
+            maxLat: 13.01,
+            minLng: 121.33,
+            maxLng: 121.36,
+          },
+          population: 900,
+        },
+
+        // Agricultural/Rural areas
+        {
+          name: "Batuhan",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 12.95,
+            maxLat: 12.98,
+            minLng: 121.34,
+            maxLng: 121.37,
+          },
+          population: 1050,
+        },
+        {
+          name: "Calocmahan",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 12.99,
+            maxLat: 13.02,
+            minLng: 121.36,
+            maxLng: 121.39,
+          },
+          population: 1350,
+        },
+        {
+          name: "Catmon",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 13.02,
+            maxLat: 13.05,
+            minLng: 121.27,
+            maxLng: 121.3,
+          },
+          population: 1180,
+        },
+        {
+          name: "Dampulan",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 13.06,
+            maxLat: 13.09,
+            minLng: 121.28,
+            maxLng: 121.31,
+          },
+          population: 850,
+        },
+        {
+          name: "Hiwahiwan",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 12.94,
+            maxLat: 12.97,
+            minLng: 121.36,
+            maxLng: 121.39,
+          },
+          population: 1450,
+        },
+        {
+          name: "Leuteboro II",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 12.98,
+            maxLat: 13.01,
+            minLng: 121.28,
+            maxLng: 121.31,
+          },
+          population: 920,
+        },
+        {
+          name: "Malarayat",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 12.96,
+            maxLat: 12.99,
+            minLng: 121.29,
+            maxLng: 121.32,
+          },
+          population: 1280,
+        },
+        {
+          name: "Matandang Sabang",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 12.93,
+            maxLat: 12.96,
+            minLng: 121.33,
+            maxLng: 121.36,
+          },
+          population: 1150,
+        },
+        {
+          name: "Parang",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 13.07,
+            maxLat: 13.1,
+            minLng: 121.32,
+            maxLng: 121.35,
+          },
+          population: 1680,
+        },
+        {
+          name: "Santo Niño",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 12.92,
+            maxLat: 12.95,
+            minLng: 121.35,
+            maxLng: 121.38,
+          },
+          population: 1380,
+        },
+      ];
+
+      // Check if coordinates fall within any Socorro barangay
+      for (const barangay of socorroBarangays) {
+        const { bounds } = barangay;
+        if (
+          numLat >= bounds.minLat &&
+          numLat <= bounds.maxLat &&
+          numLng >= bounds.minLng &&
+          numLng <= bounds.maxLng
+        ) {
+          return `Barangay ${barangay.name}, Socorro, Oriental Mindoro`;
+        }
+      }
+
+      // If not in specific barangay bounds but within Socorro general area
+      if (
+        numLat >= 12.92 &&
+        numLat <= 13.1 &&
+        numLng >= 121.27 &&
+        numLng <= 121.41
+      ) {
+        return "Socorro Municipality, Oriental Mindoro";
+      }
+
+      return null; // Not found in Socorro database
+    };
+
+    // Enhanced geocoding function with Socorro-specific handling
+    const getHumanReadableLocation = async (latitude, longitude) => {
+      if (!latitude || !longitude) return "Unknown Location";
+
+      // First try local Socorro database
+      const localResult = getSocorroLocation(latitude, longitude);
+      if (localResult) {
+        console.log(`Found local Socorro match: ${localResult}`);
+        return localResult;
+      }
+
+      // If not in local database, try external APIs for verification
+      try {
+        const axios = require("axios");
+
+        // Try Nominatim with Philippines-specific parameters
+        const response = await axios.get(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1&accept-language=en,tl&countrycodes=ph`,
+          {
+            headers: {
+              "User-Agent": "SocorroMDRRMO-IncidentReporting/1.0",
+            },
+            timeout: 8000,
+          }
+        );
+
+        const data = response.data;
+
+        if (data && data.address) {
+          const address = data.address;
+          const parts = [];
+
+          // Build Socorro-specific address
+          if (address.house_number && address.road) {
+            parts.push(`${address.house_number} ${address.road}`);
+          } else if (address.road) {
+            parts.push(address.road);
+          }
+
+          // Barangay identification for Socorro area
+          let barangayName = null;
+          if (address.village) {
+            barangayName = address.village;
+          } else if (address.neighbourhood) {
+            barangayName = address.neighbourhood;
+          } else if (address.suburb) {
+            barangayName = address.suburb;
+          }
+
+          if (barangayName) {
+            if (!barangayName.toLowerCase().startsWith("barangay")) {
+              parts.push(`Barangay ${barangayName}`);
+            } else {
+              parts.push(barangayName);
+            }
+          }
+
+          // Always append Socorro municipality
+          if (address.city && address.city.toLowerCase().includes("socorro")) {
+            parts.push("Socorro");
+          } else {
+            parts.push("Socorro Municipality");
+          }
+
+          parts.push("Oriental Mindoro");
+
+          if (parts.length > 0) {
+            return parts.join(", ");
+          }
+        }
+
+        // Fallback for Socorro area
+        return await getSocorroLocationFallback(latitude, longitude);
+      } catch (error) {
+        console.warn(
+          `Geocoding failed for ${latitude}, ${longitude}:`,
+          error.message
+        );
+        return await getSocorroLocationFallback(latitude, longitude);
+      }
+    };
+
+    // Socorro-specific fallback geocoding
+    const getSocorroLocationFallback = async (latitude, longitude) => {
+      const numLat = parseFloat(latitude);
+      const numLng = parseFloat(longitude);
+
+      // Check if within Socorro general boundaries
+      if (
+        numLat >= 12.9 &&
+        numLat <= 13.12 &&
+        numLng >= 121.25 &&
+        numLng <= 121.43
+      ) {
+        // Provide sector-based location within Socorro
+        let sector = "Central Socorro";
+
+        if (numLat > 13.05) {
+          sector = "Northern Socorro (Near Naujan Lake)";
+        } else if (numLat < 12.98) {
+          sector = "Southern Socorro";
+        }
+
+        if (numLng < 121.3) {
+          sector = "Western Socorro";
+        } else if (numLng > 121.37) {
+          sector = "Eastern Socorro";
+        }
+
+        return `${sector}, Socorro, Oriental Mindoro (${numLat.toFixed(
+          4
+        )}°N, ${numLng.toFixed(4)}°E)`;
+      }
+
+      // Outside Socorro boundaries
+      return `Outside Socorro Municipality (${numLat.toFixed(
+        4
+      )}°N, ${numLng.toFixed(4)}°E)`;
+    };
+
     // Build where clause
     const whereClause = { deletedAt: null };
     if (startDate && endDate) {
@@ -800,45 +1279,17 @@ const generateTopLocationsByIncidentsReport = async (req, res, next) => {
       whereClause.type = incidentType;
     }
 
-    // Get top locations by incident count
-    const topLocationsByCount = await sequelize.query(
+    // Get all incidents with coordinates
+    const incidentsWithCoordinates = await sequelize.query(
       `
       SELECT 
-        COALESCE(c.location, 'User Reported') as location,
-        COUNT(*) as incidentCount,
-        GROUP_CONCAT(DISTINCT i.type) as incidentTypes
-      FROM Incidents i
-      LEFT JOIN cameras c ON i.cameraId = c.id
-      WHERE i.deletedAt IS NULL
-      ${
-        startDate && endDate
-          ? "AND i.createdAt BETWEEN :startDate AND :endDate"
-          : ""
-      }
-      ${incidentType ? "AND i.type = :incidentType" : ""}
-      GROUP BY COALESCE(c.location, 'User Reported')
-      ORDER BY incidentCount DESC
-      LIMIT :limit
-    `,
-      {
-        replacements: {
-          startDate: startDate ? new Date(startDate) : null,
-          endDate: endDate ? new Date(endDate) : null,
-          incidentType,
-          limit: Number.parseInt(limit),
-        },
-        type: sequelize.QueryTypes.SELECT,
-      }
-    );
-
-    // Get incident breakdown by type for each top location
-    const locationBreakdown = await sequelize.query(
-      `
-      SELECT 
-        COALESCE(c.location, 'User Reported') as location,
+        i.id,
         i.type,
-        COUNT(*) as count,
-        i.status
+        i.status,
+        i.createdAt,
+        COALESCE(c.location, NULL) as cameraLocation,
+        COALESCE(c.latitude, i.latitude) as latitude,
+        COALESCE(c.longitude, i.longitude) as longitude
       FROM Incidents i
       LEFT JOIN cameras c ON i.cameraId = c.id
       WHERE i.deletedAt IS NULL
@@ -848,8 +1299,6 @@ const generateTopLocationsByIncidentsReport = async (req, res, next) => {
           : ""
       }
       ${incidentType ? "AND i.type = :incidentType" : ""}
-      GROUP BY COALESCE(c.location, 'User Reported'), i.type, i.status
-      ORDER BY location, count DESC
     `,
       {
         replacements: {
@@ -861,47 +1310,151 @@ const generateTopLocationsByIncidentsReport = async (req, res, next) => {
       }
     );
 
-    // Get geographic coordinates for mapping (if available)
-    const locationCoordinates = await sequelize.query(
-      `
-      SELECT DISTINCT
-        COALESCE(c.location, 'User Reported') as location,
-        AVG(COALESCE(c.latitude, i.latitude)) as latitude,
-        AVG(COALESCE(c.longitude, i.longitude)) as longitude,
-        COUNT(*) as incidentCount
-      FROM Incidents i
-      LEFT JOIN cameras c ON i.cameraId = c.id
-      WHERE i.deletedAt IS NULL
-      ${
-        startDate && endDate
-          ? "AND i.createdAt BETWEEN :startDate AND :endDate"
-          : ""
+    // Group coordinates to minimize API calls
+    const uniqueCoordinates = new Map();
+    const coordinateToLocation = new Map();
+
+    incidentsWithCoordinates.forEach((incident) => {
+      if (!incident.cameraLocation && incident.latitude && incident.longitude) {
+        const coordKey = `${parseFloat(incident.latitude).toFixed(
+          6
+        )},${parseFloat(incident.longitude).toFixed(6)}`;
+        uniqueCoordinates.set(coordKey, {
+          lat: incident.latitude,
+          lng: incident.longitude,
+        });
       }
-      ${incidentType ? "AND i.type = :incidentType" : ""}
-      AND (c.latitude IS NOT NULL OR i.latitude IS NOT NULL)
-      GROUP BY COALESCE(c.location, 'User Reported')
-      HAVING latitude IS NOT NULL AND longitude IS NOT NULL
-    `,
-      {
-        replacements: {
-          startDate: startDate ? new Date(startDate) : null,
-          endDate: endDate ? new Date(endDate) : null,
-          incidentType,
-        },
-        type: sequelize.QueryTypes.SELECT,
+    });
+
+    console.log(
+      `Processing ${uniqueCoordinates.size} unique coordinate pairs for Socorro-specific geocoding...`
+    );
+
+    // Process coordinates with appropriate delays
+    for (const [coordKey, coords] of uniqueCoordinates.entries()) {
+      const location = await getHumanReadableLocation(coords.lat, coords.lng);
+      coordinateToLocation.set(coordKey, location);
+      console.log(`Resolved: ${coords.lat}, ${coords.lng} -> ${location}`);
+
+      // Delay to respect rate limits (1 request per second for Nominatim)
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+    }
+
+    // Apply resolved locations to incidents
+    const incidentsWithResolvedLocations = incidentsWithCoordinates.map(
+      (incident) => {
+        let resolvedLocation = incident.cameraLocation;
+
+        if (!resolvedLocation && incident.latitude && incident.longitude) {
+          const coordKey = `${parseFloat(incident.latitude).toFixed(
+            6
+          )},${parseFloat(incident.longitude).toFixed(6)}`;
+          resolvedLocation =
+            coordinateToLocation.get(coordKey) || "Unknown Location";
+        }
+
+        return {
+          ...incident,
+          resolvedLocation: resolvedLocation || "Unknown Location",
+        };
       }
     );
+
+    // Group and aggregate data
+    const locationCounts = {};
+    const locationBreakdownData = {};
+
+    incidentsWithResolvedLocations.forEach((incident) => {
+      const location = incident.resolvedLocation;
+
+      if (!locationCounts[location]) {
+        locationCounts[location] = {
+          location,
+          incidentCount: 0,
+          incidentTypes: new Set(),
+          latitude: incident.latitude,
+          longitude: incident.longitude,
+        };
+      }
+      locationCounts[location].incidentCount++;
+      locationCounts[location].incidentTypes.add(incident.type);
+
+      if (!locationBreakdownData[location]) {
+        locationBreakdownData[location] = {};
+      }
+      const key = `${incident.type}-${incident.status}`;
+      if (!locationBreakdownData[location][key]) {
+        locationBreakdownData[location][key] = {
+          location,
+          type: incident.type,
+          status: incident.status,
+          count: 0,
+        };
+      }
+      locationBreakdownData[location][key].count++;
+    });
+
+    // Format results
+    const topLocationsByCount = Object.values(locationCounts)
+      .map((loc) => ({
+        ...loc,
+        incidentTypes: Array.from(loc.incidentTypes).join(","),
+      }))
+      .sort((a, b) => b.incidentCount - a.incidentCount)
+      .slice(0, Number.parseInt(limit));
+
+    const locationBreakdown = Object.values(locationBreakdownData)
+      .flatMap((locationData) => Object.values(locationData))
+      .sort((a, b) => {
+        if (a.location === b.location) {
+          return b.count - a.count;
+        }
+        return a.location.localeCompare(b.location);
+      });
+
+    const locationCoordinates = topLocationsByCount
+      .filter((loc) => loc.latitude && loc.longitude)
+      .map((loc) => ({
+        location: loc.location,
+        latitude: parseFloat(loc.latitude),
+        longitude: parseFloat(loc.longitude),
+        incidentCount: loc.incidentCount,
+      }));
+
+    // Socorro-specific statistics
+    const socorroStats = {
+      incidentsInSocorro: incidentsWithResolvedLocations.filter((i) =>
+        i.resolvedLocation.toLowerCase().includes("socorro")
+      ).length,
+      incidentsOutsideSocorro: incidentsWithResolvedLocations.filter(
+        (i) => !i.resolvedLocation.toLowerCase().includes("socorro")
+      ).length,
+      barangaysWithIncidents: topLocationsByCount.filter((loc) =>
+        loc.location.toLowerCase().includes("barangay")
+      ).length,
+    };
 
     const reportData = {
-      reportType: "Top Locations by Incidents Report",
+      reportType: "Socorro MDRRMO - Top Locations by Incidents Report",
       generatedAt: new Date(),
+      jurisdiction: "Municipality of Socorro, Oriental Mindoro",
       filters: { startDate, endDate, incidentType, limit },
       summary: {
         totalLocations: topLocationsByCount.length,
         totalIncidents: topLocationsByCount.reduce(
-          (sum, loc) => sum + Number.parseInt(loc.incidentCount),
+          (sum, loc) => sum + loc.incidentCount,
           0
         ),
+        socorroSpecificStats: socorroStats,
+        geocodingStats: {
+          uniqueCoordinatesProcessed: uniqueCoordinates.size,
+          socorroLocalMatches: Array.from(coordinateToLocation.values()).filter(
+            (loc) => loc.includes("Barangay") && loc.includes("Socorro")
+          ).length,
+          externalApiResolves: Array.from(coordinateToLocation.values()).filter(
+            (loc) => loc.includes("Socorro") || loc.includes("Oriental Mindoro")
+          ).length,
+        },
       },
       topLocationsByCount,
       locationBreakdown,
@@ -910,7 +1463,7 @@ const generateTopLocationsByIncidentsReport = async (req, res, next) => {
 
     return res.status(StatusCodes.OK).json({
       success: true,
-      message: "Top locations by incidents report generated successfully",
+      message: "Socorro MDRRMO location report generated successfully",
       data: reportData,
     });
   } catch (error) {

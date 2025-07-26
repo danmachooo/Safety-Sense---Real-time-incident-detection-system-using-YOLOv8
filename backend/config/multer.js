@@ -1,48 +1,15 @@
 import multer from "multer";
-import path from "path";
-import fs from "fs";
-import { fileURLToPath } from "url";
+import { createClient } from "@supabase/supabase-js";
 import { BadRequestError } from "../utils/Error.js";
 
-// Get __dirname equivalent in ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Initialize Supabase client
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY
+);
 
-// Create uploads directory if it doesn't exist
-const createUploadsDir = () => {
-  const uploadDir = path.join(__dirname, "../uploads");
-  const incidentImagesDir = path.join(uploadDir, "incidents");
-
-  if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-    console.log(`Created uploads directory: ${uploadDir}`);
-  }
-
-  if (!fs.existsSync(incidentImagesDir)) {
-    fs.mkdirSync(incidentImagesDir, { recursive: true });
-    console.log(`Created incidents directory: ${incidentImagesDir}`);
-  }
-
-  return incidentImagesDir;
-};
-
-// Configure storage
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadPath = createUploadsDir();
-    console.log(`File will be saved to: ${uploadPath}`);
-    cb(null, uploadPath);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname) || ".jpg";
-    const filename = `incident-${uniqueSuffix}${ext}`;
-    console.log(
-      `Generated filename: ${filename} for original: ${file.originalname}`
-    );
-    cb(null, filename);
-  },
-});
+// Configure multer to use memory storage instead of disk storage
+const storage = multer.memoryStorage();
 
 // File filter to only allow images
 const fileFilter = (req, file, cb) => {
@@ -62,7 +29,7 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-// Create multer upload instance
+// Create multer upload instance with memory storage
 const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
@@ -71,11 +38,41 @@ const upload = multer({
   },
 }).single("image");
 
+// Upload file to Supabase storage
+const uploadToSupabase = async (file, bucket = "incidents") => {
+  try {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    const fileExt = file.originalname.split(".").pop();
+    const fileName = `incident-${uniqueSuffix}.${fileExt}`;
+
+    console.log(`Uploading ${fileName} to Supabase bucket: ${bucket}`);
+
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .upload(fileName, file.buffer, {
+        contentType: file.mimetype,
+        cacheControl: "3600",
+        upsert: false,
+      });
+
+    if (error) {
+      console.error("Supabase upload error:", error);
+      throw new BadRequestError(`Upload failed: ${error.message}`);
+    }
+
+    console.log("File uploaded successfully to Supabase:", data);
+    return data.path;
+  } catch (error) {
+    console.error("Error uploading to Supabase:", error);
+    throw error;
+  }
+};
+
 // Middleware wrapper for better error handling
 const uploadMiddleware = (req, res, next) => {
   console.log("Request headers:", req.headers);
 
-  upload(req, res, function (err) {
+  upload(req, res, async function (err) {
     if (err instanceof multer.MulterError) {
       console.error("Multer error:", err);
       if (err.code === "LIMIT_FILE_SIZE") {
@@ -89,27 +86,61 @@ const uploadMiddleware = (req, res, next) => {
       return next(err);
     }
 
-    console.log("Upload middleware completed successfully");
-    console.log("req.file after upload:", req.file);
+    // If file was uploaded, upload it to Supabase
+    if (req.file) {
+      try {
+        console.log("Processing file for Supabase upload:", req.file);
+        const supabasePath = await uploadToSupabase(req.file);
+
+        // Add Supabase path to the request object
+        req.file.supabasePath = supabasePath;
+        req.file.filename = supabasePath.split("/").pop(); // Extract filename from path
+
+        console.log("Upload middleware completed successfully");
+        console.log("req.file after Supabase upload:", req.file);
+      } catch (uploadError) {
+        console.error("Supabase upload failed:", uploadError);
+        return next(uploadError);
+      }
+    }
+
     next();
   });
 };
 
-// Helper to construct the full image URL
-const getFilePath = (filename) => `uploads/incidents/${filename}`;
-const getFileUrl = (filename) => {
-  const baseUrl =
-    process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
-  return `${baseUrl}/uploads/incidents/${filename}`;
+// Helper to get public URL from Supabase
+const getFileUrl = (filename, bucket = "incidents") => {
+  const { data } = supabase.storage.from(bucket).getPublicUrl(filename);
+  return data.publicUrl;
+};
+
+// Helper to get file path (for backward compatibility)
+const getFilePath = (filename) => filename;
+
+// Helper to delete file from Supabase
+const deleteFile = async (filename, bucket = "incidents") => {
+  try {
+    const { error } = await supabase.storage.from(bucket).remove([filename]);
+    if (error) {
+      console.error("Error deleting file from Supabase:", error);
+      throw new BadRequestError(`Delete failed: ${error.message}`);
+    }
+    console.log(`File ${filename} deleted successfully from Supabase`);
+    return true;
+  } catch (error) {
+    console.error("Error deleting file:", error);
+    throw error;
+  }
 };
 
 // Export individual functions and the upload middleware
 export const uploadSingle = uploadMiddleware;
-export { getFilePath, getFileUrl };
+export { getFilePath, getFileUrl, deleteFile, uploadToSupabase };
 
 // Default export for backward compatibility
 export default {
   upload: { single: () => uploadMiddleware },
   getFilePath,
   getFileUrl,
+  deleteFile,
 };

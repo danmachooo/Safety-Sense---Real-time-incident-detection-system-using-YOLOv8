@@ -1,12 +1,6 @@
 import multer from "multer";
-import { createClient } from "@supabase/supabase-js";
 import { BadRequestError } from "../utils/Error.js";
-
-// Initialize Supabase client
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
-);
+import supabase from "./supabase/supabase.js";
 
 // Configure multer to use memory storage instead of disk storage
 const storage = multer.memoryStorage();

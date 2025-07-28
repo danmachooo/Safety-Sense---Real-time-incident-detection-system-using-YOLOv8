@@ -69,7 +69,7 @@ const navigateTo = (route) => {
             <span class="font-medium text-white ml-3">Dashboard</span>
           </button>
         </div>
-        <!-- Dashboard -->
+        <!-- Reports -->
         <div class="relative mb-2">
           <button
             @click="navigateTo('/admin/reports')"

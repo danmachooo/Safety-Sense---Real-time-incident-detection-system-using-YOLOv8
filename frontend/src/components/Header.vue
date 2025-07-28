@@ -266,7 +266,7 @@ onUnmounted(() => {
 
 <template>
   <header
-    class="bg-[#1B262C] px-6 py-4 rounded-t-lg border-b flex items-center justify-between sticky top-0 z-10"
+    class="bg-[#1B262C] px-6 py-4 rounded-t-lg border-b flex items-center justify-between sticky top-0 z-30"
   >
     <!-- Left side - Page Title -->
     <div>
@@ -291,9 +291,10 @@ onUnmounted(() => {
         </button>
 
         <!-- Enhanced Notifications Dropdown -->
+        <!-- Notifications Dropdown -->
         <div
           v-if="showNotifications"
-          class="notifications-dropdown absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-lg border border-gray-200 z-[50]"
+          class="notifications-dropdown absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-lg border border-gray-200 z-[9999]"
         >
           <!-- Header with Tabs -->
           <div class="p-4 border-b border-gray-200">
@@ -433,7 +434,7 @@ onUnmounted(() => {
         <!-- User Dropdown -->
         <div
           v-if="showUserDropdown"
-          class="user-dropdown absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50"
+          class="user-dropdown absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-[9999]"
         >
           <div class="p-3 border-b border-gray-200">
             <p class="text-sm font-medium text-gray-800">
@@ -464,7 +465,7 @@ onUnmounted(() => {
     <!-- Logout Confirmation Modal -->
     <div
       v-if="showLogoutConfirmation"
-      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]"
+      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[99999]"
       @click.self="cancelLogout"
     >
       <div

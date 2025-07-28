@@ -2,15 +2,6 @@ import { Op } from "sequelize"; // Import models from the index file to ensure a
 import models from "../../models/index.js";
 const { Incident, Camera, User, IncidentAcceptance, IncidentDismissal } =
   models;
-// const Camera = models.Camera;
-// const User = models.User;
-// const IncidentAcceptance = models.IncidentAcceptance;
-// const IncidentDismissal = models.IncidentDismissal; // Add this line
-
-// const { BadRequestError, NotFoundError } = require("../../utils/Error");
-// const { StatusCodes } = require("http-status-codes");
-// const sequelize = require("../../config/database");
-// const fcmService = require("../../services/firebase/fcmService");
 
 import { BadRequestError, NotFoundError } from "../../utils/Error.js";
 import { StatusCodes } from "http-status-codes";
@@ -21,7 +12,7 @@ import xlsx from "xlsx";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
-
+import { getFileUrl } from "../../config/multer.js";
 // Get current directory for ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -129,7 +120,7 @@ const createIncident = async (req, res, next) => {
 };
 
 /**
- * Create a new incident specifically from citizen report
+ * Create citizen report with file upload in one step
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  * @param {Function} next - Express next middleware function
@@ -141,29 +132,81 @@ const createCitizenReport = async (req, res, next) => {
   try {
     transaction = await sequelize.transaction();
 
+    // Log what we received
+    console.log("Request body:", req.body);
+    console.log("Request file:", req.file ? "Present" : "None");
+    console.log("Upload error:", req.uploadError?.message || "None");
+
+    // Extract data from form fields or JSON body
     const {
-      ipAddress,
       reportedBy,
       contact,
       type,
-      snapshotUrl,
       description,
       longitude,
       latitude,
+      snapshotUrl,
     } = req.body;
 
-    console.debug("REQUEST BODY: ", req.body.ipAddress);
-    // Only require type, snapshotUrl, longitude, and latitude
-    if (
-      !type ||
-      !snapshotUrl ||
-      !longitude ||
-      !latitude ||
-      !description ||
-      !ipAddress
-    ) {
+    // Get IP address from request
+    const ipAddress =
+      req.ip ||
+      req.connection.remoteAddress ||
+      req.socket.remoteAddress ||
+      req.headers["x-forwarded-for"]?.split(",")[0] ||
+      "unknown";
+
+    console.debug("Extracted fields:", {
+      type,
+      description,
+      longitude,
+      latitude,
+      ipAddress,
+      reportedBy,
+      contact,
+      snapshotUrl, // Log the snapshotUrl from request body
+    });
+
+    // Handle image upload - FIXED LOGIC
+    let finalSnapshotUrl = null;
+    const warnings = [];
+
+    // Priority 1: Check if snapshotUrl was provided in request body (THIS IS YOUR CASE)
+    if (snapshotUrl && snapshotUrl.trim() !== "") {
+      // Image was uploaded separately and URL/path provided in request body
+      finalSnapshotUrl = snapshotUrl.startsWith("http")
+        ? snapshotUrl
+        : getFileUrl(snapshotUrl);
+      console.log("Image URL from request body:", finalSnapshotUrl);
+    }
+    // Priority 2: Check if file was uploaded through multer middleware
+    else if (req.file && req.file.supabasePath && !req.uploadError) {
+      // File uploaded successfully to Supabase via middleware
+      finalSnapshotUrl = getFileUrl(req.file.supabasePath);
+      console.log("Image uploaded via middleware:", finalSnapshotUrl);
+    }
+    // Priority 3: Handle upload errors
+    else if (req.file && req.uploadError) {
+      console.warn("Image upload failed:", req.uploadError.message);
+      warnings.push(`Image upload failed: ${req.uploadError.message}`);
+      // Continue without image - set finalSnapshotUrl to null
+    }
+    // Priority 4: No image provided
+    else {
+      console.log("No image file provided - proceeding without image");
+      // finalSnapshotUrl remains null
+    }
+
+    // Validate required fields
+    const missingFields = [];
+    if (!type) missingFields.push("type");
+    if (!description) missingFields.push("description");
+    if (!longitude) missingFields.push("longitude");
+    if (!latitude) missingFields.push("latitude");
+
+    if (missingFields.length > 0) {
       throw new BadRequestError(
-        "Required fields are missing: type, snapshotUrl, description, longitude, latitude"
+        `Required fields are missing: ${missingFields.join(", ")}`
       );
     }
 
@@ -177,55 +220,113 @@ const createCitizenReport = async (req, res, next) => {
       "Other",
     ];
     if (!validTypes.includes(type)) {
-      throw new BadRequestError("Invalid incident type");
+      throw new BadRequestError(
+        `Invalid incident type. Must be one of: ${validTypes.join(", ")}`
+      );
     }
-    const incident = await Incident.create(
-      {
-        cameraId: null,
-        reportedBy: reportedBy || "Anonymous Citizen",
-        contact: contact || "No contact provided.",
-        type,
-        snapshotUrl,
-        description,
-        longitude,
-        latitude,
-        ipAddress,
-        status: "pending",
-      },
-      { transaction }
-    );
 
+    // Validate and parse coordinates
+    const lat = parseFloat(latitude);
+    const lng = parseFloat(longitude);
+
+    if (isNaN(lat) || lat < -90 || lat > 90) {
+      throw new BadRequestError("Invalid latitude. Must be between -90 and 90");
+    }
+
+    if (isNaN(lng) || lng < -180 || lng > 180) {
+      throw new BadRequestError(
+        "Invalid longitude. Must be between -180 and 180"
+      );
+    }
+
+    // Create incident record
+    const incidentData = {
+      cameraId: null,
+      reportedBy: reportedBy || "Anonymous Citizen",
+      contact: contact || "No contact provided",
+      type,
+      snapshotUrl: finalSnapshotUrl, // Use the processed snapshot URL
+      description,
+      longitude: lng,
+      latitude: lat,
+      ipAddress,
+      status: "pending",
+    };
+
+    console.log("Creating incident with data:", incidentData);
+
+    const incident = await Incident.create(incidentData, { transaction });
+
+    // Send push notification to responders
     try {
       const shortDescription =
         incident.description.length > 100
           ? `${incident.description.substring(0, 100)}...`
           : incident.description;
 
-      console.log("Broadcasting to: ", process.env.RESPONDER_TOPIC);
+      const notificationTitle = `${type} Incident Alert!`;
+      const notificationBody = `${shortDescription} - Reported by: ${incident.reportedBy}`;
+
+      console.log("Broadcasting notification to:", process.env.RESPONDER_TOPIC);
+
       await sendTopicNotification(
         process.env.RESPONDER_TOPIC || "all_responders",
-        "Incident Alert!",
-        shortDescription,
+        notificationTitle,
+        notificationBody,
         {
-          incidentId: incident.id, // include this in the data payload
+          incidentId: incident.id.toString(),
+          type: incident.type,
+          latitude: incident.latitude.toString(),
+          longitude: incident.longitude.toString(),
+          hasImage: !!incident.snapshotUrl,
         }
       );
-    } catch (error) {
-      console.error("FCM notification failed:", error);
+
+      console.log("Notification sent successfully");
+    } catch (notificationError) {
+      console.error("FCM notification failed:", notificationError);
+      warnings.push("Notification to responders failed");
+      // Don't fail the request if notification fails
     }
+
     await transaction.commit();
-    transaction = null; // Set to null after commit to prevent double rollback
+    transaction = null;
+
+    // Success response
+    const responseMessage =
+      warnings.length > 0
+        ? "Citizen report created successfully with warnings"
+        : "Citizen report created successfully";
 
     return res.status(StatusCodes.CREATED).json({
       success: true,
-      message: "Citizen report created successfully",
-      data: incident,
+      message: responseMessage,
+      data: {
+        id: incident.id,
+        type: incident.type,
+        description: incident.description,
+        latitude: incident.latitude,
+        longitude: incident.longitude,
+        reportedBy: incident.reportedBy,
+        contact: incident.contact,
+        snapshotUrl: incident.snapshotUrl,
+        status: incident.status,
+        createdAt: incident.createdAt,
+        hasImage: !!incident.snapshotUrl,
+      },
+      warnings: warnings.length > 0 ? warnings : undefined,
     });
   } catch (error) {
-    // Only roll back if transaction exists and hasn't been committed/rolled back
-    if (transaction) await transaction.rollback();
+    // Rollback transaction if it exists
+    if (transaction) {
+      try {
+        await transaction.rollback();
+      } catch (rollbackError) {
+        console.error("Transaction rollback failed:", rollbackError);
+      }
+    }
 
-    console.error("An error occurred: " + error);
+    console.error("Error creating citizen report:", error);
     next(error);
   }
 };

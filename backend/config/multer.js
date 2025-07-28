@@ -32,41 +32,120 @@ const upload = multer({
   },
 }).single("image");
 
-// Upload file to Supabase storage
-const uploadToSupabase = async (file, bucket = "incidents") => {
+// Enhanced retry logic for network issues
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const retryOperation = async (operation, maxRetries = 3, baseDelay = 1000) => {
+  let lastError;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      console.warn(`Attempt ${attempt} failed:`, error.message);
+
+      // Check if it's a network/timeout error that might benefit from retry
+      const isRetryableError =
+        error.message?.includes("fetch failed") ||
+        error.message?.includes("Connect Timeout") ||
+        error.code === "UND_ERR_CONNECT_TIMEOUT" ||
+        error.code === "ECONNRESET" ||
+        error.code === "ETIMEDOUT";
+
+      if (!isRetryableError || attempt === maxRetries) {
+        throw error;
+      }
+
+      // Exponential backoff with jitter
+      const delayTime =
+        baseDelay * Math.pow(2, attempt - 1) + Math.random() * 1000;
+      console.log(`Retrying in ${Math.round(delayTime)}ms...`);
+      await delay(delayTime);
+    }
+  }
+
+  throw lastError;
+};
+
+// Upload file to Supabase storage with correct bucket/folder structure
+// Upload file to Supabase storage with correct bucket/folder structure
+const uploadToSupabase = async (file, rawBucket = "uploads") => {
+  const bucket = rawBucket.trim();
+
   try {
+    // Skip bucket validation to avoid extra network calls
+    // Assume bucket exists and let the upload operation handle errors
+
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
     const fileExt = file.originalname.split(".").pop();
     const fileName = `incident-${uniqueSuffix}.${fileExt}`;
 
-    console.log(`Uploading ${fileName} to Supabase bucket: ${bucket}`);
+    // Upload to uploads bucket in the incidents folder
+    const filePath = `incidents/${fileName}`;
 
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .upload(fileName, file.buffer, {
-        contentType: file.mimetype,
-        cacheControl: "3600",
-        upsert: false,
-      });
+    console.log(`Uploading ${filePath} to Supabase bucket: ${bucket}`);
 
-    if (error) {
-      console.error("Supabase upload error:", error);
-      throw new BadRequestError(`Upload failed: ${error.message}`);
-    }
+    const uploadOperation = async () => {
+      const { data, error } = await supabase.storage
+        .from(bucket)
+        .upload(filePath, file.buffer, {
+          contentType: file.mimetype,
+          cacheControl: "3600",
+          upsert: false,
+        });
+
+      if (error) {
+        console.error("Supabase upload error:", error);
+
+        // Handle specific bucket not found error
+        if (
+          error.message?.includes("Bucket not found") ||
+          error.message?.includes("bucket does not exist")
+        ) {
+          throw new BadRequestError(
+            `Bucket '${bucket}' does not exist. Please check your Supabase configuration.`
+          );
+        }
+
+        throw new BadRequestError(`Upload failed: ${error.message}`);
+      }
+
+      return data;
+    };
+
+    const data = await retryOperation(uploadOperation, 3, 2000);
 
     console.log("File uploaded successfully to Supabase:", data);
-    return data.path;
+    return data.path; // This will be "incidents/incident-xxx.jpg"
   } catch (error) {
-    console.error("Error uploading to Supabase:", error);
+    console.error("Error uploading to Supabase after retries:", error);
+
+    // Provide more specific error messages
+    if (
+      error.message?.includes("fetch failed") ||
+      error.code === "UND_ERR_CONNECT_TIMEOUT" ||
+      error.message?.includes("Connect Timeout")
+    ) {
+      throw new BadRequestError(
+        "Network connection to Supabase failed. Please check your internet connection and try again."
+      );
+    }
+
     throw error;
   }
 };
 
-// Middleware wrapper for better error handling
+// Enhanced middleware wrapper with better error handling and fallback
 const uploadMiddleware = (req, res, next) => {
   console.log("Request headers:", req.headers);
+  console.log("Request body keys:", Object.keys(req.body || {}));
 
   upload(req, res, async function (err) {
+    // Log parsed form data
+    console.log("Parsed form fields:", req.body);
+    console.log("Uploaded file:", req.file ? "Present" : "None");
+
     if (err instanceof multer.MulterError) {
       console.error("Multer error:", err);
       if (err.code === "LIMIT_FILE_SIZE") {
@@ -80,7 +159,7 @@ const uploadMiddleware = (req, res, next) => {
       return next(err);
     }
 
-    // If file was uploaded, upload it to Supabase
+    // If file was uploaded, try to upload it to Supabase
     if (req.file) {
       try {
         console.log("Processing file for Supabase upload:", req.file);
@@ -94,42 +173,121 @@ const uploadMiddleware = (req, res, next) => {
         console.log("req.file after Supabase upload:", req.file);
       } catch (uploadError) {
         console.error("Supabase upload failed:", uploadError);
-        return next(uploadError);
+
+        // Instead of failing completely, continue without the file
+        // and let the route handler decide what to do
+        req.uploadError = uploadError;
+        console.warn("Continuing without file upload due to network issues");
       }
+    } else {
+      console.log("No file uploaded in this request");
     }
 
     next();
   });
 };
 
-// Helper to get public URL from Supabase
-const getFileUrl = (filename, bucket = "incidents") => {
-  const { data } = supabase.storage.from(bucket).getPublicUrl(filename);
-  return data.publicUrl;
+// Helper to get public URL from Supabase with correct bucket/folder structure
+const getFileUrl = (filename, bucket = "uploads") => {
+  try {
+    // If filename already includes the folder path, use it as is
+    const filePath = filename.includes("incidents/")
+      ? filename
+      : `incidents/${filename}`;
+    const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
+    return data.publicUrl;
+  } catch (error) {
+    console.error("Error getting file URL:", error);
+    return null;
+  }
 };
 
 // Helper to get file path (for backward compatibility)
-const getFilePath = (filename) => filename;
+const getFilePath = (filename) => {
+  // Return the full path including the folder
+  return filename.includes("incidents/") ? filename : `incidents/${filename}`;
+};
 
-// Helper to delete file from Supabase
-const deleteFile = async (filename, bucket = "incidents") => {
+// Helper to delete file from Supabase with retry logic
+const deleteFile = async (filename, bucket = "uploads") => {
   try {
-    const { error } = await supabase.storage.from(bucket).remove([filename]);
-    if (error) {
-      console.error("Error deleting file from Supabase:", error);
-      throw new BadRequestError(`Delete failed: ${error.message}`);
-    }
-    console.log(`File ${filename} deleted successfully from Supabase`);
+    const filePath = filename.includes("incidents/")
+      ? filename
+      : `incidents/${filename}`;
+
+    const deleteOperation = async () => {
+      const { error } = await supabase.storage.from(bucket).remove([filePath]);
+      if (error) {
+        console.error("Error deleting file from Supabase:", error);
+        throw new BadRequestError(`Delete failed: ${error.message}`);
+      }
+      return true;
+    };
+
+    await retryOperation(deleteOperation, 2, 1000);
+    console.log(`File ${filePath} deleted successfully from Supabase`);
     return true;
   } catch (error) {
-    console.error("Error deleting file:", error);
+    console.error("Error deleting file after retries:", error);
     throw error;
+  }
+};
+
+// Health check function to test Supabase connection
+const testSupabaseConnection = async () => {
+  try {
+    const { data, error } = await supabase.storage.listBuckets();
+    if (error) {
+      console.error("Supabase connection test failed:", error);
+      return false;
+    }
+    console.log("Supabase connection test passed");
+    console.log(
+      "Available buckets:",
+      data.map((b) => b.name)
+    );
+    return true;
+  } catch (error) {
+    console.error("Supabase connection test error:", error);
+    return false;
+  }
+};
+
+// Function to test the uploads/incidents structure
+const testUploadsIncidentsStructure = async () => {
+  try {
+    console.log("Testing uploads/incidents structure...");
+
+    // List files in the uploads bucket
+    const { data, error } = await supabase.storage
+      .from("uploads")
+      .list("incidents", {
+        limit: 1,
+      });
+
+    if (error) {
+      console.error("Error testing structure:", error);
+      return false;
+    }
+
+    console.log("✅ uploads/incidents structure is accessible");
+    return true;
+  } catch (error) {
+    console.error("Error testing uploads/incidents:", error);
+    return false;
   }
 };
 
 // Export individual functions and the upload middleware
 export const uploadSingle = uploadMiddleware;
-export { getFilePath, getFileUrl, deleteFile, uploadToSupabase };
+export {
+  getFilePath,
+  getFileUrl,
+  deleteFile,
+  uploadToSupabase,
+  testSupabaseConnection,
+  testUploadsIncidentsStructure,
+};
 
 // Default export for backward compatibility
 export default {
@@ -137,4 +295,6 @@ export default {
   getFilePath,
   getFileUrl,
   deleteFile,
+  testSupabaseConnection,
+  testUploadsIncidentsStructure,
 };

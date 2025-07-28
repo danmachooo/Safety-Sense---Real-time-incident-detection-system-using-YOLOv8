@@ -1,11 +1,7 @@
-// const { getFileUrl, getFilePath } = require("../../config/multer");
-// const { StatusCodes } = require("http-status-codes");
-// const { BadRequestError } = require("../../utils/Error");
-
-import { getFileUrl } from "../../config/multer.js";
-import { getFilePath } from "../../config/multer.js";
+import { getFileUrl, getFilePath } from "../../config/multer.js";
 import { StatusCodes } from "http-status-codes";
 import { BadRequestError } from "../../utils/Error.js";
+
 /**
  * Upload an image for an incident report
  * @param {Object} req - Express request object
@@ -23,7 +19,6 @@ const uploadIncidentImage = async (req, res, next) => {
     if (!req.file) {
       console.log("No file found in request");
 
-      // Check if the request has the correct content type
       if (
         !req.headers["content-type"] ||
         !req.headers["content-type"].includes("multipart/form-data")
@@ -34,26 +29,42 @@ const uploadIncidentImage = async (req, res, next) => {
       throw new BadRequestError("No image file uploaded");
     }
 
+    // Check if upload failed
+    if (req.uploadError) {
+      console.error("Upload failed:", req.uploadError);
+      throw new BadRequestError(`Upload failed: ${req.uploadError.message}`);
+    }
+
+    // Check if Supabase path exists
+    if (!req.file.supabasePath) {
+      throw new BadRequestError(
+        "File upload to storage failed - no Supabase path"
+      );
+    }
+
     // Generate URL for the uploaded file
-    const imageUrl = getFileUrl(req.file.filename);
+    // Use the full path since it includes incidents/ folder
+    const imageUrl = getFileUrl(req.file.supabasePath);
+    const imagePath = getFilePath(req.file.supabasePath);
 
     console.log("Upload successful:", {
-      filename: req.file.filename,
+      supabasePath: req.file.supabasePath,
       mimetype: req.file.mimetype,
       size: req.file.size,
-      path: req.file.path,
       imageUrl: imageUrl,
     });
 
-    const imagePath = getFilePath(req.file.filename);
     return res.status(StatusCodes.OK).json({
       success: true,
       message: "Image uploaded successfully",
       data: {
-        filename: req.file.filename,
+        filename: req.file.supabasePath.split("/").pop(),
+        fullPath: req.file.supabasePath,
         mimetype: req.file.mimetype,
         size: req.file.size,
         imagePath: imagePath,
+        imageUrl: imageUrl,
+        uploadedAt: new Date().toISOString(),
       },
     });
   } catch (error) {

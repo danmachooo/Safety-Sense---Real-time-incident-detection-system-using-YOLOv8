@@ -266,7 +266,7 @@ onUnmounted(() => {
 
 <template>
   <header
-    class="bg-[#1B262C] px-6 py-4 rounded-t-lg border-b flex items-center justify-between sticky top-0 z-30"
+    class="bg-gray-900 px-6 py-4 rounded-t-lg border-b flex items-center justify-between sticky top-0 z-30"
   >
     <!-- Left side - Page Title -->
     <div>

@@ -24,12 +24,16 @@ import {
   getDismissedIncidentsByUser,
   getUsersByDismissedIncident,
   getIncidentStats,
+  getIncidentsForHeatmap,
 } from "../controllers/Incidents/incidentController.js";
 import { uploadSingle } from "../config/multer.js";
 import { uploadIncidentImage } from "../controllers/Incidents/uploadController.js";
 
 // Get all incidents with filtering
 router.get("/", authMiddleware, getIncidents);
+
+// Get all incidents with filtering for heatmap
+router.get("/heatmap", getIncidentsForHeatmap);
 
 // Get incident statistics
 router.get("/stats", authMiddleware, getIncidentStats);

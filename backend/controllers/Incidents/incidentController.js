@@ -10,9 +10,9 @@ import { sendTopicNotification } from "../../services/firebase/fcmService.js";
 
 import xlsx from "xlsx";
 import path from "path";
-import fs from "fs";
 import { fileURLToPath } from "url";
 import { getFileUrl } from "../../config/multer.js";
+
 // Get current directory for ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -532,6 +532,82 @@ const getIncidents = async (req, res, next) => {
   } catch (error) {
     console.error("An error occurred: " + error);
     next(error);
+  }
+};
+
+const getIncidentsForHeatmap = async (req, res, next) => {
+  try {
+    const { filter, startDate, endDate, type } = req.query;
+
+    const where = {};
+
+    // 🔎 Date filtering logic
+    if (filter === "last7days") {
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      where.createdAt = { [Op.gte]: sevenDaysAgo };
+    }
+
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) where.createdAt[Op.gte] = new Date(startDate);
+      if (endDate) where.createdAt[Op.lte] = new Date(endDate);
+    }
+
+    // 🎯 Incident type filter
+    if (type) {
+      where.type = type.toLowerCase();
+    }
+
+    // 📥 Query incidents (only what's needed)
+    const incidents = await Incident.findAll({
+      where,
+      attributes: ["latitude", "longitude", "type"],
+      raw: true,
+    });
+
+    // 📊 Intensity weights by type
+    const TYPE_INTENSITY = {
+      fire: 5,
+      medical: 4,
+      accident: 3,
+      crime: 4,
+      flood: 3,
+      other: 1,
+    };
+
+    const coordMap = {};
+    const round = (val, precision = 4) => Number(val).toFixed(precision); // ~10m accuracy
+
+    for (const { latitude, longitude, type } of incidents) {
+      if (!latitude || !longitude) continue;
+
+      const lat = round(latitude);
+      const lon = round(longitude);
+      const key = `${lat},${lon}`;
+
+      const normalizedType = type?.toLowerCase() || "other";
+      const intensity = TYPE_INTENSITY[normalizedType] || TYPE_INTENSITY.other;
+
+      coordMap[key] = (coordMap[key] || 0) + intensity;
+    }
+
+    // 🔄 Transform to frontend-friendly format
+    const heatmapData = Object.entries(coordMap).map(([key, intensity]) => {
+      const [lat, lon] = key.split(",").map(Number);
+      return [lat, lon, intensity];
+    });
+
+    // 🧪 Optional debugging log
+    console.log(`Heatmap response: ${heatmapData.length} bubbles`);
+
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      data: heatmapData,
+    });
+  } catch (error) {
+    console.error("Heatmap Error:", error.message);
+    return next(error);
   }
 };
 
@@ -1559,4 +1635,5 @@ export {
   getUsersByDismissedIncident,
   getIncidentStats,
   generateEmptyTemplate,
+  getIncidentsForHeatmap,
 };

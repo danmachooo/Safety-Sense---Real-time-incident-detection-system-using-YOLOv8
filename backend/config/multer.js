@@ -69,7 +69,6 @@ const retryOperation = async (operation, maxRetries = 3, baseDelay = 1000) => {
 };
 
 // Upload file to Supabase storage with correct bucket/folder structure
-// Upload file to Supabase storage with correct bucket/folder structure
 const uploadToSupabase = async (file, rawBucket = "uploads") => {
   const bucket = rawBucket.trim();
 

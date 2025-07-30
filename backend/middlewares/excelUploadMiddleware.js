@@ -17,9 +17,10 @@ const fileFilter = (req, file, cb) => {
 };
 
 // Upload Excel file to Supabase storage
-const uploadExcelToSupabase = async (file, bucket = "excels") => {
+const uploadExcelToSupabase = async (file, bucket = "uploads") => {
   try {
-    const fileName = `inventory-${Date.now()}.xlsx`;
+    // Include the folder path in the filename
+    const fileName = `excels/inventory-${Date.now()}.xlsx`;
 
     console.log(`Uploading ${fileName} to Supabase bucket: ${bucket}`);
 
@@ -69,7 +70,12 @@ const uploadExcelMiddleware = (req, res, next) => {
     // If file was uploaded, upload it to Supabase
     if (req.file) {
       try {
-        console.log("Processing Excel file for Supabase upload:", req.file);
+        console.log("Processing Excel file for Supabase upload:", {
+          originalname: req.file.originalname,
+          size: req.file.size,
+          mimetype: req.file.mimetype,
+        });
+
         const supabasePath = await uploadExcelToSupabase(req.file);
 
         // Add Supabase path to the request object
@@ -77,7 +83,7 @@ const uploadExcelMiddleware = (req, res, next) => {
         req.file.filename = supabasePath.split("/").pop();
 
         console.log("Excel upload middleware completed successfully");
-        console.log("req.file after Supabase upload:", req.file);
+        console.log("File stored at:", supabasePath);
       } catch (uploadError) {
         console.error("Supabase Excel upload failed:", uploadError);
         return next(uploadError);

@@ -1,5 +1,4 @@
 import xlsx from "xlsx";
-import fs from "fs";
 import models from "../../../models/index.js";
 import { BadRequestError } from "../../../utils/Error.js";
 const { InventoryItem, Category, Batch, Notification } = models;
@@ -67,8 +66,10 @@ const convertExcelDateBuiltIn = (excelDate) => {
   return null;
 };
 
-export const processExcelFile = async (filePath, userId) => {
-  const workbook = xlsx.readFile(filePath);
+// Updated function to work with buffer instead of file path
+export const processExcelFile = async (fileBuffer, userId) => {
+  // Read workbook from buffer instead of file path
+  const workbook = xlsx.read(fileBuffer, { type: "buffer" });
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
 
   // Option 1: Use raw data and convert dates manually
@@ -230,12 +231,8 @@ export const processExcelFile = async (filePath, userId) => {
     }
   }
 
-  // 🧹 Delete the file
-  try {
-    fs.unlinkSync(filePath);
-  } catch (fileError) {
-    console.error("Error deleting file:", fileError.message);
-  }
+  // No need to delete file since we're working with buffer now
+  // The file cleanup (if needed) would be handled by Supabase
 
   return results;
 };

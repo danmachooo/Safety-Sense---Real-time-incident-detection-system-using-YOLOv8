@@ -19,6 +19,7 @@ import {
   DollarSign,
   TrendingDown,
   AlertTriangle,
+  RefreshCcw, // Added for the retry button icon
 } from "lucide-vue-next";
 import api from "../../../utils/axios";
 
@@ -51,6 +52,7 @@ const currentBatch = ref({
   cost: 0,
   notes: "",
   is_active: true,
+  batch_number: "", // This field is for display in the title, not for input in the form
 });
 
 // Fetch data
@@ -70,6 +72,7 @@ const fetchInventoryItems = async () => {
 const fetchBatches = async () => {
   try {
     loading.value = true;
+    error.value = null; // Clear previous errors
     const response = await api.get("inventory/batches", {
       params: {
         page: currentPage.value,
@@ -80,11 +83,12 @@ const fetchBatches = async () => {
         is_active: filters.value.isActive,
       },
     });
-
     batches.value = response.data.data;
     totalItems.value = response.data.meta.total;
     totalPages.value = response.data.meta.pages;
   } catch (err) {
+    error.value =
+      err.response?.data?.message || "An unexpected error occurred.";
     showNotification("Failed to fetch batches", "error");
   } finally {
     loading.value = false;
@@ -105,6 +109,7 @@ const openBatchModal = (batch = null) => {
         cost: 0,
         notes: "",
         is_active: true,
+        batch_number: "", // Ensure it's reset for new batches
       };
   showModal.value = true;
 };
@@ -115,7 +120,6 @@ const saveBatch = async () => {
     const url = currentBatch.value.id
       ? `inventory/batches/${currentBatch.value.id}`
       : "inventory/batches";
-
     await api[method](url, currentBatch.value);
     showNotification(
       `Batch ${currentBatch.value.id ? "updated" : "created"} successfully`,
@@ -158,7 +162,6 @@ const statusBadge = (batch) => {
   const expiryDate = new Date(batch.expiry_date);
   const today = new Date();
   const diffDays = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
-
   if (diffDays < 0)
     return { bg: "bg-red-50", text: "text-red-700", border: "border-red-200" };
   if (diffDays <= 30)
@@ -179,23 +182,19 @@ const expiryProgress = (batch) => {
   const created = new Date(batch.received_date);
   const expiry = new Date(batch.expiry_date);
   const now = new Date();
-
   const total = expiry - created;
   const elapsed = now - created;
-
   if (total <= 0) return 100;
   return Math.min((elapsed / total) * 100, 100);
 };
 
 const getStatusText = (batch) => {
   if (!batch.expiry_date) return "No Expiry";
-
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const expiry = new Date(batch.expiry_date);
   expiry.setHours(0, 0, 0, 0);
   const diffDays = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
-
   if (diffDays < 0) return "Expired";
   if (diffDays <= 30) return "Expiring Soon";
   return "Active";
@@ -242,12 +241,10 @@ const visiblePages = computed(() => {
   const range = 2;
   let start = Math.max(1, currentPage.value - range);
   let end = Math.min(totalPages.value, currentPage.value + range);
-
   if (end - start < range * 2) {
     start = Math.max(1, end - range * 2);
     end = Math.min(totalPages.value, start + range * 2);
   }
-
   return Array.from({ length: end - start + 1 }, (_, i) => start + i);
 });
 
@@ -257,6 +254,35 @@ const goToPage = (page) => {
     fetchBatches();
   }
 };
+
+// Computed properties for empty state messages
+const emptyStateTitle = computed(() => {
+  if (filters.value.expiringSoon) {
+    return "No expiring batches found";
+  }
+  if (!filters.value.isActive && totalItems.value > 0) {
+    // Only show if there are batches but none are inactive
+    return "No inactive batches found";
+  }
+  if (searchQuery.value || filters.value.supplier) {
+    return "No batches found";
+  }
+  return "No inventory batches yet";
+});
+
+const emptyStateDescription = computed(() => {
+  if (filters.value.expiringSoon) {
+    return "There are currently no batches expiring soon. All active batches are in good standing.";
+  }
+  if (!filters.value.isActive && totalItems.value > 0) {
+    // Only show if there are batches but none are inactive
+    return "There are currently no inactive batches. All batches are active.";
+  }
+  if (searchQuery.value || filters.value.supplier) {
+    return "Try adjusting your search criteria or filters to find what you're looking for.";
+  }
+  return "Get started by creating your first inventory batch to track expiration dates and stock levels.";
+});
 </script>
 
 <template>
@@ -290,7 +316,6 @@ const goToPage = (page) => {
           </button>
         </div>
       </div>
-
       <!-- Header -->
       <div
         class="bg-white/80 mb-8 backdrop-blur-sm shadow-lg border-b border-gray-200/50 sticky top-0 z-10"
@@ -317,7 +342,6 @@ const goToPage = (page) => {
                 </p>
               </div>
             </div>
-
             <!-- Right: Action Button -->
             <button @click="openBatchModal" class="btn-primary group">
               <PlusCircle
@@ -328,7 +352,6 @@ const goToPage = (page) => {
           </div>
         </div>
       </div>
-
       <!-- Stats Cards -->
       <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <div
@@ -395,7 +418,6 @@ const goToPage = (page) => {
           </div>
         </div>
       </div>
-
       <!-- Filters -->
       <div
         class="bg-white/70 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6 mb-8"
@@ -456,7 +478,6 @@ const goToPage = (page) => {
           </div>
         </div>
       </div>
-
       <!-- Loading State -->
       <div v-if="loading" class="flex justify-center items-center h-64">
         <div class="relative">
@@ -468,21 +489,22 @@ const goToPage = (page) => {
           ></div>
         </div>
       </div>
-
       <!-- Error State -->
       <div
         v-else-if="error"
-        class="bg-red-50/80 backdrop-blur-sm border border-red-200 p-6 rounded-2xl text-red-700"
+        class="bg-red-50/80 backdrop-blur-sm border border-red-200 p-6 rounded-2xl text-red-700 flex flex-col items-center justify-center text-center"
       >
-        <div class="flex items-center">
-          <AlertCircle class="w-6 h-6 mr-3" />
-          <div>
-            <p class="font-semibold">Error loading data:</p>
-            <p>{{ error }}</p>
-          </div>
-        </div>
+        <AlertCircle class="w-12 h-12 text-red-600 mb-4" />
+        <h3 class="text-xl font-semibold mb-2">Failed to Load Batches</h3>
+        <p class="text-gray-700 mb-6">{{ error }}</p>
+        <button
+          @click="fetchBatches"
+          class="px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors font-medium flex items-center justify-center"
+        >
+          <RefreshCcw class="w-4 h-4 mr-2" />
+          Retry
+        </button>
       </div>
-
       <!-- Empty State -->
       <div
         v-else-if="!loading && !error && batches.length === 0"
@@ -490,27 +512,25 @@ const goToPage = (page) => {
       >
         <Package2 class="w-16 h-16 mx-auto text-gray-400 mb-4" />
         <h3 class="text-xl font-semibold text-gray-900 mb-2">
-          {{
-            searchQuery || filters.supplier || filters.expiringSoon
-              ? "No batches found"
-              : "No inventory batches yet"
-          }}
+          {{ emptyStateTitle }}
         </h3>
         <p class="text-gray-600 mb-6">
-          {{
-            searchQuery || filters.supplier || filters.expiringSoon
-              ? "Try adjusting your search criteria or filters to find what you're looking for."
-              : "Get started by creating your first inventory batch to track expiration dates and stock levels."
-          }}
+          {{ emptyStateDescription }}
         </p>
         <div class="flex flex-col sm:flex-row gap-3 justify-center">
           <button
-            v-if="searchQuery || filters.supplier || filters.expiringSoon"
+            v-if="
+              searchQuery ||
+              filters.supplier ||
+              filters.expiringSoon ||
+              !filters.isActive
+            "
             @click="
               () => {
                 searchQuery = '';
                 filters.supplier = '';
                 filters.expiringSoon = false;
+                filters.isActive = true; // Reset to default active only
                 fetchBatches();
               }
             "
@@ -519,6 +539,7 @@ const goToPage = (page) => {
             Clear Filters
           </button>
           <button
+            v-if="totalItems === 0"
             @click="openBatchModal()"
             class="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium flex items-center justify-center"
           >
@@ -527,7 +548,6 @@ const goToPage = (page) => {
           </button>
         </div>
       </div>
-
       <!-- Table -->
       <div
         v-else-if="batches.length > 0"
@@ -659,7 +679,6 @@ const goToPage = (page) => {
             </tbody>
           </table>
         </div>
-
         <!-- Pagination -->
         <div class="px-6 py-4 border-t border-gray-100 bg-gray-50/50">
           <div class="flex flex-col md:flex-row items-center justify-between">
@@ -700,7 +719,6 @@ const goToPage = (page) => {
           </div>
         </div>
       </div>
-
       <!-- Batch Modal -->
       <div
         v-if="showModal"
@@ -720,6 +738,12 @@ const goToPage = (page) => {
               </div>
               <h3 class="text-2xl font-bold text-gray-900">
                 {{ currentBatch.id ? "Edit" : "New" }} Batch
+                <span
+                  v-if="currentBatch.id && currentBatch.batch_number"
+                  class="text-gray-500 text-xl font-normal ml-2"
+                >
+                  (#{{ currentBatch.batch_number }})
+                </span>
               </h3>
             </div>
             <button
@@ -750,6 +774,7 @@ const goToPage = (page) => {
                   </option>
                 </select>
               </div>
+              <!-- Removed Batch Number input field as requested -->
               <div>
                 <label class="block text-sm font-semibold text-gray-700 mb-3"
                   >Quantity *</label
@@ -857,23 +882,18 @@ const goToPage = (page) => {
     opacity: 1;
   }
 }
-
 .animate-slide-in {
   animation: slide-in 0.3s ease-out;
 }
-
 .btn-primary {
   @apply bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-3 rounded-xl flex items-center justify-center font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-0.5;
 }
-
 .btn-secondary {
   @apply bg-gray-100 hover:bg-gray-200 text-gray-700 px-6 py-3 rounded-xl font-semibold transition-all duration-200;
 }
-
 .btn-pagination {
   @apply relative inline-flex items-center px-4 py-2 border border-gray-200 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200;
 }
-
 .btn-pagination:not(:last-child) {
   @apply border-r-0;
 }

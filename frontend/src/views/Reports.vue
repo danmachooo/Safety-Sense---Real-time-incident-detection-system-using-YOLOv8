@@ -4,7 +4,7 @@
   >
     <!-- Enhanced Header with Gradient -->
     <div
-      class="bg-white/80 backdrop-blur-sm shadow-lg border-b border-gray-200/50 sticky top-0 z-9"
+      class="bg-white/80 backdrop-blur-sm shadow-lg border-b border-gray-200/50 sticky top-0 z-10"
     >
       <div class="px-6 py-6">
         <div class="flex items-center justify-between">

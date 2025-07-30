@@ -42,13 +42,13 @@ const navigateTo = (route) => {
 </script>
 
 <template>
-  <div class="flex h-screen bg-[#1B262C] text-gray-800">
+  <div class="flex h-screen bg-gray-900 text-gray-800">
     <!-- Sidebar -->
     <aside
-      class="w-64 bg-[#1B262C] overflow-y-auto scrollbar-hide flex-shrink-0"
+      class="w-64 bg-gray-900 overflow-y-auto scrollbar-hide flex-shrink-0"
     >
       <div
-        class="p-4 sticky top-0 bg-[#1B262C] z-10 flex items-center justify-center"
+        class="p-4 sticky top-0 bg-gray-900 z-10 flex items-center justify-center"
       >
         <img
           :src="thatLogo"

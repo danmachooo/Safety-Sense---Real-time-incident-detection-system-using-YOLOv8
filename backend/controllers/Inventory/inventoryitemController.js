@@ -91,7 +91,9 @@ const createItem = async (req, res, next) => {
 const uploadExcelFile = async (req, res, next) => {
   try {
     if (!req.file) throw new BadRequestError("No file uploaded.");
-    const result = await processExcelFile(req.file.path, req.user.id);
+
+    // Pass the file buffer instead of file path since we're using Supabase
+    const result = await processExcelFile(req.file.buffer, req.user.id);
 
     // Invalidate cache after bulk upload
     await invalidateItemsCache();

@@ -15,7 +15,8 @@ import Category from "./Inventory/Category.js";
 import Deployment from "./Inventory/Deployment.js";
 import InventoryNotification from "./Inventory/InventoryNotification.js";
 import ActionLog from "./Inventory/ActionLog.js";
-
+import SerialItemDeployment from "./Inventory/SerialItemDeployment.js";
+import SerializedItem from "./Inventory/SerializedItem.js";
 const setupAssociations = () => {
   // ========================================
   // USER ASSOCIATIONS
@@ -226,6 +227,79 @@ const setupAssociations = () => {
   ActionLog.belongsTo(InventoryItem, {
     foreignKey: "itemId",
     as: "inventoryItem",
+  });
+
+  // ========================================
+  // SERIALIZED ITEM ASSOCIATIONS
+  // ========================================
+
+  // SerializedItem <-> Batch
+  Batch.hasMany(SerializedItem, {
+    foreignKey: "batch_id",
+    as: "serializedItems",
+  });
+
+  SerializedItem.belongsTo(Batch, {
+    foreignKey: "batch_id",
+    as: "batch",
+  });
+
+  // SerializedItem <-> InventoryItem
+  InventoryItem.hasMany(SerializedItem, {
+    foreignKey: "inventory_item_id",
+    as: "serializedItems",
+  });
+
+  SerializedItem.belongsTo(InventoryItem, {
+    foreignKey: "inventory_item_id",
+    as: "inventoryItem",
+  });
+
+  // SerializedItem <-> User (created_by)
+  User.hasMany(SerializedItem, {
+    foreignKey: "created_by",
+    as: "createdSerializedItems",
+  });
+
+  SerializedItem.belongsTo(User, {
+    foreignKey: "created_by",
+    as: "creator",
+  });
+
+  // SerialItemDeployment associations
+  Deployment.hasMany(SerialItemDeployment, {
+    foreignKey: "deployment_id",
+    as: "serialItemDeployments",
+  });
+
+  SerialItemDeployment.belongsTo(Deployment, {
+    foreignKey: "deployment_id",
+    as: "deployment",
+  });
+
+  SerializedItem.hasMany(SerialItemDeployment, {
+    foreignKey: "serialized_item_id",
+    as: "deploymentHistory",
+  });
+
+  SerialItemDeployment.belongsTo(SerializedItem, {
+    foreignKey: "serialized_item_id",
+    as: "serializedItem",
+  });
+
+  // Many-to-Many through SerialItemDeployment
+  Deployment.belongsToMany(SerializedItem, {
+    through: SerialItemDeployment,
+    as: "deployedSerialItems",
+    foreignKey: "deployment_id",
+    otherKey: "serialized_item_id",
+  });
+
+  SerializedItem.belongsToMany(Deployment, {
+    through: SerialItemDeployment,
+    as: "deployments",
+    foreignKey: "serialized_item_id",
+    otherKey: "deployment_id",
   });
 
   console.log("✅ All model associations have been set up successfully");

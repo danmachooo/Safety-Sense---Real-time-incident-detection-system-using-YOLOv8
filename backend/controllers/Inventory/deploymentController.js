@@ -7,81 +7,179 @@ import {
   ForbiddenError,
   UnauthorizedError,
 } from "../../utils/Error.js";
+import sequelize from "../../config/database.js";
 import { invalidateItemsCache } from "./utils/cacheUtil.js";
-const { Deployment, InventoryItem, User, InventoryNotification } = models;
+const {
+  Deployment,
+  InventoryItem,
+  User,
+  InventoryNotification,
+  SerializedItem,
+  SerialItemDeployment,
+} = models;
 
 const createDeployment = async (req, res, next) => {
+  const t = await sequelize.transaction();
   try {
     const {
+      incident_type,
       inventory_item_id,
+      quantity,
+      serial_item_ids, // IDs of serialized items
+      deployed_to, // user or department ID (from body)
+      expected_return_date,
+      actual_return_date,
+      notes,
       deployment_type,
-      quantity_deployed,
       deployment_location,
       deployment_date,
-      expected_return_date,
-      incident_type,
-      notes,
-      deployed_to,
     } = req.body;
 
-    const deployed_by = req.user.id;
-
-    if (
-      !inventory_item_id ||
-      !deployment_type ||
-      !quantity_deployed ||
-      !deployment_location
-    ) {
-      throw new BadRequestError("Required fields are missing");
+    // Current logged-in user
+    const deployed_by = req.user?.id;
+    if (!deployed_by) {
+      throw new UnauthorizedError("You must be logged in to deploy items");
     }
 
-    // Check if item exists and has sufficient quantity
-    const item = await InventoryItem.findByPk(inventory_item_id);
-    if (!item) throw new NotFoundError("Item not found");
+    // Validate required fields
+    if (!deployment_type || !deployment_location) {
+      throw new BadRequestError("Deployment type and location are required");
+    }
+    if (!inventory_item_id) {
+      throw new BadRequestError("Inventory item ID is required");
+    }
+    if (!deployed_to) {
+      throw new BadRequestError("Deploy-to ID is required");
+    }
 
-    if (!item.is_deployable)
-      throw new BadRequestError("Item is not deployable");
+    const finalDeploymentDate = deployment_date
+      ? new Date(deployment_date)
+      : new Date();
+    if (isNaN(finalDeploymentDate.getTime())) {
+      throw new BadRequestError("Invalid deployment date");
+    }
 
-    if (item.quantity_in_stock < quantity_deployed)
-      throw new BadRequestError("Insufficient Stock");
-
-    const deployment = await Deployment.create({
-      inventory_item_id,
-      deployed_by,
-      deployed_to,
-      deployment_type,
-      quantity_deployed,
-      deployment_location,
-      deployment_date: deployment_date || new Date(),
-      expected_return_date,
-      status: "DEPLOYED",
-      incident_type,
-      notes,
+    // Lock the inventory item
+    const inventoryItem = await InventoryItem.findByPk(inventory_item_id, {
+      transaction: t,
+      lock: t.LOCK.UPDATE,
     });
+    if (!inventoryItem) throw new NotFoundError("Inventory item not found");
 
-    // Update inventory quantity
-    await item.update({
-      quantity_in_stock: item.quantity_in_stock - quantity_deployed,
-    });
+    // SERIALIZED deployment
+    if (serial_item_ids?.length > 0) {
+      if (!Array.isArray(serial_item_ids)) {
+        throw new BadRequestError("serial_item_ids must be an array of IDs");
+      }
 
-    // Create notification for deployment
-    await InventoryNotification.create({
-      notification_type: "EQUIPMENT_ISSUE",
-      inventory_item_id,
-      user_id: deployed_by,
-      title: "Equipment Deployed",
-      message: `${item.name} (${quantity_deployed} ${item.unit_of_measure}) deployed to ${deployment_location}`,
-      priority: "MEDIUM",
-    });
-    await invalidateItemsCache();
+      const serializedItems = await SerializedItem.findAll({
+        where: {
+          id: serial_item_ids,
+          status: "AVAILABLE",
+          inventory_item_id,
+        },
+        transaction: t,
+        lock: t.LOCK.UPDATE,
+      });
+
+      if (serializedItems.length !== serial_item_ids.length) {
+        throw new BadRequestError(
+          "Some serial items are not available or don't belong to this inventory item"
+        );
+      }
+
+      // Decrement stock
+      await inventoryItem.decrement("quantity_in_stock", {
+        by: serial_item_ids.length,
+        transaction: t,
+      });
+
+      // Create parent deployment
+      const deployment = await Deployment.create(
+        {
+          deployed_by,
+          deployed_to,
+          incident_type,
+          inventory_item_id,
+          quantity_deployed: serial_item_ids.length,
+          expected_return_date,
+          actual_return_date,
+          notes,
+          deployment_type,
+          deployment_location,
+          deployment_date: finalDeploymentDate,
+          status: "DEPLOYED",
+        },
+        { transaction: t }
+      );
+
+      // Link serialized items
+      const serialDeployments = serial_item_ids.map((id) => ({
+        deployment_id: deployment.id,
+        serialized_item_id: id,
+        deployed_at: finalDeploymentDate,
+      }));
+
+      await SerialItemDeployment.bulkCreate(serialDeployments, {
+        transaction: t,
+      });
+
+      // Update serialized item statuses
+      await SerializedItem.update(
+        { status: "DEPLOYED" },
+        { where: { id: serial_item_ids }, transaction: t }
+      );
+    } else {
+      // NON-SERIALIZED deployment
+      if (!Number.isInteger(quantity) || quantity <= 0) {
+        throw new BadRequestError("Quantity must be a positive integer");
+      }
+      if (inventoryItem.quantity_in_stock < quantity) {
+        throw new BadRequestError("Not enough stock available");
+      }
+
+      await inventoryItem.decrement("quantity_in_stock", {
+        by: quantity,
+        transaction: t,
+      });
+
+      await Deployment.create(
+        {
+          deployed_by,
+          deployed_to,
+          incident_type,
+          inventory_item_id,
+          quantity_deployed: quantity,
+          expected_return_date,
+          actual_return_date,
+          notes,
+          deployment_type,
+          deployment_location,
+          deployment_date: finalDeploymentDate,
+          status: "DEPLOYED",
+        },
+        { transaction: t }
+      );
+    }
+
+    await t.commit();
+
+    // Invalidate cache
+    try {
+      await invalidateItemsCache();
+    } catch (cacheErr) {
+      console.error("Cache invalidation failed:", cacheErr);
+    }
 
     return res.status(StatusCodes.CREATED).json({
       success: true,
-      message: "Deployment Created",
-      data: deployment,
+      message: serial_item_ids?.length
+        ? "Serialized items deployed successfully"
+        : "Non-serialized items deployed successfully",
     });
   } catch (error) {
-    console.error("Create deployment error: ", error.message);
+    await t.rollback();
+    console.error("Create deployment error:", error);
     next(error);
   }
 };
@@ -201,7 +299,9 @@ const getDeploymentById = async (req, res, next) => {
 
 const updateDeploymentStatus = async (req, res, next) => {
   try {
-    const { status, actual_return_date, notes } = req.body;
+    const { status, actual_return_date, notes, return_condition, serial_ids } =
+      req.body;
+
     const deployment = await Deployment.findByPk(req.params.id, {
       include: [{ model: InventoryItem, as: "inventoryItem" }],
     });
@@ -212,20 +312,78 @@ const updateDeploymentStatus = async (req, res, next) => {
       throw new BadRequestError("Deployment already marked as RETURNED");
 
     const oldStatus = deployment.status;
+
     await deployment.update({
       status,
       actual_return_date:
         status === "RETURNED" ? actual_return_date || new Date() : null,
-      notes: notes ? `${deployment.notes}\n${notes}` : deployment.notes,
+      notes: notes ? `${deployment.notes || ""}\n${notes}` : deployment.notes,
     });
 
-    // If item is returned, update inventory quantity
+    // If returned, update quantity in stock
     if (status === "RETURNED" && oldStatus === "DEPLOYED") {
+      let returnedCount = deployment.quantity_deployed; // Default for non-serialized
+
+      if (Array.isArray(serial_ids) && serial_ids.length > 0) {
+        // For serialized: Update history
+        const updateDate = actual_return_date || new Date();
+        await SerialItemDeployment.update(
+          {
+            returned_at: updateDate,
+            return_condition: return_condition || "GOOD",
+            notes,
+          },
+          {
+            where: {
+              deployment_id: deployment.id,
+              serialized_item_id: serial_ids,
+              returned_at: null,
+            },
+          }
+        );
+
+        // NEW: Update SerializedItem current status
+        await SerializedItem.update(
+          {
+            status:
+              return_condition === "DAMAGED"
+                ? "DAMAGED"
+                : return_condition === "LOST"
+                ? "RETIRED"
+                : "AVAILABLE",
+            return_date: updateDate,
+            deployed_to: null, // Clear deployment location
+            condition_notes: notes
+              ? `${condition_notes || ""}\n${notes}`
+              : condition_notes,
+          },
+          {
+            where: { id: serial_ids }, // Assumes serial_ids are SerializedItem IDs
+          }
+        );
+
+        // Adjust stock increment for partial returns
+        returnedCount = serial_ids.length; // Or query how many were actually updated
+      }
+
+      // Increment stock by the appropriate amount
       await deployment.inventoryItem.increment("quantity_in_stock", {
-        by: deployment.quantity_deployed,
+        by: returnedCount,
       });
 
-      // Create notification for return
+      // NEW: Check if all serial items are returned; if not, revert deployment status to partial state
+      // (Optional: Skip if you don't support partial returns)
+      const pendingSerials = await SerialItemDeployment.count({
+        where: {
+          deployment_id: deployment.id,
+          returned_at: null,
+        },
+      });
+      if (pendingSerials > 0) {
+        await deployment.update({ status: "PARTIAL_RETURN" }); // Or keep as "DEPLOYED"; add "PARTIAL_RETURN" to your ENUM if needed
+      }
+
+      // Create notification (unchanged)
       await InventoryNotification.create({
         notification_type: "EQUIPMENT_ISSUE",
         inventory_item_id: deployment.inventory_item_id,
@@ -244,11 +402,10 @@ const updateDeploymentStatus = async (req, res, next) => {
       message: "Deployment status updated successfully",
     });
   } catch (error) {
-    console.error("Deployment status updated error: ", error.message);
+    console.error("Deployment status update error:", error.message);
     next(error);
   }
 };
-
 const getOverdueDeployments = async (req, res, next) => {
   try {
     const { page = 1, limit = 10 } = req.query;

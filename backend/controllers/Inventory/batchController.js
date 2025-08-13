@@ -1,7 +1,15 @@
-import { Op } from "sequelize";
+import { Op, Sequelize } from "sequelize";
 
 import models from "../../models/index.js";
-const { User, InventoryItem, Category, Batch, InventoryNotification } = models;
+const {
+  User,
+  InventoryItem,
+  Category,
+  Batch,
+  InventoryNotification,
+  SerialItemDeployment,
+  SerializedItem,
+} = models;
 import { invalidateItemsCache } from "./utils/cacheUtil.js";
 import {
   BadRequestError,
@@ -17,8 +25,55 @@ import {
   invalidateInventoryCache,
   invalidateCategoryCache,
 } from "../../services/redis/cache.js";
+import sequelize from "../../config/database.js";
+
+const isReturnableItem = (categoryType, categoryName, itemName) => {
+  const returnableCategories = [
+    "EQUIPMENT",
+    "VEHICLES",
+    "COMMUNICATION_DEVICES",
+    "SUPPLIES",
+  ];
+
+  const returnableKeywords = [
+    "stretcher",
+    "wheelchair",
+    "defibrillator",
+    "monitor",
+    "ventilator",
+    "ambulance",
+    "truck",
+    "generator",
+    "radio",
+    "laptop",
+    "tablet",
+    "kit",
+  ];
+
+  return (
+    returnableCategories.includes(categoryType?.toUpperCase()) ||
+    returnableCategories.includes(categoryName?.toUpperCase()) ||
+    returnableKeywords.some((keyword) =>
+      itemName?.toLowerCase().includes(keyword.toLowerCase())
+    )
+  );
+};
+
+const generateSerialNumbers = (batchNumber, quantity, categoryCode) => {
+  const date = new Date();
+  const yymmdd =
+    date.getFullYear().toString().slice(-2) +
+    (date.getMonth() + 1).toString().padStart(2, "0") +
+    date.getDate().toString().padStart(2, "0");
+
+  return Array.from({ length: quantity }, (_, i) => {
+    const sequence = (i + 1).toString().padStart(3, "0");
+    return `${categoryCode}-${batchNumber}-${yymmdd}-${sequence}`;
+  });
+};
 
 const createBatch = async (req, res, next) => {
+  const t = await sequelize.transaction();
   try {
     const {
       inventory_item_id,
@@ -30,42 +85,77 @@ const createBatch = async (req, res, next) => {
       notes,
     } = req.body;
 
-    // Assuming user ID is available in req.user.id from auth middleware
+    if (!inventory_item_id || !quantity) {
+      throw new BadRequestError("Required fields are missing");
+    }
+
     const received_by = req.user.id;
 
-    // Check if inventory item exists
-    const item = await InventoryItem.findByPk(inventory_item_id);
+    const item = await InventoryItem.findByPk(inventory_item_id, {
+      include: [{ model: Category, as: "category" }],
+      transaction: t,
+      lock: t.LOCK.UPDATE,
+    });
+
     if (!item) throw new BadRequestError("Item not found");
 
     // Generate batch number
     const itemPrefix = item.name.slice(0, 3).toUpperCase();
     const currentDate = new Date()
       .toISOString()
-      .replace(/[-:]/g, "")
+      .replace(/[-:TZ]/g, "")
       .slice(0, 14);
     const batch_number = `${itemPrefix}${currentDate}`;
 
-    if (!inventory_item_id || !quantity)
-      throw new BadRequestError("Required fields are missing");
+    const needsSerialization =
+      item.is_returnable ||
+      isReturnableItem(item.category.type, item.category.name, item.name);
 
-    const batch = await Batch.create({
-      inventory_item_id,
-      batch_number,
-      quantity,
-      expiry_date,
-      supplier,
-      received_by,
-      received_date: new Date(),
-      funding_source,
-      cost,
-      notes,
-      is_active: true,
-    });
+    // Create batch record
+    const newBatch = await Batch.create(
+      {
+        inventory_item_id,
+        batch_number,
+        quantity,
+        expiry_date,
+        supplier,
+        received_by,
+        received_date: new Date(),
+        funding_source,
+        cost,
+        notes,
+        is_active: true,
+      },
+      { transaction: t }
+    );
 
-    // Update inventory item quantity
-    await item.increment("quantity_in_stock", { by: quantity });
+    if (needsSerialization) {
+      const categoryCode = item.category.type
+        .slice(0, 3)
+        .toUpperCase()
+        .padEnd(3, "X");
 
-    // Check for expiry notification if expiry date is set
+      const serialNumbers = generateSerialNumbers(
+        batch_number,
+        quantity,
+        categoryCode
+      );
+
+      const serializedItems = serialNumbers.map((serialNumber) => ({
+        serial_number: serialNumber,
+        batch_id: newBatch.id,
+        inventory_item_id,
+        status: "AVAILABLE",
+        created_by: received_by,
+      }));
+
+      await SerializedItem.bulkCreate(serializedItems, { transaction: t });
+      console.log(`Generated ${quantity} serial numbers for ${item.name}`);
+    }
+
+    await item.increment("quantity_in_stock", { by: quantity, transaction: t });
+
+    // Expiry notification
     if (expiry_date) {
       const expiryDate = new Date(expiry_date);
       const today = new Date();
@@ -74,29 +164,101 @@ const createBatch = async (req, res, next) => {
       );
 
       if (daysUntilExpiry <= 30) {
-        await InventoryNotification.create({
-          notification_type: "EXPIRING_SOON",
-          inventory_item_id,
-          user_id: received_by,
-          title: "Batch Expiring Soon",
-          message: `Batch ${batch_number} of ${item.name} will expire in ${daysUntilExpiry} days`,
-          priority: daysUntilExpiry <= 7 ? "HIGH" : "MEDIUM",
-        });
+        await InventoryNotification.create(
+          {
+            notification_type: "EXPIRING_SOON",
+            inventory_item_id,
+            user_id: received_by,
+            title: "Batch Expiring Soon",
+            message: `Batch ${batch_number} of ${item.name} will expire in ${daysUntilExpiry} days`,
+            priority: daysUntilExpiry <= 7 ? "HIGH" : "MEDIUM",
+          },
+          { transaction: t }
+        );
       }
     }
 
-    // ✅ FIXED: Invalidate relevant caches
+    // Commit transaction
+    await t.commit();
+
+    // Invalidate caches AFTER successful commit
     await invalidateBatchCache(inventory_item_id);
     await invalidateInventoryCache(inventory_item_id);
-    await invalidateItemsCache(); // Your existing cache invalidation
+    await invalidateItemsCache();
 
     return res.status(StatusCodes.CREATED).json({
       success: true,
-      message: "A batch has been created!",
-      data: batch,
+      message: needsSerialization
+        ? `Batch created with ${quantity} serialized items!`
+        : "Batch created successfully!",
+      data: {
+        batch: newBatch,
+        serialized: needsSerialization,
+        serial_count: needsSerialization ? quantity : 0,
+      },
     });
   } catch (error) {
-    console.error("Batch Creation error: ", error.message);
+    await t.rollback();
+    console.error("Batch Creation error: ", error);
+    next(error);
+  }
+};
+
+// Get serialized items for a specific batch or item
+const getSerializedItems = async (req, res, next) => {
+  try {
+    const {
+      batch_id,
+      inventory_item_id,
+      status,
+      page = 1,
+      limit = 20,
+      sort = "ASC",
+    } = req.query;
+
+    const whereClause = {};
+    if (batch_id) whereClause.batch_id = batch_id;
+    if (inventory_item_id) whereClause.inventory_item_id = inventory_item_id;
+    if (status) whereClause.status = status;
+
+    const offset = (page - 1) * limit;
+
+    const { rows: serializedItems, count } =
+      await SerializedItem.findAndCountAll({
+        where: whereClause,
+        include: [
+          {
+            model: Batch,
+            as: "batch",
+          },
+          {
+            model: InventoryItem,
+            as: "inventoryItem",
+            include: [
+              {
+                model: Category,
+                as: "category",
+              },
+            ],
+          },
+        ],
+        order: [["serial_number", sort.toUpperCase()]],
+        limit: parseInt(limit, 10),
+        offset: parseInt(offset, 10),
+      });
+
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      data: serializedItems,
+      pagination: {
+        total: count,
+        page: parseInt(page, 10),
+        limit: parseInt(limit, 10),
+        totalPages: Math.ceil(count / limit),
+      },
+    });
+  } catch (error) {
+    console.error("Get Serialized Items error: ", error.message);
     next(error);
   }
 };
@@ -432,6 +594,7 @@ const getExpiringBatches = async (req, res, next) => {
 
 export {
   createBatch,
+  getSerializedItems,
   getAllBatches,
   getBatchById,
   updateBatch,

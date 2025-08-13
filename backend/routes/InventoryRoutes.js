@@ -7,6 +7,7 @@ const router = express.Router();
 
 import {
   createBatch,
+  getSerializedItems,
   getAllBatches,
   getBatchById,
   updateBatch,
@@ -96,6 +97,9 @@ router.post("/batches", authMiddleware, adminMiddleware, createBatch);
 router.put("/batches/:id", authMiddleware, adminMiddleware, updateBatch);
 router.delete("/batches/:id", authMiddleware, adminMiddleware, deleteBatch);
 router.patch("/batches/:id", authMiddleware, adminMiddleware, restoreBatch);
+
+//Serialized iTEMS
+router.get("/serialized", authMiddleware, adminMiddleware, getSerializedItems);
 
 //Deployments
 router.get("/deployment", authMiddleware, adminMiddleware, getAllDeployments);

@@ -8,7 +8,7 @@ import {
 import { processExcelFile } from "./services/inventoryService.js";
 
 import models from "../../models/index.js";
-const { User, InventoryItem, Category, Notification } = models;
+const { User, InventoryItem, Category, InventoryNotification } = models;
 
 import { BadRequestError, NotFoundError } from "../../utils/Error.js";
 import { getStatusCode, StatusCodes } from "http-status-codes";
@@ -65,7 +65,7 @@ const createItem = async (req, res, next) => {
 
     // Create notification if stock is below minimum
     if (quantity_in_stock <= min_stock_level) {
-      await Notification.create({
+      await InventoryNotification.create({
         notification_type: "LOW_STOCK",
         inventory_item_id: item.id,
         title: "Low Stock Alert",
@@ -268,7 +268,7 @@ const updateItem = async (req, res, next) => {
       );
 
       if (daysUntilMaintenance <= 7) {
-        await Notification.create({
+        await InventoryNotification.create({
           notification_type: "MAINTENANCE_DUE",
           inventory_item_id: item.id,
           title: "Maintenance Due Soon",

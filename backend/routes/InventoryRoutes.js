@@ -7,6 +7,7 @@ const router = express.Router();
 
 import {
   createBatch,
+  getSerializedItems,
   getAllBatches,
   getBatchById,
   updateBatch,
@@ -30,6 +31,7 @@ import {
   getDeploymentById,
   updateDeploymentStatus,
   getOverdueDeployments,
+  getUserLiabilityReport,
 } from "../controllers/Inventory/deploymentController.js";
 
 import {
@@ -53,6 +55,7 @@ import {
 
 import { uploadExcel } from "../middlewares/excelUploadMiddleware.js";
 import { generateEmptyTemplate } from "../controllers/Incidents/incidentController.js";
+import { and } from "sequelize";
 
 //Categories
 router.get("/categories", authMiddleware, adminMiddleware, getAllCategories);
@@ -97,8 +100,17 @@ router.put("/batches/:id", authMiddleware, adminMiddleware, updateBatch);
 router.delete("/batches/:id", authMiddleware, adminMiddleware, deleteBatch);
 router.patch("/batches/:id", authMiddleware, adminMiddleware, restoreBatch);
 
+//Serialized iTEMS
+router.get("/serialized", authMiddleware, adminMiddleware, getSerializedItems);
+
 //Deployments
 router.get("/deployment", authMiddleware, adminMiddleware, getAllDeployments);
+router.get(
+  "/deployment/user-liability",
+  authMiddleware,
+  adminMiddleware,
+  getUserLiabilityReport
+);
 router.get(
   "/deployment/overdue",
   authMiddleware,

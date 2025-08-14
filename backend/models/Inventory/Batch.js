@@ -42,7 +42,7 @@ const Batch = sequelize.define(
     },
     received_by: {
       type: DataTypes.UUID,
-      allowNull: false, // Ensuring it's required
+      allowNull: true, // Ensuring it's required
     },
     funding_source: {
       type: DataTypes.STRING(255),

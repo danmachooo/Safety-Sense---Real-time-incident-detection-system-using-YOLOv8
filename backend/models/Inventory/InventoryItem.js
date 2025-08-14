@@ -71,6 +71,11 @@ const InventoryItem = sequelize.define(
       type: DataTypes.BOOLEAN,
       defaultValue: true,
     },
+    is_returnable: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+      comment: "Indicates if item requires individual serial number tracking",
+    },
     notes: {
       type: DataTypes.TEXT,
     },

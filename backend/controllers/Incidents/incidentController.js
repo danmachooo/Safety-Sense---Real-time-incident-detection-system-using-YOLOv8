@@ -175,14 +175,15 @@ const createCitizenReport = async (req, res, next) => {
     if (snapshotUrl && snapshotUrl.trim() !== "") {
       // Image was uploaded separately and URL/path provided in request body
       finalSnapshotUrl = snapshotUrl.startsWith("http")
-        ? snapshotUrl
-        : getFileUrl(snapshotUrl);
+        ? snapshotUrl // only if you actually want to accept external URLs
+        : getFilePath(snapshotUrl);
+
       console.log("Image URL from request body:", finalSnapshotUrl);
     }
     // Priority 2: Check if file was uploaded through multer middleware
     else if (req.file && req.file.supabasePath && !req.uploadError) {
       // File uploaded successfully to Supabase via middleware
-      finalSnapshotUrl = getFileUrl(req.file.supabasePath);
+      finalSnapshotUrl = getFilePath(req.file.supabasePath);
       console.log("Image uploaded via middleware:", finalSnapshotUrl);
     }
     // Priority 3: Handle upload errors
@@ -441,7 +442,6 @@ const getIncidents = async (req, res, next) => {
 
     const whereCondition = {};
 
-    // Search condition
     if (search) {
       whereCondition[Op.or] = [
         { description: { [Op.like]: `%${search}%` } },
@@ -450,38 +450,32 @@ const getIncidents = async (req, res, next) => {
       ];
     }
 
-    // Filter conditions
     if (status) whereCondition.status = status;
     if (type) whereCondition.type = type;
     if (cameraId) whereCondition.cameraId = cameraId;
 
-    // Filter by source (citizen vs camera)
     if (source === "citizen") {
       whereCondition.cameraId = null;
     } else if (source === "camera") {
       whereCondition.cameraId = { [Op.not]: null };
     }
 
-    // Date range filter
     if (startDate || endDate) {
       whereCondition.createdAt = {};
       if (startDate) whereCondition.createdAt[Op.gte] = new Date(startDate);
       if (endDate) whereCondition.createdAt[Op.lte] = new Date(endDate);
     }
 
-    // Pagination
     const pageNumber = Number.parseInt(page) || 1;
     const limitNumber = Number.parseInt(limit) || 10;
     const offset = (pageNumber - 1) * limitNumber;
 
-    // Paranoid option for soft deleted records
     const paranoidOption = showDeleted === "true" ? false : true;
 
-    // Sorting
     const validSortColumns = ["createdAt", "type", "status", "updatedAt"];
     const validSortOrders = ["asc", "desc"];
 
-    let order = [["createdAt", "desc"]]; // Default sorting
+    let order = [["createdAt", "desc"]];
 
     if (sortBy && validSortColumns.includes(sortBy.toLowerCase())) {
       const direction = validSortOrders.includes(sortOrder?.toLowerCase())
@@ -497,29 +491,45 @@ const getIncidents = async (req, res, next) => {
           model: Camera,
           as: "camera",
           attributes: ["id", "name", "location", "status"],
-          required: false, // LEFT JOIN
+          required: false,
         },
         {
           model: User,
           as: "accepters",
           attributes: ["id", "firstname", "lastname", "email", "contact"],
           through: { attributes: ["acceptedAt"] },
-          required: false, // LEFT JOIN
+          required: false,
         },
         {
           model: User,
           as: "dismissers",
           attributes: ["id", "firstname", "lastname", "email", "contact"],
           through: { attributes: ["dismissedAt"] },
-          required: false, // LEFT JOIN
+          required: false,
         },
       ],
       paranoid: paranoidOption,
       offset,
       limit: limitNumber,
       order,
-      distinct: true, // Important for correct count with associations
+      distinct: true,
     });
+
+    // Generate signed URLs for snapshot paths
+    const dataWithSignedUrls = await Promise.all(
+      rows.map(async (incident) => {
+        if (incident.snapshotUrl) {
+          const { data: signed, error } = await supabase.storage
+            .from("uploads") // your bucket name
+            .createSignedUrl(incident.snapshotUrl, 3600); // 1 hour expiry
+
+          if (!error && signed?.signedUrl) {
+            incident.dataValues.snapshotSignedUrl = signed.signedUrl;
+          }
+        }
+        return incident;
+      })
+    );
 
     return res.status(StatusCodes.OK).json({
       success: true,
@@ -527,7 +537,7 @@ const getIncidents = async (req, res, next) => {
       totalIncidents: count,
       totalPages: Math.ceil(count / limitNumber),
       currentPage: pageNumber,
-      data: rows,
+      data: dataWithSignedUrls,
     });
   } catch (error) {
     console.error("An error occurred: " + error);

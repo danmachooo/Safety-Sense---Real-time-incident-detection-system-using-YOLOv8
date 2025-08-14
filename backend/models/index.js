@@ -18,6 +18,8 @@ import Batch from "./Inventory/Batch.js";
 import Category from "./Inventory/Category.js";
 import Deployment from "./Inventory/Deployment.js";
 import InventoryNotification from "./Inventory/InventoryNotification.js";
+import SerializedItem from "./Inventory/SerializedItem.js";
+import SerialItemDeployment from "./Inventory/SerialItemDeployment.js";
 // import ActionLog from "./ActionLog.js"; // Uncomment if this exists
 
 // IMPORTANT: Set up associations ONCE here
@@ -40,6 +42,8 @@ const models = {
   Category,
   Deployment,
   InventoryNotification,
+  SerializedItem,
+  SerialItemDeployment,
   // ActionLog, // Uncomment if this exists
 };
 

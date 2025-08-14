@@ -15,7 +15,9 @@ const InventoryNotification = sequelize.define(
         "EXPIRING_SOON",
         "MAINTENANCE_DUE",
         "DEPLOYMENT_OVERDUE",
-        "EQUIPMENT_ISSUE"
+        "EQUIPMENT_ISSUE",
+        "EQUIPMENT_RETURN",
+        "EQUIPMENT_RECOVERY"
       ),
       allowNull: false,
     },

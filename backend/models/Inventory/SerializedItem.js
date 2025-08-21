@@ -106,17 +106,6 @@ const SerializedItem = sequelize.define(
         isDate: {
           msg: "Must be a valid date",
         },
-        isAfterLast(value) {
-          if (
-            value &&
-            this.last_maintenance_date &&
-            value <= this.last_maintenance_date
-          ) {
-            throw new Error(
-              "Next maintenance date must be after last maintenance date"
-            );
-          }
-        },
       },
     },
   },

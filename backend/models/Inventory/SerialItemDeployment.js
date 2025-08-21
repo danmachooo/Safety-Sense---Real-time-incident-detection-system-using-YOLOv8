@@ -47,11 +47,6 @@ const SerialItemDeployment = sequelize.define(
         isDate: {
           msg: "Must be a valid date",
         },
-        isAfterDeployment(value) {
-          if (value && this.deployed_at && value <= this.deployed_at) {
-            throw new Error("Return date must be after deployment date");
-          }
-        },
       },
     },
     return_condition: {

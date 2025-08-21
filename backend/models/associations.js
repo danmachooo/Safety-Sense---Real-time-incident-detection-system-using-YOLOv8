@@ -17,88 +17,63 @@ import InventoryNotification from "./Inventory/InventoryNotification.js";
 import ActionLog from "./Inventory/ActionLog.js";
 import SerialItemDeployment from "./Inventory/SerialItemDeployment.js";
 import SerializedItem from "./Inventory/SerializedItem.js";
+import SerializedItemHistory from "./Inventory/SerializedItemHistory.js"; // 👈 new model
 
 const setupAssociations = () => {
   // ========================================
   // USER ASSOCIATIONS
   // ========================================
-
-  // User -> LoginHistory (One-to-Many)
   User.hasMany(LoginHistory, {
     foreignKey: "userId",
     as: "loginHistory",
     onDelete: "CASCADE",
   });
-  LoginHistory.belongsTo(User, {
-    foreignKey: "userId",
-    as: "user",
-  });
+  LoginHistory.belongsTo(User, { foreignKey: "userId", as: "user" });
 
-  // User -> CameraLog (One-to-Many)
   User.hasMany(CameraLog, {
     foreignKey: "userId",
     as: "cameraLogs",
-    onDelete: "SET NULL", // Keep logs even if user is deleted
+    onDelete: "SET NULL",
   });
-  CameraLog.belongsTo(User, {
-    foreignKey: "userId",
-    as: "user",
-  });
+  CameraLog.belongsTo(User, { foreignKey: "userId", as: "user" });
 
-  // User -> Batch (One-to-Many - received_by)
   User.hasMany(Batch, {
     foreignKey: "received_by",
     as: "receivedBatches",
-    onDelete: "SET NULL", // Keep batch records
+    onDelete: "SET NULL",
   });
-  Batch.belongsTo(User, {
-    foreignKey: "received_by",
-    as: "receiver",
-  });
+  Batch.belongsTo(User, { foreignKey: "received_by", as: "receiver" });
 
-  // User -> Deployment (One-to-Many - deployed_by)
   User.hasMany(Deployment, {
     foreignKey: "deployed_by",
     as: "deploymentsMade",
-    onDelete: "RESTRICT", // Don't allow deletion of users with deployments
+    onDelete: "RESTRICT",
   });
-  Deployment.belongsTo(User, {
-    foreignKey: "deployed_by",
-    as: "deployer",
-  });
+  Deployment.belongsTo(User, { foreignKey: "deployed_by", as: "deployer" });
 
-  // User -> Deployment (One-to-Many - deployed_to)
   User.hasMany(Deployment, {
     foreignKey: "deployed_to",
     as: "deploymentsReceived",
-    onDelete: "RESTRICT", // Don't allow deletion of users with deployments
+    onDelete: "RESTRICT",
   });
   Deployment.belongsTo(User, {
     foreignKey: "deployed_to",
-    as: "recipient", // Changed from 'receiver' to avoid conflict with Batch association
+    as: "recipient",
   });
 
-  // User -> SerializedItem (One-to-Many - created_by)
   User.hasMany(SerializedItem, {
     foreignKey: "created_by",
     as: "createdSerializedItems",
-    onDelete: "SET NULL", // Keep items even if creator is deleted
+    onDelete: "SET NULL",
   });
-  SerializedItem.belongsTo(User, {
-    foreignKey: "created_by",
-    as: "creator",
-  });
+  SerializedItem.belongsTo(User, { foreignKey: "created_by", as: "creator" });
 
-  // User -> Notifications (One-to-Many)
   User.hasMany(Notification, {
     foreignKey: "userId",
     as: "notifications",
-    onDelete: "CASCADE", // Delete notifications when user is deleted
+    onDelete: "CASCADE",
   });
-  Notification.belongsTo(User, {
-    foreignKey: "userId",
-    as: "user",
-  });
+  Notification.belongsTo(User, { foreignKey: "userId", as: "user" });
 
   User.hasMany(InventoryNotification, {
     foreignKey: "user_id",
@@ -113,41 +88,27 @@ const setupAssociations = () => {
   // ========================================
   // CAMERA & INCIDENT SYSTEM ASSOCIATIONS
   // ========================================
-
-  // Camera -> Incident (One-to-Many)
   Camera.hasMany(Incident, {
     foreignKey: "cameraId",
     as: "incidents",
-    onDelete: "SET NULL", // Keep incidents even if camera is deleted
+    onDelete: "SET NULL",
   });
-  Incident.belongsTo(Camera, {
-    foreignKey: "cameraId",
-    as: "camera",
-  });
+  Incident.belongsTo(Camera, { foreignKey: "cameraId", as: "camera" });
 
-  // Camera -> CameraHealthCheck (One-to-Many)
   Camera.hasMany(CameraHealthCheck, {
     foreignKey: "cameraId",
     as: "healthChecks",
-    onDelete: "CASCADE", // Delete health checks when camera is deleted
+    onDelete: "CASCADE",
   });
-  CameraHealthCheck.belongsTo(Camera, {
-    foreignKey: "cameraId",
-    as: "camera",
-  });
+  CameraHealthCheck.belongsTo(Camera, { foreignKey: "cameraId", as: "camera" });
 
-  // Camera -> CameraLog (One-to-Many)
   Camera.hasMany(CameraLog, {
     foreignKey: "cameraId",
     as: "logs",
-    onDelete: "CASCADE", // Delete logs when camera is deleted
+    onDelete: "CASCADE",
   });
-  CameraLog.belongsTo(Camera, {
-    foreignKey: "cameraId",
-    as: "camera",
-  });
+  CameraLog.belongsTo(Camera, { foreignKey: "cameraId", as: "camera" });
 
-  // User <-> Incident (Many-to-Many through IncidentAcceptance)
   User.belongsToMany(Incident, {
     through: IncidentAcceptance,
     as: "acceptedIncidents",
@@ -161,7 +122,6 @@ const setupAssociations = () => {
     otherKey: "userId",
   });
 
-  // User <-> Incident (Many-to-Many through IncidentDismissal)
   User.belongsToMany(Incident, {
     through: IncidentDismissal,
     as: "dismissedIncidents",
@@ -178,134 +138,153 @@ const setupAssociations = () => {
   // ========================================
   // INVENTORY SYSTEM ASSOCIATIONS
   // ========================================
-
-  // Category -> InventoryItem (One-to-Many)
   Category.hasMany(InventoryItem, {
     foreignKey: "category_id",
-    as: "items", // Shorter, clearer alias
-    onDelete: "RESTRICT", // Don't allow deletion of categories with items
+    as: "items",
+    onDelete: "RESTRICT",
   });
   InventoryItem.belongsTo(Category, {
     foreignKey: "category_id",
     as: "category",
   });
 
-  // InventoryItem -> Batch (One-to-Many)
   InventoryItem.hasMany(Batch, {
     foreignKey: "inventory_item_id",
     as: "batches",
-    onDelete: "CASCADE", // Delete batches when item is deleted
+    onDelete: "CASCADE",
   });
   Batch.belongsTo(InventoryItem, {
     foreignKey: "inventory_item_id",
-    as: "item", // Shorter alias
+    as: "item",
   });
 
-  // InventoryItem -> Deployment (One-to-Many)
   InventoryItem.hasMany(Deployment, {
     foreignKey: "inventory_item_id",
     as: "deployments",
-    onDelete: "RESTRICT", // Don't allow deletion of items with active deployments
+    onDelete: "RESTRICT",
   });
   Deployment.belongsTo(InventoryItem, {
     foreignKey: "inventory_item_id",
-    as: "item", // Shorter alias
+    as: "item",
   });
 
-  // InventoryItem -> SerializedItem (One-to-Many)
   InventoryItem.hasMany(SerializedItem, {
     foreignKey: "inventory_item_id",
     as: "serializedItems",
-    onDelete: "CASCADE", // Delete serialized items when parent item is deleted
+    onDelete: "CASCADE",
   });
   SerializedItem.belongsTo(InventoryItem, {
     foreignKey: "inventory_item_id",
-    as: "item", // Shorter alias
+    as: "item",
   });
 
-  // InventoryItem -> InventoryNotification (One-to-Many)
   InventoryItem.hasMany(InventoryNotification, {
     foreignKey: "inventory_item_id",
     as: "notifications",
-    onDelete: "CASCADE", // Delete notifications when item is deleted
+    onDelete: "CASCADE",
   });
   InventoryNotification.belongsTo(InventoryItem, {
     foreignKey: "inventory_item_id",
-    as: "item", // Shorter alias
+    as: "item",
   });
 
-  // InventoryItem -> ActionLog (One-to-Many)
   InventoryItem.hasMany(ActionLog, {
     foreignKey: "itemId",
     as: "actionLogs",
-    onDelete: "CASCADE", // Delete logs when item is deleted
+    onDelete: "CASCADE",
   });
-  ActionLog.belongsTo(InventoryItem, {
-    foreignKey: "itemId",
-    as: "item", // Shorter alias
-  });
+  ActionLog.belongsTo(InventoryItem, { foreignKey: "itemId", as: "item" });
 
   // ========================================
   // BATCH & SERIALIZED ITEM ASSOCIATIONS
   // ========================================
-
-  // Batch -> SerializedItem (One-to-Many)
   Batch.hasMany(SerializedItem, {
     foreignKey: "batch_id",
     as: "serializedItems",
-    onDelete: "CASCADE", // Delete serialized items when batch is deleted
+    onDelete: "CASCADE",
   });
-  SerializedItem.belongsTo(Batch, {
-    foreignKey: "batch_id",
-    as: "batch",
-  });
+  SerializedItem.belongsTo(Batch, { foreignKey: "batch_id", as: "batch" });
 
   // ========================================
   // DEPLOYMENT TRACKING ASSOCIATIONS
   // ========================================
-
-  // Deployment -> SerialItemDeployment (One-to-Many)
   Deployment.hasMany(SerialItemDeployment, {
     foreignKey: "deployment_id",
-    as: "itemDeployments", // Clearer alias
-    onDelete: "CASCADE", // Delete tracking records when deployment is deleted
+    as: "itemDeployments",
+    onDelete: "CASCADE",
   });
   SerialItemDeployment.belongsTo(Deployment, {
     foreignKey: "deployment_id",
     as: "deployment",
   });
 
-  // SerializedItem -> SerialItemDeployment (One-to-Many)
   SerializedItem.hasMany(SerialItemDeployment, {
     foreignKey: "serialized_item_id",
     as: "deploymentHistory",
-    onDelete: "CASCADE", // Delete deployment history when item is deleted
+    onDelete: "CASCADE",
   });
   SerialItemDeployment.belongsTo(SerializedItem, {
     foreignKey: "serialized_item_id",
-    as: "item", // Shorter alias
+    as: "item",
   });
 
   // ========================================
-  // HELPER ASSOCIATIONS FOR COMPLEX QUERIES
+  // SERIALIZED ITEM HISTORY ASSOCIATIONS 👇
   // ========================================
+  SerializedItem.hasMany(SerializedItemHistory, {
+    foreignKey: "serialized_item_id",
+    as: "history",
+    onDelete: "CASCADE",
+  });
+  SerializedItemHistory.belongsTo(SerializedItem, {
+    foreignKey: "serialized_item_id",
+    as: "item",
+  });
 
-  // Add convenience association for current deployment
+  // 🔹 User who deployed the item
+  User.hasMany(SerializedItemHistory, {
+    foreignKey: "deployed_by",
+    as: "deployedHistories",
+    onDelete: "SET NULL",
+  });
+  SerializedItemHistory.belongsTo(User, {
+    foreignKey: "deployed_by",
+    as: "deployer",
+  });
+
+  // 🔹 User who received the item
+  User.hasMany(SerializedItemHistory, {
+    foreignKey: "deployed_to",
+    as: "receivedHistories",
+    onDelete: "SET NULL",
+  });
+  SerializedItemHistory.belongsTo(User, {
+    foreignKey: "deployed_to",
+    as: "receiver",
+  });
+
+  Deployment.hasMany(SerializedItemHistory, {
+    foreignKey: "deployment_id",
+    as: "itemHistories",
+    onDelete: "SET NULL",
+  });
+  SerializedItemHistory.belongsTo(Deployment, {
+    foreignKey: "deployment_id",
+    as: "deployment",
+  });
+
+  // ========================================
+  // HELPER ASSOCIATIONS
+  // ========================================
   SerializedItem.hasOne(SerialItemDeployment, {
     foreignKey: "serialized_item_id",
     as: "currentDeployment",
-    scope: {
-      returned_at: null, // Only get active deployments
-    },
+    scope: { returned_at: null },
   });
 
-  // Add convenience association for latest deployment
   SerializedItem.hasOne(SerialItemDeployment, {
     foreignKey: "serialized_item_id",
     as: "latestDeployment",
-    scope: {
-      // Will get the latest deployment (active or returned)
-    },
     order: [["deployed_at", "DESC"]],
   });
 

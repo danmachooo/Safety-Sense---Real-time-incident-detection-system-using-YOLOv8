@@ -14,6 +14,7 @@ import {
   deleteBatch,
   restoreBatch,
   getExpiringBatches,
+  getSerializedItemsByBatch,
 } from "../controllers/Inventory/batchController.js";
 
 import {
@@ -31,6 +32,7 @@ import {
   getDeploymentById,
   updateDeploymentStatus,
   getOverdueDeployments,
+  getItemHistoryReport,
   getUserLiabilityReport,
 } from "../controllers/Inventory/deploymentController.js";
 
@@ -102,15 +104,19 @@ router.patch("/batches/:id", authMiddleware, adminMiddleware, restoreBatch);
 
 //Serialized iTEMS
 router.get("/serialized", authMiddleware, adminMiddleware, getSerializedItems);
+router.get(
+  "/serialized/:id",
+  authMiddleware,
+  adminMiddleware,
+  getSerializedItemsByBatch
+);
 
 //Deployments
 router.get("/deployment", authMiddleware, adminMiddleware, getAllDeployments);
-router.get(
-  "/deployment/user-liability",
-  authMiddleware,
-  adminMiddleware,
-  getUserLiabilityReport
-);
+router.get("/deployment/:itemId/history", getItemHistoryReport);
+router.get("/deployment/history", getItemHistoryReport);
+router.get("/deployment/:itemId/liability-report", getUserLiabilityReport);
+
 router.get(
   "/deployment/overdue",
   authMiddleware,

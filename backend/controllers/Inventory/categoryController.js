@@ -63,7 +63,7 @@ const getAllCategories = async (req, res, next) => {
       include: [
         {
           model: InventoryItem,
-          as: "inventoryItems",
+          as: "items",
           attributes: ["id", "name", "quantity_in_stock"],
         },
       ],
@@ -96,7 +96,7 @@ const getCategoryById = async (req, res, next) => {
       include: [
         {
           model: InventoryItem,
-          as: "inventoryItems",
+          as: "items",
         },
       ],
     });

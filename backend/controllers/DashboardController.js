@@ -129,7 +129,7 @@ const getDashboardSummary = async (req, res, next) => {
       include: [
         {
           model: InventoryItem,
-          as: "inventoryItem",
+          as: "item",
           attributes: ["id", "name", "location"],
         },
         {
@@ -757,7 +757,7 @@ const getActivityFeed = async (req, res, next) => {
         },
         {
           model: InventoryItem,
-          as: "inventoryItem", // Fixed typo
+          as: "item", // Fixed typo
           attributes: ["id", "name"],
         },
       ],
@@ -902,7 +902,7 @@ const getMapData = async (req, res, next) => {
       include: [
         {
           model: InventoryItem,
-          as: "inventoryItem",
+          as: "item",
           attributes: ["id", "name"],
         },
       ],

@@ -12,6 +12,7 @@ import {
   setCache,
   getCached,
   invalidateCache,
+  invalidateCategoryCache,
 } from "../../services/redis/cache.js";
 import { Op } from "sequelize";
 const createCategory = async (req, res, next) => {
@@ -25,7 +26,7 @@ const createCategory = async (req, res, next) => {
     if (existingCategory) throw new BadRequestError("Already Exist Category");
 
     const category = await Category.create({ name, description, type });
-    const result = await invalidateCache("category");
+    const result = await invalidateCategoryCache();
 
     if (!result) {
       console.log("Failed to invalidate cache");
@@ -132,7 +133,7 @@ const updateCategory = async (req, res, next) => {
     }
 
     await category.update({ name, description, type });
-    const result = await invalidateCache("category");
+    const result = await invalidateCategoryCache();
 
     if (!result) {
       console.log("Failed to invalidate cache");
@@ -163,7 +164,7 @@ const deleteCategory = async (req, res, next) => {
       throw new BadRequestError("Cannot delete category with associated items");
 
     await category.destroy();
-    const result = await invalidateCache("category");
+    const result = await invalidateCategoryCache();
 
     if (!result) {
       console.log("Failed to invalidate cache");
@@ -195,7 +196,7 @@ const restoreCategory = async (req, res, next) => {
 
     // Restore the category
     await category.restore();
-    const result = await invalidateCache("category");
+    const result = await invalidateCategoryCache();
 
     if (!result) {
       console.log("Failed to invalidate cache");

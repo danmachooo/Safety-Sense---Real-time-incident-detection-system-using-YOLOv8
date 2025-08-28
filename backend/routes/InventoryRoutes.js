@@ -24,7 +24,7 @@ import {
   updateCategory,
   deleteCategory,
   restoreCategory,
-} from "../controllers/Inventory/CategoryController.js";
+} from "../controllers/Inventory/categoryController.js";
 
 import {
   createDeployment,
@@ -57,7 +57,6 @@ import {
 
 import { uploadExcel } from "../middlewares/excelUploadMiddleware.js";
 import { generateEmptyTemplate } from "../controllers/Incidents/incidentController.js";
-import { and } from "sequelize";
 
 //Categories
 router.get("/categories", authMiddleware, adminMiddleware, getAllCategories);
@@ -104,12 +103,7 @@ router.patch("/batches/:id", authMiddleware, adminMiddleware, restoreBatch);
 
 //Serialized iTEMS
 router.get("/serialized", authMiddleware, adminMiddleware, getSerializedItems);
-router.get(
-  "/serialized/:id",
-  authMiddleware,
-  adminMiddleware,
-  getSerializedItemsByBatch
-);
+router.get("/serialized/:id", getSerializedItemsByBatch);
 
 //Deployments
 router.get("/deployment", authMiddleware, adminMiddleware, getAllDeployments);

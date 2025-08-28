@@ -38,6 +38,7 @@ const currentDeployment = ref(null);
 const deploymentLoading = ref(false);
 const isUpdating = ref(false);
 const notification = ref({ show: false, type: "", message: "" });
+const pendingChanges = ref([]); // New state for tracking pending status changes
 
 // Define non-returnable item categories/keywords
 const nonReturnableItems = [
@@ -70,13 +71,13 @@ const isItemReturnable = (itemName) => {
 
 // Helper function to check if deployment should show return date
 const shouldShowReturnDate = (deployment) => {
-  const itemName = deployment.inventoryItem?.name || "";
+  const itemName = deployment.item?.name || "";
   return isItemReturnable(itemName) && deployment.expected_return_date;
 };
 
 // Helper function to check if status update buttons should be enabled
 const canUpdateStatus = (deployment) => {
-  const itemName = deployment.inventoryItem?.name || "";
+  const itemName = deployment.item?.name || "";
   return isItemReturnable(itemName) && deployment.status === "DEPLOYED";
 };
 
@@ -111,11 +112,53 @@ const fetchDeployment = async (id) => {
     deploymentLoading.value = true;
     const response = await api.get(`inventory/deployment/${id}`);
     currentDeployment.value = response.data.data;
+    pendingChanges.value = []; // Reset pending changes when fetching new deployment
   } catch (err) {
     console.error("Error fetching deployment details:", err);
     showNotification("Failed to fetch deployment details", "error");
   } finally {
     deploymentLoading.value = false;
+  }
+};
+
+// Stage a change to be confirmed later
+const stageChange = (serialId, condition) => {
+  pendingChanges.value.push({ id: serialId, condition });
+};
+
+// Remove a pending change
+const removePendingChange = (serialId) => {
+  pendingChanges.value = pendingChanges.value.filter(
+    (change) => change.id !== serialId
+  );
+};
+
+// Confirm all pending changes
+const confirmChanges = async () => {
+  try {
+    isUpdating.value = true;
+    const response = await api.put(
+      `inventory/deployment/${currentDeployment.value.id}/status`,
+      {
+        serials: pendingChanges.value.map((change) => ({
+          id: change.id,
+          return_condition: change.condition,
+        })),
+        notes: `Updated ${pendingChanges.value.length} serial(s)`,
+      }
+    );
+    currentDeployment.value = response.data.data;
+    showNotification(
+      `Successfully updated ${pendingChanges.value.length} serial(s)`,
+      "success"
+    );
+    pendingChanges.value = []; // Clear pending changes
+    fetchDeployments(); // Refresh list
+  } catch (err) {
+    console.error("Error updating serial statuses:", err);
+    showNotification("Failed to update serial statuses", "error");
+  } finally {
+    isUpdating.value = false;
   }
 };
 
@@ -234,6 +277,7 @@ const closeModal = () => {
   showModal.value = false;
   setTimeout(() => {
     currentDeployment.value = null;
+    pendingChanges.value = []; // Clear pending changes when closing modal
   }, 300);
 };
 
@@ -288,7 +332,6 @@ const goToPage = (page) => {
 // Initialize data on component mount
 onMounted(fetchDeployments);
 </script>
-
 <template>
   <div
     class="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50"
@@ -532,7 +575,7 @@ onMounted(fetchDeployments);
                     <div
                       :class="[
                         'w-10 h-10 rounded-xl flex items-center justify-center mr-4',
-                        isItemReturnable(deployment.inventoryItem?.name)
+                        isItemReturnable(deployment.item?.name)
                           ? 'bg-gradient-to-r from-blue-500 to-indigo-600'
                           : 'bg-gradient-to-r from-gray-400 to-gray-600',
                       ]"
@@ -541,10 +584,10 @@ onMounted(fetchDeployments);
                     </div>
                     <div>
                       <div class="font-semibold text-gray-900">
-                        {{ deployment.inventoryItem?.name || "Unknown Item" }}
+                        {{ deployment.item?.name || "Unknown Item" }}
                       </div>
                       <div
-                        v-if="!isItemReturnable(deployment.inventoryItem?.name)"
+                        v-if="!isItemReturnable(deployment.item?.name)"
                         class="text-xs text-gray-500 flex items-center mt-1"
                       >
                         <Ban class="w-3 h-3 mr-1" />
@@ -758,7 +801,7 @@ onMounted(fetchDeployments);
                   :class="[
                     'p-3 rounded-xl mr-4',
                     currentDeployment &&
-                    isItemReturnable(currentDeployment.inventoryItem?.name)
+                    isItemReturnable(currentDeployment.item?.name)
                       ? 'bg-gradient-to-r from-blue-500 to-indigo-600'
                       : 'bg-gradient-to-r from-gray-400 to-gray-600',
                   ]"
@@ -842,17 +885,10 @@ onMounted(fetchDeployments);
                         Item Name
                       </p>
                       <p class="text-lg font-semibold text-gray-900">
-                        {{
-                          currentDeployment.inventoryItem?.name ||
-                          "Unknown Item"
-                        }}
+                        {{ currentDeployment.item?.name || "Unknown Item" }}
                       </p>
                       <div
-                        v-if="
-                          !isItemReturnable(
-                            currentDeployment.inventoryItem?.name
-                          )
-                        "
+                        v-if="!isItemReturnable(currentDeployment.item?.name)"
                         class="flex items-center mt-2 text-sm text-gray-600"
                       >
                         <Ban class="w-4 h-4 mr-1" />
@@ -1063,92 +1099,155 @@ onMounted(fetchDeployments);
               </div>
 
               <!-- Action Buttons Section -->
-              <div class="border-t border-gray-200 pt-6">
-                <div v-if="canUpdateStatus(currentDeployment)">
-                  <h4
-                    class="text-lg font-semibold text-gray-900 mb-4 flex items-center"
-                  >
-                    <CheckCircle2 class="w-5 h-5 text-green-600 mr-2" />
-                    Update Status
-                  </h4>
-                  <p class="text-gray-600 mb-6">
-                    Update the deployment status to reflect the current
-                    situation.
-                  </p>
-                  <div class="flex flex-wrap gap-3">
+              <!-- Serialized Items Section -->
+              <div
+                v-if="currentDeployment.itemDeployments?.length"
+                class="mb-8"
+              >
+                <div
+                  class="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-6 border border-gray-200"
+                >
+                  <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center">
+                      <Package class="w-5 h-5 text-gray-600 mr-2" />
+                      <h4 class="text-lg font-semibold text-gray-900">
+                        Serialized Items
+                      </h4>
+                    </div>
                     <button
-                      v-if="currentDeployment.status !== 'RETURNED'"
-                      @click="handleStatusUpdate('RETURNED')"
+                      v-if="pendingChanges.length"
+                      @click="confirmChanges"
+                      class="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
                       :disabled="isUpdating"
-                      class="btn-status-returned"
                     >
-                      <Check class="w-4 h-4 mr-2" />
-                      {{ isUpdating ? "Updating..." : "Mark as Returned" }}
-                    </button>
-                    <button
-                      v-if="currentDeployment.status !== 'LOST'"
-                      @click="handleStatusUpdate('LOST')"
-                      :disabled="isUpdating"
-                      class="btn-status-lost"
-                    >
-                      <AlertTriangle class="w-4 h-4 mr-2" />
-                      {{ isUpdating ? "Updating..." : "Mark as Lost" }}
-                    </button>
-                    <button
-                      v-if="currentDeployment.status !== 'DAMAGED'"
-                      @click="handleStatusUpdate('DAMAGED')"
-                      :disabled="isUpdating"
-                      class="btn-status-damaged"
-                    >
-                      <AlertTriangle class="w-4 h-4 mr-2" />
-                      {{ isUpdating ? "Updating..." : "Mark as Damaged" }}
+                      <Check class="w-4 h-4 inline mr-1" />
+                      Confirm {{ pendingChanges.length }} Change{{
+                        pendingChanges.length > 1 ? "s" : ""
+                      }}
                     </button>
                   </div>
-                </div>
-
-                <!-- Non-returnable item notice -->
-                <div
-                  v-else-if="
-                    !isItemReturnable(currentDeployment.inventoryItem?.name)
-                  "
-                >
-                  <div
-                    class="bg-blue-50 rounded-2xl p-6 border border-blue-200"
-                  >
-                    <div class="flex items-start">
-                      <Ban
-                        class="w-6 h-6 text-blue-600 mr-3 mt-1 flex-shrink-0"
-                      />
+                  <div class="divide-y divide-gray-200">
+                    <div
+                      v-for="deployment in currentDeployment.itemDeployments"
+                      :key="deployment.item.id"
+                      class="flex items-center justify-between py-4"
+                      :class="{
+                        'opacity-60': deployment.item.status !== 'DEPLOYED',
+                      }"
+                    >
+                      <!-- Serial Info -->
                       <div>
-                        <h4 class="text-lg font-semibold text-blue-900 mb-2">
-                          Non-returnable Item
-                        </h4>
-                        <p class="text-blue-700 leading-relaxed">
-                          This item is classified as non-returnable and will
-                          remain permanently deployed at the specified location.
-                          No return date tracking or status updates are required
-                          for this deployment.
+                        <p class="font-semibold text-gray-900">
+                          Serial #: {{ deployment.item.serial_number }}
+                        </p>
+                        <p class="text-sm text-gray-600">
+                          Status: {{ deployment.item.status }}
+                          <span v-if="deployment.return_condition">
+                            ({{ deployment.return_condition }})
+                          </span>
                         </p>
                       </div>
-                    </div>
-                  </div>
-                </div>
 
-                <!-- Already processed status -->
-                <div v-else>
-                  <div
-                    class="bg-gray-50 rounded-2xl p-6 border border-gray-200"
-                  >
-                    <div class="flex items-center">
-                      <CheckCircle2 class="w-6 h-6 text-gray-600 mr-3" />
-                      <div>
-                        <h4 class="text-lg font-semibold text-gray-900 mb-1">
-                          Status Finalized
-                        </h4>
-                        <p class="text-gray-600">
-                          This deployment has been processed and no further
-                          actions are available.
-                        </p>
+                      <!-- Action Buttons -->
+                      <div class="flex gap-2">
+                        <button
+                          v-if="
+                            !pendingChanges.some(
+                              (change) => change.id === deployment.item.id
+                            )
+                          "
+                          @click="stageChange(deployment.item.id, 'RETURNED')"
+                          class="btn-status-returned"
+                          :class="{
+                            'bg-gray-200 text-gray-500 cursor-not-allowed':
+                              deployment.item.status !== 'DEPLOYED',
+                          }"
+                          :disabled="
+                            isUpdating || deployment.item.status !== 'DEPLOYED'
+                          "
+                        >
+                          <Check class="w-4 h-4 mr-1" /> Return
+                        </button>
+                        <button
+                          v-else-if="
+                            pendingChanges.some(
+                              (change) =>
+                                change.id === deployment.item.id &&
+                                change.condition === 'RETURNED'
+                            )
+                          "
+                          @click="removePendingChange(deployment.item.id)"
+                          class="bg-emerald-100 text-emerald-700 border border-emerald-300"
+                          :disabled="isUpdating"
+                        >
+                          <X class="w-4 h-4 mr-1" /> Undo Return
+                        </button>
+
+                        <button
+                          v-if="
+                            !pendingChanges.some(
+                              (change) => change.id === deployment.item.id
+                            )
+                          "
+                          @click="stageChange(deployment.item.id, 'DAMAGED')"
+                          class="btn-status-damaged"
+                          :class="{
+                            'bg-gray-200 text-gray-500 cursor-not-allowed':
+                              deployment.item.status !== 'DEPLOYED',
+                          }"
+                          :disabled="
+                            isUpdating || deployment.item.status !== 'DEPLOYED'
+                          "
+                        >
+                          <AlertTriangle class="w-4 h-4 mr-1" /> Damaged
+                        </button>
+                        <button
+                          v-else-if="
+                            pendingChanges.some(
+                              (change) =>
+                                change.id === deployment.item.id &&
+                                change.condition === 'DAMAGED'
+                            )
+                          "
+                          @click="removePendingChange(deployment.item.id)"
+                          class="bg-amber-100 text-amber-700 border border-amber-300"
+                          :disabled="isUpdating"
+                        >
+                          <X class="w-4 h-4 mr-1" /> Undo Damaged
+                        </button>
+
+                        <button
+                          v-if="
+                            !pendingChanges.some(
+                              (change) => change.id === deployment.item.id
+                            )
+                          "
+                          @click="stageChange(deployment.item.id, 'LOST')"
+                          class="btn-status-lost"
+                          :class="{
+                            'bg-gray-200 text-gray-500 cursor-not-allowed':
+                              deployment.item.status !== 'DEPLOYED',
+                          }"
+                          :disabled="
+                            isUpdating || deployment.item.status !== 'DEPLOYED'
+                          "
+                        >
+                          <AlertTriangle class="w-4 h-4 mr-1" /> Lost
+                        </button>
+                        <button
+                          v-else-if="
+                            pendingChanges.some(
+                              (change) =>
+                                change.id === deployment.item.id &&
+                                change.condition === 'LOST'
+                            )
+                          "
+                          @click="removePendingChange(deployment.item.id)"
+                          class="bg-red-100 text-red-700 border border-red-300"
+                          :disabled="isUpdating"
+                        >
+                          <X class="w-4 h-4 mr-1" /> Undo Lost
+                        </button>
                       </div>
                     </div>
                   </div>

@@ -599,7 +599,7 @@ const emptyStateDescription = computed(() => {
                     </div>
                     <div>
                       <div class="font-semibold text-gray-900">
-                        {{ batch.inventoryItem?.name || "Unknown Item" }}
+                        {{ batch.item.name || "Unknown Item" }}
                       </div>
                       <div class="text-sm text-gray-500">
                         {{ batch.supplier || "No supplier" }}
@@ -613,7 +613,7 @@ const emptyStateDescription = computed(() => {
                       batch.quantity
                     }}</span>
                     <span class="text-sm text-gray-500 ml-1">{{
-                      batch.inventoryItem?.unit_of_measure || "units"
+                      batch.item?.unit_of_measure || "units"
                     }}</span>
                   </div>
                 </td>

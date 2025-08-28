@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted, computed, watch } from "vue";
 import {
   PlusCircle,
   Pencil,
@@ -95,8 +95,9 @@ const deploymentDetails = ref({
   deployment_date: new Date().toISOString().split("T")[0],
   expected_return_date: null,
   incident_type: "",
-  deployed_to: "", // Added deployed_to field
+  deployed_to: "",
   notes: "",
+  serialized_item_ids: [], // <-- NEW
 });
 
 // Table configuration
@@ -415,9 +416,25 @@ const deleteItem = async (id) => {
     showNotification("Deletion failed", "error");
   }
 };
+const serializedItems = ref([]);
 
-// Enhanced Deployment with user selection
-const openDeployModal = (item) => {
+const getSerializedItems = async (id) => {
+  try {
+    const res = await api.get(`/inventory/serialized/${id}`, {
+      params: { page: 1, limit: 100 },
+    });
+
+    // Ensure it's always an array
+    serializedItems.value = Array.isArray(res.data?.data) ? res.data.data : [];
+
+    console.log("Serialized items:", serializedItems.value[0].id);
+  } catch (err) {
+    console.error("❌ Failed to fetch serialized items:", err);
+    serializedItems.value = []; // clear on error
+  }
+};
+
+const openDeployModal = async (item) => {
   deploymentDetails.value = {
     inventory_item_id: item.id,
     deployment_type: "EMERGENCY",
@@ -426,9 +443,12 @@ const openDeployModal = (item) => {
     deployment_date: new Date().toISOString().split("T")[0],
     expected_return_date: null,
     incident_type: "",
-    deployed_to: "", // Reset deployed_to field
+    deployed_to: "",
     notes: "",
+    serialized_item_ids: [],
   };
+  serializedItems.value = [];
+  getSerializedItems(item.id);
   showDeployModal.value = true;
 };
 
@@ -493,6 +513,64 @@ const formatFileSize = (bytes) => {
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 };
+
+// Update quantity when serialized items are manually selected
+const updateQuantityFromSelection = () => {
+  const selectedCount = deploymentDetails.value.serialized_item_ids.length;
+
+  // Only update if different to avoid loops
+  if (deploymentDetails.value.quantity_deployed !== selectedCount) {
+    deploymentDetails.value.quantity_deployed = selectedCount;
+  }
+};
+
+const selectAllAvailable = () => {
+  deploymentDetails.value.serialized_item_ids = serializedItems.value.map(
+    (item) => item.id
+  );
+  deploymentDetails.value.quantity_deployed = serializedItems.value.length;
+};
+
+const clearSelection = () => {
+  deploymentDetails.value.serialized_item_ids = [];
+  deploymentDetails.value.quantity_deployed = 0;
+};
+
+// Auto-select items when user types quantity
+watch(
+  () => deploymentDetails.value.quantity_deployed,
+  (newQty, oldQty) => {
+    // Only auto-select if item is serialized and quantity is valid
+    if (
+      serializedItems.value.length > 0 &&
+      Number.isInteger(newQty) &&
+      newQty > 0 &&
+      newQty !== oldQty
+    ) {
+      // Clear current selection first
+      deploymentDetails.value.serialized_item_ids = [];
+
+      // Auto-select the first N available items
+      const availableItems = serializedItems.value.filter(
+        (item) => item.status !== "DAMAGED" // Optional: exclude damaged items
+      );
+
+      const itemsToSelect = Math.min(newQty, availableItems.length);
+      deploymentDetails.value.serialized_item_ids = availableItems
+        .slice(0, itemsToSelect)
+        .map((item) => item.id);
+
+      // Show warning if not enough items available
+      if (newQty > availableItems.length) {
+        showNotification(
+          `Only ${availableItems.length} serialized items are available.`,
+          "warning"
+        );
+      }
+    }
+  },
+  { immediate: false }
+);
 </script>
 
 <template>
@@ -1659,6 +1737,78 @@ const formatFileSize = (bytes) => {
                       class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200"
                     />
                   </div>
+                </div>
+              </div>
+            </div>
+            <!-- Serialized Items (only if serialized) -->
+            <!-- Replace your existing serialized items section with this -->
+            <div v-if="serializedItems.length > 0" class="mb-8">
+              <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center">
+                  <Package class="w-5 h-5 text-indigo-600 mr-2" />
+                  <h4 class="text-lg font-semibold text-gray-900">
+                    Select Serialized Items
+                  </h4>
+                </div>
+                <div class="flex space-x-2">
+                  <button
+                    type="button"
+                    @click="selectAllAvailable"
+                    class="text-sm px-3 py-1 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200"
+                  >
+                    Select All ({{ serializedItems.length }})
+                  </button>
+                  <button
+                    type="button"
+                    @click="clearSelection"
+                    class="text-sm px-3 py-1 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+              <div
+                class="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-6 border border-indigo-100"
+              >
+                <div class="mb-4">
+                  <p class="text-sm text-gray-600">
+                    Selected:
+                    {{ deploymentDetails.serialized_item_ids.length }} of
+                    {{ serializedItems.length }} items
+                  </p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <label
+                    v-for="sItem in serializedItems"
+                    :key="sItem.id"
+                    class="flex items-center space-x-3 p-3 border rounded-xl cursor-pointer transition-all duration-200"
+                    :class="{
+                      'bg-indigo-50 border-indigo-200':
+                        deploymentDetails.serialized_item_ids.includes(
+                          sItem.id
+                        ),
+                      'bg-white hover:bg-indigo-50':
+                        !deploymentDetails.serialized_item_ids.includes(
+                          sItem.id
+                        ),
+                    }"
+                  >
+                    <input
+                      type="checkbox"
+                      class="w-4 h-4 text-indigo-600"
+                      :value="sItem.id"
+                      v-model="deploymentDetails.serialized_item_ids"
+                      @change="updateQuantityFromSelection"
+                    />
+                    <div class="flex-1">
+                      <span class="text-sm font-medium text-gray-700">
+                        {{ sItem.serial_number }}
+                      </span>
+                      <span class="text-xs text-gray-500 ml-2">
+                        ({{ sItem.status || "GOOD" }})
+                      </span>
+                    </div>
+                  </label>
                 </div>
               </div>
             </div>

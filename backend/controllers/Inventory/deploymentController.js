@@ -48,15 +48,17 @@ const createDeployment = async (req, res, next) => {
     const {
       incident_type,
       inventory_item_id,
-      quantity,
-      serial_item_ids, // IDs of serialized items
-      deployed_to, // user or department ID (from body)
+      quantity_deployed,
+      serialized_item_ids, // IDs of serialized items
+      deployed_to, // user or department ID
       expected_return_date,
       notes,
       deployment_type,
       deployment_location,
       deployment_date,
     } = req.body;
+
+    console.log("Request body: ", req.body);
 
     // Current logged-in user
     const deployed_by = req.user?.id;
@@ -89,15 +91,17 @@ const createDeployment = async (req, res, next) => {
     });
     if (!inventoryItem) throw new NotFoundError("Inventory item not found");
 
+    // ======================
     // SERIALIZED deployment
-    if (serial_item_ids?.length > 0) {
-      if (!Array.isArray(serial_item_ids)) {
+    // ======================
+    if (serialized_item_ids?.length > 0) {
+      if (!Array.isArray(serialized_item_ids)) {
         throw new BadRequestError("serial_item_ids must be an array of IDs");
       }
 
       const serializedItems = await SerializedItem.findAll({
         where: {
-          id: serial_item_ids,
+          id: { [Op.in]: serialized_item_ids },
           status: "AVAILABLE",
           inventory_item_id,
         },
@@ -105,7 +109,7 @@ const createDeployment = async (req, res, next) => {
         lock: t.LOCK.UPDATE,
       });
 
-      if (serializedItems.length !== serial_item_ids.length) {
+      if (serializedItems.length !== serialized_item_ids.length) {
         throw new BadRequestError(
           "Some serial items are not available or don't belong to this inventory item"
         );
@@ -113,7 +117,7 @@ const createDeployment = async (req, res, next) => {
 
       // Decrement stock
       await inventoryItem.decrement("quantity_in_stock", {
-        by: serial_item_ids.length,
+        by: serialized_item_ids.length,
         transaction: t,
       });
 
@@ -124,9 +128,9 @@ const createDeployment = async (req, res, next) => {
           deployed_to,
           incident_type,
           inventory_item_id,
-          quantity_deployed: serial_item_ids.length,
+          quantity_deployed: serialized_item_ids.length,
           expected_return_date,
-          notes, // Fixed: was using condition_notes
+          notes,
           deployment_type,
           deployment_location,
           deployment_date: finalDeploymentDate,
@@ -135,37 +139,61 @@ const createDeployment = async (req, res, next) => {
         { transaction: t }
       );
 
-      // Link serialized items - REMOVED redundant deployed_to and condition_notes
-      const serialDeployments = serial_item_ids.map((id) => ({
+      // Create serial item deployment links
+      const serialDeployments = serialized_item_ids.map((id) => ({
         deployment_id: deployment.id,
-        serialized_item_id: id,
+        serialized_item_id: id, // ⚠️ must match your model FK
         deployed_at: finalDeploymentDate,
-        notes, // Only store notes in SerialItemDeployment, not redundantly
+        notes,
       }));
 
-      await SerialItemDeployment.bulkCreate(serialDeployments, {
-        transaction: t,
-      });
-
-      // Update serialized item statuses - REMOVED redundant fields
-      await SerializedItem.update(
-        {
-          status: "DEPLOYED",
-          // REMOVED: deployed_date, deployed_to, condition_notes (now tracked in SerialItemDeployment)
-        },
-        { where: { id: serial_item_ids }, transaction: t }
+      const createdSerialDeployments = await SerialItemDeployment.bulkCreate(
+        serialDeployments,
+        { transaction: t }
       );
+      console.log(
+        "Created serial deployments:",
+        createdSerialDeployments.length
+      );
+
+      // Update serialized item statuses
+      const [updatedCount] = await SerializedItem.update(
+        { status: "DEPLOYED" },
+        {
+          where: { id: { [Op.in]: serialized_item_ids } },
+          transaction: t,
+          lock: t.LOCK.UPDATE,
+        }
+      );
+      console.log("Updated serialized items:", updatedCount);
+
+      // Insert into history
+      const histories = serialized_item_ids.map((id) => ({
+        serialized_item_id: id,
+        deployed_by,
+        deployed_to,
+        notes,
+        deployent_id: deployment.id,
+      }));
+
+      const createdHistories = await SerializedItemHistory.bulkCreate(
+        histories,
+        { transaction: t }
+      );
+      console.log("Created histories:", createdHistories.length);
     } else {
+      // ======================
       // NON-SERIALIZED deployment
-      if (!Number.isInteger(quantity) || quantity <= 0) {
+      // ======================
+      if (!Number.isInteger(quantity_deployed) || quantity_deployed <= 0) {
         throw new BadRequestError("Quantity must be a positive integer");
       }
-      if (inventoryItem.quantity_in_stock < quantity) {
+      if (inventoryItem.quantity_in_stock < quantity_deployed) {
         throw new BadRequestError("Not enough stock available");
       }
 
       await inventoryItem.decrement("quantity_in_stock", {
-        by: quantity,
+        by: quantity_deployed,
         transaction: t,
       });
 
@@ -175,9 +203,9 @@ const createDeployment = async (req, res, next) => {
           deployed_to,
           incident_type,
           inventory_item_id,
-          quantity_deployed: quantity,
+          quantity_deployed: quantity_deployed,
           expected_return_date,
-          notes, // Fixed: was using condition_notes
+          notes,
           deployment_type,
           deployment_location,
           deployment_date: finalDeploymentDate,
@@ -187,6 +215,7 @@ const createDeployment = async (req, res, next) => {
       );
     }
 
+    // Commit transaction
     await t.commit();
 
     // Invalidate cache
@@ -198,7 +227,7 @@ const createDeployment = async (req, res, next) => {
 
     return res.status(StatusCodes.CREATED).json({
       success: true,
-      message: serial_item_ids?.length
+      message: serialized_item_ids?.length
         ? "Serialized items deployed successfully"
         : "Non-serialized items deployed successfully",
     });
@@ -974,367 +1003,6 @@ const getOverdueDeployments = async (req, res, next) => {
     next(error);
   }
 };
-// const getUserLiabilityReport = async (req, res, next) => {
-//   try {
-//     // Query to get all serialized items with their history and current deployments
-//     const liabilityReport = await SerializedItem.findAll({
-//       include: [
-//         {
-//           model: InventoryItem,
-//           as: "item",
-//           attributes: ["name", "description", "category_id"],
-//         },
-//         {
-//           model: SerializedItemHistory,
-//           as: "history",
-//           include: [
-//             {
-//               model: User,
-//               as: "deployer",
-//               attributes: ["id", "firstname", "lastname", "email"],
-//             },
-//             {
-//               model: User,
-//               as: "receiver",
-//               attributes: ["id", "firstname", "lastname", "email"],
-//             },
-//             {
-//               model: Deployment,
-//               as: "deployment",
-//               attributes: [
-//                 "deployment_type",
-//                 "deployment_location",
-//                 "deployment_date",
-//                 "status",
-//               ],
-//             },
-//           ],
-//           attributes: [
-//             "id",
-//             "old_condition",
-//             "new_condition",
-//             "notes",
-//             "createdAt",
-//             "updatedAt",
-//           ],
-//           order: [["createdAt", "ASC"]], // Chronological order to track timeline
-//         },
-//         {
-//           model: SerialItemDeployment,
-//           as: "currentDeployment",
-//           include: [
-//             {
-//               model: Deployment,
-//               as: "deployment",
-//               include: [
-//                 {
-//                   model: User,
-//                   as: "recipient",
-//                   attributes: ["id", "firstname", "lastname", "email"],
-//                 },
-//                 {
-//                   model: User,
-//                   as: "deployer",
-//                   attributes: ["id", "firstname", "lastname", "email"],
-//                 },
-//               ],
-//               attributes: [
-//                 "deployment_type",
-//                 "deployment_location",
-//                 "deployment_date",
-//                 "status",
-//               ],
-//             },
-//           ],
-//           attributes: ["deployed_at", "returned_at"],
-//           where: { returned_at: null },
-//           required: false,
-//         },
-//       ],
-//       attributes: ["id", "serial_number", "status", "condition_notes"],
-//       order: [["serial_number", "ASC"]],
-//     });
-
-//     // Process the data to create liability report based on condition history
-//     const processedReport = liabilityReport.map((item) => {
-//       const conditionHistory = item.history || [];
-//       const currentDeployment = item.currentDeployment;
-
-//       // Track liability events by analyzing condition changes
-//       const liabilityEvents = [];
-//       let currentlyDeployedTo = null;
-//       let deploymentStartDate = null;
-
-//       // Process history chronologically to identify liability events
-//       conditionHistory.forEach((historyRecord, index) => {
-//         const receiver = historyRecord.receiver;
-//         const deployer = historyRecord.deployer;
-//         const recordDate = historyRecord.createdAt;
-
-//         // Determine liability based on condition change
-//         let liabilityStatus = "NO_LIABILITY";
-//         let liabilityReason = "";
-//         let liabilityAmount = "NONE";
-
-//         if (
-//           historyRecord.new_condition === "DAMAGED" &&
-//           historyRecord.old_condition === "GOOD"
-//         ) {
-//           liabilityStatus = "LIABLE_FOR_DAMAGE";
-//           liabilityReason = "Item condition changed from good to damaged";
-//           liabilityAmount = "PARTIAL";
-//         } else if (historyRecord.new_condition === "LOST") {
-//           liabilityStatus = "LIABLE_FOR_LOSS";
-//           liabilityReason = "Item was lost";
-//           liabilityAmount = "FULL";
-//         } else if (
-//           historyRecord.new_condition === "DAMAGED" &&
-//           historyRecord.old_condition === "DAMAGED"
-//         ) {
-//           liabilityStatus = "LIABLE_FOR_ADDITIONAL_DAMAGE";
-//           liabilityReason = "Item condition worsened while deployed";
-//           liabilityAmount = "PARTIAL";
-//         }
-
-//         // Calculate days between events for liability period
-//         let liabilityPeriodDays = 0;
-//         if (index > 0) {
-//           const previousRecord = conditionHistory[index - 1];
-//           liabilityPeriodDays = Math.ceil(
-//             (new Date(recordDate) - new Date(previousRecord.createdAt)) /
-//               (1000 * 60 * 60 * 24)
-//           );
-//         } else if (historyRecord.deployment?.deployment_date) {
-//           liabilityPeriodDays = Math.ceil(
-//             (new Date(recordDate) -
-//               new Date(historyRecord.deployment.deployment_date)) /
-//               (1000 * 60 * 60 * 24)
-//           );
-//         }
-
-//         liabilityEvents.push({
-//           historyId: historyRecord.id,
-//           eventDate: recordDate,
-//           responsibleUser: receiver
-//             ? {
-//                 id: receiver.id,
-//                 name: `${receiver.firstname} ${receiver.lastname}`,
-//                 email: receiver.email,
-//               }
-//             : null,
-//           deployer: deployer
-//             ? {
-//                 id: deployer.id,
-//                 name: `${deployer.firstname} ${deployer.lastname}`,
-//                 email: deployer.email,
-//               }
-//             : null,
-//           conditionChange: {
-//             from: historyRecord.old_condition,
-//             to: historyRecord.new_condition,
-//           },
-//           deploymentInfo: historyRecord.deployment
-//             ? {
-//                 id: historyRecord.deployment_id,
-//                 type: historyRecord.deployment.deployment_type,
-//                 location: historyRecord.deployment.deployment_location,
-//                 date: historyRecord.deployment.deployment_date,
-//                 status: historyRecord.deployment.status,
-//               }
-//             : null,
-//           liabilityStatus,
-//           liabilityReason,
-//           liabilityAmount,
-//           liabilityPeriodDays,
-//           notes: historyRecord.notes,
-//         });
-//       });
-
-//       // Add current deployment info if item is currently deployed
-//       if (currentDeployment) {
-//         const recipient = currentDeployment.deployment?.recipient;
-//         const deployer = currentDeployment.deployment?.deployer;
-//         const daysDeployed = Math.ceil(
-//           (new Date() - new Date(currentDeployment.deployed_at)) /
-//             (1000 * 60 * 60 * 24)
-//         );
-
-//         currentlyDeployedTo = recipient
-//           ? {
-//               id: recipient.id,
-//               name: `${recipient.firstname} ${recipient.lastname}`,
-//               email: recipient.email,
-//               deployedSince: currentDeployment.deployed_at,
-//               daysDeployed,
-//               deployer: deployer
-//                 ? {
-//                     id: deployer.id,
-//                     name: `${deployer.firstname} ${deployer.lastname}`,
-//                     email: deployer.email,
-//                   }
-//                 : null,
-//               deploymentInfo: {
-//                 type: currentDeployment.deployment.deployment_type,
-//                 location: currentDeployment.deployment.deployment_location,
-//                 date: currentDeployment.deployment.deployment_date,
-//                 status: currentDeployment.deployment.status,
-//               },
-//             }
-//           : null;
-//       }
-
-//       // Calculate liability summary
-//       const liabilitySummary = {
-//         totalLiabilityEvents: liabilityEvents.length,
-//         totalDamageEvents: liabilityEvents.filter((e) =>
-//           e.liabilityStatus.includes("DAMAGE")
-//         ).length,
-//         totalLossEvents: liabilityEvents.filter(
-//           (e) => e.liabilityStatus === "LIABLE_FOR_LOSS"
-//         ).length,
-//         isCurrentlyDeployed: !!currentlyDeployedTo,
-//         usersWithLiability: [
-//           ...new Set(
-//             liabilityEvents
-//               .filter((e) => e.liabilityStatus.includes("LIABLE"))
-//               .map((e) => e.responsibleUser?.id)
-//               .filter(Boolean)
-//           ),
-//         ],
-//         totalLiabilityDays: liabilityEvents.reduce(
-//           (sum, event) => sum + event.liabilityPeriodDays,
-//           0
-//         ),
-//       };
-
-//       return {
-//         serialNumber: item.serial_number,
-//         itemId: item.id,
-//         itemName: item.item?.name || "Unknown Item",
-//         itemDescription: item.item?.description,
-//         currentStatus: item.status,
-//         conditionNotes: item.condition_notes,
-//         currentCondition:
-//           conditionHistory.length > 0
-//             ? conditionHistory[conditionHistory.length - 1].new_condition
-//             : "GOOD",
-//         currentlyDeployedTo,
-//         liabilityEvents,
-//         liabilitySummary,
-//         conditionTimeline: conditionHistory.map((h) => ({
-//           date: h.createdAt,
-//           from: h.old_condition,
-//           to: h.new_condition,
-//           responsibleUser: h.receiver
-//             ? `${h.receiver.firstname} ${h.receiver.lastname}`
-//             : null,
-//           notes: h.notes,
-//         })),
-//       };
-//     });
-
-//     // Generate comprehensive summary statistics
-//     const summary = {
-//       totalItems: processedReport.length,
-//       totalLiabilityEvents: processedReport.reduce(
-//         (sum, item) => sum + item.liabilitySummary.totalLiabilityEvents,
-//         0
-//       ),
-//       itemsWithLiabilityIssues: processedReport.filter(
-//         (item) => item.liabilitySummary.totalLiabilityEvents > 0
-//       ).length,
-//       currentlyDeployedItems: processedReport.filter(
-//         (item) => item.liabilitySummary.isCurrentlyDeployed
-//       ).length,
-//       totalDamageEvents: processedReport.reduce(
-//         (sum, item) => sum + item.liabilitySummary.totalDamageEvents,
-//         0
-//       ),
-//       totalLossEvents: processedReport.reduce(
-//         (sum, item) => sum + item.liabilitySummary.totalLossEvents,
-//         0
-//       ),
-//       itemsByCondition: {
-//         good: processedReport.filter((item) => item.currentCondition === "GOOD")
-//           .length,
-//         damaged: processedReport.filter(
-//           (item) => item.currentCondition === "DAMAGED"
-//         ).length,
-//         lost: processedReport.filter((item) => item.currentCondition === "LOST")
-//           .length,
-//       },
-//     };
-
-//     // Generate detailed user liability summary
-//     const userLiabilityMap = new Map();
-
-//     processedReport.forEach((item) => {
-//       item.liabilityEvents.forEach((event) => {
-//         if (event.responsibleUser && event.liabilityStatus.includes("LIABLE")) {
-//           const userId = event.responsibleUser.id;
-
-//           if (!userLiabilityMap.has(userId)) {
-//             userLiabilityMap.set(userId, {
-//               user: event.responsibleUser,
-//               totalLiabilityEvents: 0,
-//               damageEvents: [],
-//               lossEvents: [],
-//               totalLiabilityDays: 0,
-//               affectedItems: new Set(),
-//             });
-//           }
-
-//           const userLiability = userLiabilityMap.get(userId);
-//           userLiability.totalLiabilityEvents++;
-//           userLiability.totalLiabilityDays += event.liabilityPeriodDays;
-//           userLiability.affectedItems.add(item.serialNumber);
-
-//           const eventSummary = {
-//             serialNumber: item.serialNumber,
-//             itemName: item.itemName,
-//             eventDate: event.eventDate,
-//             conditionChange: event.conditionChange,
-//             liabilityAmount: event.liabilityAmount,
-//             liabilityPeriodDays: event.liabilityPeriodDays,
-//             deploymentInfo: event.deploymentInfo,
-//             notes: event.notes,
-//           };
-
-//           if (event.liabilityStatus.includes("DAMAGE")) {
-//             userLiability.damageEvents.push(eventSummary);
-//           } else if (event.liabilityStatus === "LIABLE_FOR_LOSS") {
-//             userLiability.lossEvents.push(eventSummary);
-//           }
-//         }
-//       });
-//     });
-
-//     // Convert user liability map to sorted array
-//     const userLiabilityReport = Array.from(userLiabilityMap.values())
-//       .map((liability) => ({
-//         ...liability,
-//         affectedItemsCount: liability.affectedItems.size,
-//         affectedItems: Array.from(liability.affectedItems),
-//       }))
-//       .sort((a, b) => b.totalLiabilityEvents - a.totalLiabilityEvents);
-
-//     return res.status(StatusCodes.OK).json({
-//       success: true,
-//       message:
-//         "User liability report generated successfully using history tracking",
-//       data: {
-//         summary,
-//         items: processedReport,
-//         userLiabilityReport,
-//         generatedAt: new Date().toISOString(),
-//         reportVersion: "2.0-history-based",
-//       },
-//     });
-//   } catch (error) {
-//     console.error("Error generating user liability report:", error);
-//     next(error);
-//   }
-// };
 
 export const getItemHistoryReport = async (req, res, next) => {
   try {

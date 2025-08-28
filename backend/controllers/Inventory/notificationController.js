@@ -1,15 +1,3 @@
-// const User = require('../../models/Users/User');
-// const InventoryItem = require('../../models/Inventory/InventoryItem');
-// const Notification = require('../../models/Inventory/InventoryNotification');
-
-// const { Op } = require('sequelize');
-// const { StatusCodes } = require('http-status-codes');
-// const { NotFoundError } = require('../../utils/Error');
-
-// import User from "../../models/Users/User.js";
-// import InventoryItem from "../../models/Inventory/InventoryItem.js";
-// import Notification from "../../models/Notification/Notification.js";
-
 import models from "../../models/index.js";
 const { InventoryItem, User, Notification } = models;
 

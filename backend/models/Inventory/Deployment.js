@@ -83,11 +83,6 @@ const Deployment = sequelize.define(
         isDate: {
           msg: "Must be a valid date",
         },
-        notInFuture(value) {
-          if (value > new Date()) {
-            throw new Error("Deployment date cannot be in the future");
-          }
-        },
       },
     },
     expected_return_date: {
@@ -96,13 +91,6 @@ const Deployment = sequelize.define(
       validate: {
         isDate: {
           msg: "Must be a valid date",
-        },
-        isAfterDeployment(value) {
-          if (value && this.deployment_date && value <= this.deployment_date) {
-            throw new Error(
-              "Expected return date must be after deployment date"
-            );
-          }
         },
       },
     },

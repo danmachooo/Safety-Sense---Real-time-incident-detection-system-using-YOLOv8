@@ -27,36 +27,94 @@ import {
 } from "../../services/redis/cache.js";
 import sequelize from "../../config/database.js";
 
-const isReturnableItem = (categoryType, categoryName, itemName) => {
-  const returnableCategories = [
+// Fixed serialization algorithm - only for returnable items and equipment
+const shouldSerializeItem = (item, category) => {
+  // Method 1: Check if item is explicitly marked as returnable
+  if (item.is_returnable === true) {
+    return true;
+  }
+
+  // Method 2: Check category type - only these categories get serialized
+  const serializableCategories = [
     "EQUIPMENT",
     "VEHICLES",
     "COMMUNICATION_DEVICES",
-    "SUPPLIES",
   ];
 
-  const returnableKeywords = [
-    "stretcher",
-    "wheelchair",
-    "defibrillator",
-    "monitor",
-    "ventilator",
-    "ambulance",
-    "truck",
-    "generator",
-    "radio",
-    "laptop",
+  if (serializableCategories.includes(category.type?.toUpperCase())) {
+    return true;
+  }
+
+  // Method 3: Check for high-value or trackable items by name/description
+  const itemText = `${item.name} ${item.description || ""}`.toLowerCase();
+
+  // Non-returnable keywords (consumables/disposables) - these should NEVER be serialized
+  const consumableKeywords = [
+    "bandage",
+    "gauze",
+    "syringe",
+    "needle",
+    "pill",
     "tablet",
-    "kit",
+    "capsule",
+    "medicine",
+    "drug",
+    "antibiotic",
+    "paracetamol",
+    "food",
+    "water",
+    "rice",
+    "can",
+    "bottle",
+    "sachet",
+    "packet",
+    "pouch",
+    "powder",
+    "liquid",
+    "cream",
+    "ointment",
+    "disposable",
+    "single-use",
   ];
 
-  return (
-    returnableCategories.includes(categoryType?.toUpperCase()) ||
-    returnableCategories.includes(categoryName?.toUpperCase()) ||
-    returnableKeywords.some((keyword) =>
-      itemName?.toLowerCase().includes(keyword.toLowerCase())
-    )
+  // First check if it's a consumable - these should never be serialized
+  const isConsumable = consumableKeywords.some((keyword) =>
+    itemText.includes(keyword.toLowerCase())
   );
+
+  if (isConsumable) {
+    return false;
+  }
+
+  // Trackable patterns for high-value or critical items
+  const trackablePatterns = [
+    // Medical equipment patterns
+    /\b(defibrillator|ventilator|monitor|stretcher|wheelchair)\b/,
+    /\b(oxygen\s+(tank|cylinder)|medical\s+kit)\b/,
+
+    // Vehicle patterns
+    /\b(ambulance|truck|vehicle|motorbike|bicycle)\b/,
+
+    // Communication & IT
+    /\b(radio|laptop|tablet|computer|generator)\b/,
+    /\b(walkie[\s-]*talkie|two[\s-]*way\s+radio)\b/,
+
+    // Tools & Equipment
+    /\b(chainsaw|drill|pump|tent|shelter)\b/,
+    /\b(emergency\s+kit|rescue\s+kit|tool\s+kit)\b/,
+
+    // High-value supplies that need individual tracking
+    /\b(solar\s+panel|battery\s+pack|power\s+bank)\b/,
+    /\b(blanket|tarpaulin|rope|cable|hose)\b/,
+    /\b(flashlight|torch|lantern)\b/,
+  ];
+
+  // Check if any pattern matches
+  const shouldTrack = trackablePatterns.some((pattern) =>
+    pattern.test(itemText)
+  );
+
+  return shouldTrack;
 };
 
 const generateSerialNumbers = (batchNumber, quantity, categoryCode) => {
@@ -107,9 +165,15 @@ const createBatch = async (req, res, next) => {
       .slice(0, 14);
     const batch_number = `${itemPrefix}${currentDate}`;
 
-    const needsSerialization =
-      item.is_returnable ||
-      isReturnableItem(item.category.type, item.category.name, item.name);
+    // 🔧 UPDATED: Use improved serialization algorithm
+    const needsSerialization = shouldSerializeItem(item, item.category);
+
+    // Log serialization decision for debugging
+    console.log(
+      `🔍 Serialization check for "${item.name}" (${item.category.type}): ${
+        needsSerialization ? "✅ YES" : "❌ NO"
+      }`
+    );
 
     // Create batch record
     const newBatch = await Batch.create(
@@ -150,7 +214,13 @@ const createBatch = async (req, res, next) => {
       }));
 
       await SerializedItem.bulkCreate(serializedItems, { transaction: t });
-      console.log(`Generated ${quantity} serial numbers for ${item.name}`);
+      console.log(
+        `✅ Generated ${quantity} serial numbers for ${item.name} (${item.category.type})`
+      );
+    } else {
+      console.log(
+        `ℹ️  No serialization needed for ${item.name} (${item.category.type}) - consumable/non-trackable item`
+      );
     }
 
     await item.increment("quantity_in_stock", { by: quantity, transaction: t });
@@ -178,13 +248,33 @@ const createBatch = async (req, res, next) => {
       }
     }
 
+    // Determine serialization reason for response
+    let serializationReason = "not_trackable";
+    if (needsSerialization) {
+      if (item.is_returnable === true) {
+        serializationReason = "marked_returnable";
+      } else if (
+        ["EQUIPMENT", "VEHICLES", "COMMUNICATION_DEVICES"].includes(
+          item.category.type
+        )
+      ) {
+        serializationReason = "equipment_category";
+      } else {
+        serializationReason = "trackable_pattern";
+      }
+    }
+
     // Commit transaction
     await t.commit();
 
     // Invalidate caches AFTER successful commit
-    await invalidateBatchCache(inventory_item_id);
-    await invalidateInventoryCache(inventory_item_id);
-    await invalidateItemsCache();
+    try {
+      await invalidateBatchCache(inventory_item_id);
+      await invalidateInventoryCache(inventory_item_id);
+      await invalidateItemsCache();
+    } catch (cacheError) {
+      console.warn("Cache invalidation failed:", cacheError.message);
+    }
 
     return res.status(StatusCodes.CREATED).json({
       success: true,
@@ -195,11 +285,13 @@ const createBatch = async (req, res, next) => {
         batch: newBatch,
         serialized: needsSerialization,
         serial_count: needsSerialization ? quantity : 0,
+        serialization_reason: serializationReason,
+        category_type: item.category.type,
       },
     });
   } catch (error) {
     await t.rollback();
-    console.error("Batch Creation error: ", error);
+    console.error("❌ Batch Creation error: ", error);
     next(error);
   }
 };
@@ -233,7 +325,7 @@ const getSerializedItems = async (req, res, next) => {
           },
           {
             model: InventoryItem,
-            as: "inventoryItem",
+            as: "item",
             include: [
               {
                 model: Category,
@@ -258,7 +350,58 @@ const getSerializedItems = async (req, res, next) => {
       },
     });
   } catch (error) {
-    console.error("Get Serialized Items error: ", error.message);
+    console.error("❌ Get Serialized Items error: ", error.message);
+    next(error);
+  }
+};
+
+export const getSerializedItemsByBatch = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { page = 1, limit = 20, sort = "ASC" } = req.query;
+
+    if (!id) {
+      throw new BadRequestError("ID is required.");
+    }
+
+    const offset = (page - 1) * limit;
+
+    const { rows: serializedItems, count } =
+      await SerializedItem.findAndCountAll({
+        where: { inventory_item_id: id, status: "AVAILABLE" },
+        include: [
+          {
+            model: Batch,
+            as: "batch",
+          },
+          {
+            model: InventoryItem,
+            as: "item",
+            include: [
+              {
+                model: Category,
+                as: "category",
+              },
+            ],
+          },
+        ],
+        order: [["serial_number", sort.toUpperCase()]],
+        limit: parseInt(limit, 10),
+        offset: parseInt(offset, 10),
+      });
+
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      data: serializedItems,
+      pagination: {
+        total: count,
+        page: parseInt(page, 10),
+        limit: parseInt(limit, 10),
+        totalPages: Math.ceil(count / limit),
+      },
+    });
+  } catch (error) {
+    console.error("❌ Get Serialized Items by Batch error:", error.message);
     next(error);
   }
 };
@@ -314,7 +457,7 @@ const getAllBatches = async (req, res, next) => {
       include: [
         {
           model: InventoryItem,
-          as: "inventoryItem",
+          as: "item",
           attributes: ["id", "name", "unit_of_measure"],
         },
         {
@@ -368,7 +511,7 @@ const getBatchById = async (req, res, next) => {
       include: [
         {
           model: InventoryItem,
-          as: "inventoryItem",
+          as: "item",
           attributes: ["id", "name", "unit_of_measure"],
         },
         {
@@ -562,7 +705,7 @@ const getExpiringBatches = async (req, res, next) => {
       include: [
         {
           model: InventoryItem,
-          as: "inventoryItem",
+          as: "item",
           attributes: ["id", "name", "unit_of_measure"],
         },
       ],

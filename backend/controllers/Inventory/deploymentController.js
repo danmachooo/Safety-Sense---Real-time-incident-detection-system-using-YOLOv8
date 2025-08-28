@@ -7,6 +7,7 @@ import {
   UnauthorizedError,
 } from "../../utils/Error.js";
 import sequelize from "../../config/database.js";
+import { Op } from "sequelize";
 import { invalidateItemsCache } from "./utils/cacheUtil.js";
 const {
   Deployment,
@@ -15,9 +16,31 @@ const {
   InventoryNotification,
   SerializedItem,
   SerialItemDeployment,
+  SerializedItemHistory,
   Batch,
   Category,
 } = models;
+
+export const getHistory = async (req, res, next) => {
+  const history = await SerializedItemHistory.findAll({
+    where: { serialized_item_id: req.params.id },
+    include: [
+      { model: User, as: "user", attributes: ["id", "firstname", "lastname"] },
+      {
+        model: Deployment,
+        as: "deployment",
+        attributes: ["id", "deployment_location"],
+      },
+    ],
+    order: [["createdAt", "ASC"]],
+  });
+
+  return res.status(StatusCodes.OK).json({
+    success: true,
+    message: "Deployment History Fetched",
+    history,
+  });
+};
 
 const createDeployment = async (req, res, next) => {
   const t = await sequelize.transaction();
@@ -395,6 +418,20 @@ const updateDeploymentStatus = async (req, res, next) => {
       for (const itemId of itemsToReturn) {
         const condition = conditionsMap.get(itemId) || "GOOD";
 
+        // Get current state of the serial item BEFORE updating
+        const currentSerial = await SerialItemDeployment.findOne({
+          where: {
+            deployment_id: deployment.id,
+            serialized_item_id: itemId,
+          },
+          attributes: ["return_condition"],
+          transaction: t,
+        });
+
+        const oldCondition = currentSerial?.return_condition || null;
+        const newCondition = condition;
+
+        // Update SerialItemDeployment record
         await SerialItemDeployment.update(
           {
             returned_at: updateDate,
@@ -409,13 +446,12 @@ const updateDeploymentStatus = async (req, res, next) => {
             transaction: t,
           }
         );
-      }
 
-      // Update SerializedItem statuses based on condition
-      if (goodItems.length > 0) {
+        // Update SerializedItem current status
+        const serialStatus = condition === "GOOD" ? "AVAILABLE" : condition;
         await SerializedItem.update(
           {
-            status: "AVAILABLE",
+            status: serialStatus,
             ...(notes && {
               condition_notes: sequelize.fn(
                 "CONCAT",
@@ -424,43 +460,25 @@ const updateDeploymentStatus = async (req, res, next) => {
               ),
             }),
           },
-          { where: { id: goodItems }, transaction: t }
+          { where: { id: itemId }, transaction: t }
+        );
+
+        // NEW: Insert into SerializedItemHistory
+        await SerializedItemHistory.create(
+          {
+            serialized_item_id: itemId,
+            deployed_by: deployment.deployed_by,
+            deployed_to: deployment.deployed_to,
+            deployment_id: deployment.id,
+            old_condition: oldCondition,
+            new_condition: newCondition,
+            notes: notes || null,
+          },
+          { transaction: t }
         );
       }
 
-      // Update damaged items
-      if (damagedItems.length > 0) {
-        await SerializedItem.update(
-          {
-            status: "DAMAGED",
-            ...(notes && {
-              condition_notes: sequelize.fn(
-                "CONCAT",
-                sequelize.fn("COALESCE", sequelize.col("condition_notes"), ""),
-                notes.trim() ? `\n${notes}` : ""
-              ),
-            }),
-          },
-          { where: { id: damagedItems }, transaction: t }
-        );
-      }
-
-      // Update lost items
-      if (lostItems.length > 0) {
-        await SerializedItem.update(
-          {
-            status: "LOST",
-            ...(notes && {
-              condition_notes: sequelize.fn(
-                "CONCAT",
-                sequelize.fn("COALESCE", sequelize.col("condition_notes"), ""),
-                notes.trim() ? `\n${notes}` : ""
-              ),
-            }),
-          },
-          { where: { id: lostItems }, transaction: t }
-        );
-      }
+      // Remove the old bulk update code for SerializedItems since we're doing it individually now
     } else {
       // Non-serialized: Only increment stock if not damaged/lost
       if (return_condition !== "DAMAGED" && return_condition !== "LOST") {
@@ -667,7 +685,6 @@ const updateDeploymentStatus = async (req, res, next) => {
     next(error);
   }
 };
-
 const getAllDeployments = async (req, res, next) => {
   try {
     const {
@@ -957,238 +974,716 @@ const getOverdueDeployments = async (req, res, next) => {
     next(error);
   }
 };
-const getUserLiabilityReport = async (req, res, next) => {
+// const getUserLiabilityReport = async (req, res, next) => {
+//   try {
+//     // Query to get all serialized items with their history and current deployments
+//     const liabilityReport = await SerializedItem.findAll({
+//       include: [
+//         {
+//           model: InventoryItem,
+//           as: "item",
+//           attributes: ["name", "description", "category_id"],
+//         },
+//         {
+//           model: SerializedItemHistory,
+//           as: "history",
+//           include: [
+//             {
+//               model: User,
+//               as: "deployer",
+//               attributes: ["id", "firstname", "lastname", "email"],
+//             },
+//             {
+//               model: User,
+//               as: "receiver",
+//               attributes: ["id", "firstname", "lastname", "email"],
+//             },
+//             {
+//               model: Deployment,
+//               as: "deployment",
+//               attributes: [
+//                 "deployment_type",
+//                 "deployment_location",
+//                 "deployment_date",
+//                 "status",
+//               ],
+//             },
+//           ],
+//           attributes: [
+//             "id",
+//             "old_condition",
+//             "new_condition",
+//             "notes",
+//             "createdAt",
+//             "updatedAt",
+//           ],
+//           order: [["createdAt", "ASC"]], // Chronological order to track timeline
+//         },
+//         {
+//           model: SerialItemDeployment,
+//           as: "currentDeployment",
+//           include: [
+//             {
+//               model: Deployment,
+//               as: "deployment",
+//               include: [
+//                 {
+//                   model: User,
+//                   as: "recipient",
+//                   attributes: ["id", "firstname", "lastname", "email"],
+//                 },
+//                 {
+//                   model: User,
+//                   as: "deployer",
+//                   attributes: ["id", "firstname", "lastname", "email"],
+//                 },
+//               ],
+//               attributes: [
+//                 "deployment_type",
+//                 "deployment_location",
+//                 "deployment_date",
+//                 "status",
+//               ],
+//             },
+//           ],
+//           attributes: ["deployed_at", "returned_at"],
+//           where: { returned_at: null },
+//           required: false,
+//         },
+//       ],
+//       attributes: ["id", "serial_number", "status", "condition_notes"],
+//       order: [["serial_number", "ASC"]],
+//     });
+
+//     // Process the data to create liability report based on condition history
+//     const processedReport = liabilityReport.map((item) => {
+//       const conditionHistory = item.history || [];
+//       const currentDeployment = item.currentDeployment;
+
+//       // Track liability events by analyzing condition changes
+//       const liabilityEvents = [];
+//       let currentlyDeployedTo = null;
+//       let deploymentStartDate = null;
+
+//       // Process history chronologically to identify liability events
+//       conditionHistory.forEach((historyRecord, index) => {
+//         const receiver = historyRecord.receiver;
+//         const deployer = historyRecord.deployer;
+//         const recordDate = historyRecord.createdAt;
+
+//         // Determine liability based on condition change
+//         let liabilityStatus = "NO_LIABILITY";
+//         let liabilityReason = "";
+//         let liabilityAmount = "NONE";
+
+//         if (
+//           historyRecord.new_condition === "DAMAGED" &&
+//           historyRecord.old_condition === "GOOD"
+//         ) {
+//           liabilityStatus = "LIABLE_FOR_DAMAGE";
+//           liabilityReason = "Item condition changed from good to damaged";
+//           liabilityAmount = "PARTIAL";
+//         } else if (historyRecord.new_condition === "LOST") {
+//           liabilityStatus = "LIABLE_FOR_LOSS";
+//           liabilityReason = "Item was lost";
+//           liabilityAmount = "FULL";
+//         } else if (
+//           historyRecord.new_condition === "DAMAGED" &&
+//           historyRecord.old_condition === "DAMAGED"
+//         ) {
+//           liabilityStatus = "LIABLE_FOR_ADDITIONAL_DAMAGE";
+//           liabilityReason = "Item condition worsened while deployed";
+//           liabilityAmount = "PARTIAL";
+//         }
+
+//         // Calculate days between events for liability period
+//         let liabilityPeriodDays = 0;
+//         if (index > 0) {
+//           const previousRecord = conditionHistory[index - 1];
+//           liabilityPeriodDays = Math.ceil(
+//             (new Date(recordDate) - new Date(previousRecord.createdAt)) /
+//               (1000 * 60 * 60 * 24)
+//           );
+//         } else if (historyRecord.deployment?.deployment_date) {
+//           liabilityPeriodDays = Math.ceil(
+//             (new Date(recordDate) -
+//               new Date(historyRecord.deployment.deployment_date)) /
+//               (1000 * 60 * 60 * 24)
+//           );
+//         }
+
+//         liabilityEvents.push({
+//           historyId: historyRecord.id,
+//           eventDate: recordDate,
+//           responsibleUser: receiver
+//             ? {
+//                 id: receiver.id,
+//                 name: `${receiver.firstname} ${receiver.lastname}`,
+//                 email: receiver.email,
+//               }
+//             : null,
+//           deployer: deployer
+//             ? {
+//                 id: deployer.id,
+//                 name: `${deployer.firstname} ${deployer.lastname}`,
+//                 email: deployer.email,
+//               }
+//             : null,
+//           conditionChange: {
+//             from: historyRecord.old_condition,
+//             to: historyRecord.new_condition,
+//           },
+//           deploymentInfo: historyRecord.deployment
+//             ? {
+//                 id: historyRecord.deployment_id,
+//                 type: historyRecord.deployment.deployment_type,
+//                 location: historyRecord.deployment.deployment_location,
+//                 date: historyRecord.deployment.deployment_date,
+//                 status: historyRecord.deployment.status,
+//               }
+//             : null,
+//           liabilityStatus,
+//           liabilityReason,
+//           liabilityAmount,
+//           liabilityPeriodDays,
+//           notes: historyRecord.notes,
+//         });
+//       });
+
+//       // Add current deployment info if item is currently deployed
+//       if (currentDeployment) {
+//         const recipient = currentDeployment.deployment?.recipient;
+//         const deployer = currentDeployment.deployment?.deployer;
+//         const daysDeployed = Math.ceil(
+//           (new Date() - new Date(currentDeployment.deployed_at)) /
+//             (1000 * 60 * 60 * 24)
+//         );
+
+//         currentlyDeployedTo = recipient
+//           ? {
+//               id: recipient.id,
+//               name: `${recipient.firstname} ${recipient.lastname}`,
+//               email: recipient.email,
+//               deployedSince: currentDeployment.deployed_at,
+//               daysDeployed,
+//               deployer: deployer
+//                 ? {
+//                     id: deployer.id,
+//                     name: `${deployer.firstname} ${deployer.lastname}`,
+//                     email: deployer.email,
+//                   }
+//                 : null,
+//               deploymentInfo: {
+//                 type: currentDeployment.deployment.deployment_type,
+//                 location: currentDeployment.deployment.deployment_location,
+//                 date: currentDeployment.deployment.deployment_date,
+//                 status: currentDeployment.deployment.status,
+//               },
+//             }
+//           : null;
+//       }
+
+//       // Calculate liability summary
+//       const liabilitySummary = {
+//         totalLiabilityEvents: liabilityEvents.length,
+//         totalDamageEvents: liabilityEvents.filter((e) =>
+//           e.liabilityStatus.includes("DAMAGE")
+//         ).length,
+//         totalLossEvents: liabilityEvents.filter(
+//           (e) => e.liabilityStatus === "LIABLE_FOR_LOSS"
+//         ).length,
+//         isCurrentlyDeployed: !!currentlyDeployedTo,
+//         usersWithLiability: [
+//           ...new Set(
+//             liabilityEvents
+//               .filter((e) => e.liabilityStatus.includes("LIABLE"))
+//               .map((e) => e.responsibleUser?.id)
+//               .filter(Boolean)
+//           ),
+//         ],
+//         totalLiabilityDays: liabilityEvents.reduce(
+//           (sum, event) => sum + event.liabilityPeriodDays,
+//           0
+//         ),
+//       };
+
+//       return {
+//         serialNumber: item.serial_number,
+//         itemId: item.id,
+//         itemName: item.item?.name || "Unknown Item",
+//         itemDescription: item.item?.description,
+//         currentStatus: item.status,
+//         conditionNotes: item.condition_notes,
+//         currentCondition:
+//           conditionHistory.length > 0
+//             ? conditionHistory[conditionHistory.length - 1].new_condition
+//             : "GOOD",
+//         currentlyDeployedTo,
+//         liabilityEvents,
+//         liabilitySummary,
+//         conditionTimeline: conditionHistory.map((h) => ({
+//           date: h.createdAt,
+//           from: h.old_condition,
+//           to: h.new_condition,
+//           responsibleUser: h.receiver
+//             ? `${h.receiver.firstname} ${h.receiver.lastname}`
+//             : null,
+//           notes: h.notes,
+//         })),
+//       };
+//     });
+
+//     // Generate comprehensive summary statistics
+//     const summary = {
+//       totalItems: processedReport.length,
+//       totalLiabilityEvents: processedReport.reduce(
+//         (sum, item) => sum + item.liabilitySummary.totalLiabilityEvents,
+//         0
+//       ),
+//       itemsWithLiabilityIssues: processedReport.filter(
+//         (item) => item.liabilitySummary.totalLiabilityEvents > 0
+//       ).length,
+//       currentlyDeployedItems: processedReport.filter(
+//         (item) => item.liabilitySummary.isCurrentlyDeployed
+//       ).length,
+//       totalDamageEvents: processedReport.reduce(
+//         (sum, item) => sum + item.liabilitySummary.totalDamageEvents,
+//         0
+//       ),
+//       totalLossEvents: processedReport.reduce(
+//         (sum, item) => sum + item.liabilitySummary.totalLossEvents,
+//         0
+//       ),
+//       itemsByCondition: {
+//         good: processedReport.filter((item) => item.currentCondition === "GOOD")
+//           .length,
+//         damaged: processedReport.filter(
+//           (item) => item.currentCondition === "DAMAGED"
+//         ).length,
+//         lost: processedReport.filter((item) => item.currentCondition === "LOST")
+//           .length,
+//       },
+//     };
+
+//     // Generate detailed user liability summary
+//     const userLiabilityMap = new Map();
+
+//     processedReport.forEach((item) => {
+//       item.liabilityEvents.forEach((event) => {
+//         if (event.responsibleUser && event.liabilityStatus.includes("LIABLE")) {
+//           const userId = event.responsibleUser.id;
+
+//           if (!userLiabilityMap.has(userId)) {
+//             userLiabilityMap.set(userId, {
+//               user: event.responsibleUser,
+//               totalLiabilityEvents: 0,
+//               damageEvents: [],
+//               lossEvents: [],
+//               totalLiabilityDays: 0,
+//               affectedItems: new Set(),
+//             });
+//           }
+
+//           const userLiability = userLiabilityMap.get(userId);
+//           userLiability.totalLiabilityEvents++;
+//           userLiability.totalLiabilityDays += event.liabilityPeriodDays;
+//           userLiability.affectedItems.add(item.serialNumber);
+
+//           const eventSummary = {
+//             serialNumber: item.serialNumber,
+//             itemName: item.itemName,
+//             eventDate: event.eventDate,
+//             conditionChange: event.conditionChange,
+//             liabilityAmount: event.liabilityAmount,
+//             liabilityPeriodDays: event.liabilityPeriodDays,
+//             deploymentInfo: event.deploymentInfo,
+//             notes: event.notes,
+//           };
+
+//           if (event.liabilityStatus.includes("DAMAGE")) {
+//             userLiability.damageEvents.push(eventSummary);
+//           } else if (event.liabilityStatus === "LIABLE_FOR_LOSS") {
+//             userLiability.lossEvents.push(eventSummary);
+//           }
+//         }
+//       });
+//     });
+
+//     // Convert user liability map to sorted array
+//     const userLiabilityReport = Array.from(userLiabilityMap.values())
+//       .map((liability) => ({
+//         ...liability,
+//         affectedItemsCount: liability.affectedItems.size,
+//         affectedItems: Array.from(liability.affectedItems),
+//       }))
+//       .sort((a, b) => b.totalLiabilityEvents - a.totalLiabilityEvents);
+
+//     return res.status(StatusCodes.OK).json({
+//       success: true,
+//       message:
+//         "User liability report generated successfully using history tracking",
+//       data: {
+//         summary,
+//         items: processedReport,
+//         userLiabilityReport,
+//         generatedAt: new Date().toISOString(),
+//         reportVersion: "2.0-history-based",
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Error generating user liability report:", error);
+//     next(error);
+//   }
+// };
+
+export const getItemHistoryReport = async (req, res, next) => {
   try {
-    // Query to get all serialized items with their deployment history
-    const liabilityReport = await SerializedItem.findAll({
+    const { itemId } = req.params;
+
+    // If no itemId provided, return all deployed/borrowed items with their borrowers
+    if (!itemId) {
+      return getAllDeployedItemsReport(req, res, next);
+    }
+
+    // Get item details with full history timeline
+    const itemHistory = await SerializedItemHistory.findAll({
+      where: { serialized_item_id: itemId },
+      include: [
+        {
+          model: SerializedItem,
+          as: "item",
+          attributes: ["id", "serial_number", "status", "condition_notes"],
+          include: [
+            {
+              model: InventoryItem,
+              as: "item",
+              attributes: ["id", "name", "description"],
+            },
+          ],
+        },
+        {
+          model: User,
+          as: "deployer",
+          attributes: ["id", "firstname", "lastname", "email"],
+          required: false,
+        },
+        {
+          model: User,
+          as: "receiver",
+          attributes: ["id", "firstname", "lastname", "email"],
+          required: false,
+        },
+        {
+          model: Deployment,
+          as: "deployment",
+          attributes: ["id", "deployment_date", "expected_return_date"],
+          required: false,
+        },
+      ],
+      order: [["createdAt", "DESC"]], // Most recent first
+    });
+
+    if (!itemHistory.length) {
+      return res.status(StatusCodes.NOT_FOUND).json({
+        success: false,
+        message: "No history found for this item",
+      });
+    }
+
+    // Extract unique users who have borrowed this item
+    const borrowers = new Set();
+    const timeline = [];
+
+    itemHistory.forEach((history) => {
+      // Add users to borrowers set
+      if (history.receiver) {
+        borrowers.add(
+          JSON.stringify({
+            id: history.receiver.id,
+            name: `${history.receiver.firstname} ${history.receiver.lastname}`,
+            email: history.receiver.email,
+          })
+        );
+      }
+
+      // Build timeline entry
+      timeline.push({
+        id: history.id,
+        serialId: history.item?.serial_number || "N/A",
+        itemName: history.item?.item?.name || "N/A",
+        deployedBy: history.deployer
+          ? {
+              id: history.deployer.id,
+              name: `${history.deployer.firstname} ${history.deployer.lastname}`,
+              email: history.deployer.email,
+            }
+          : null,
+        deployedTo: history.receiver
+          ? {
+              id: history.receiver.id,
+              name: `${history.receiver.firstname} ${history.receiver.lastname}`,
+              email: history.receiver.email,
+            }
+          : null,
+        deploymentId: history.deployment_id,
+        deploymentDate: history.deployment?.deployment_date || null,
+        expectedReturnDate: history.deployment?.expected_return_date || null,
+        oldCondition: history.old_condition,
+        newCondition: history.new_condition,
+        notes: history.notes,
+        createdAt: history.createdAt,
+        updatedAt: history.updatedAt,
+      });
+    });
+
+    // Convert borrowers set back to array of objects
+    const uniqueBorrowers = Array.from(borrowers).map((borrower) =>
+      JSON.parse(borrower)
+    );
+
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Item history retrieved successfully",
+      data: {
+        itemInfo: {
+          id: itemId,
+          serialNumber: itemHistory[0]?.item?.serial_number,
+          itemName: itemHistory[0]?.item?.item?.name,
+          currentStatus: itemHistory[0]?.item?.status,
+          conditionNotes: itemHistory[0]?.item?.condition_notes,
+        },
+        borrowers: uniqueBorrowers,
+        timeline: timeline,
+        totalHistoryEntries: itemHistory.length,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching item history:", error);
+    next(error);
+  }
+};
+
+const getAllDeployedItemsReport = async (req, res, next) => {
+  try {
+    const { status, page = 1, limit = 50 } = req.query;
+    const offset = (page - 1) * limit;
+
+    // Build where condition based on status filter
+    const whereCondition = {};
+    if (
+      status &&
+      ["DEPLOYED", "LOST", "DAMAGED"].includes(status.toUpperCase())
+    ) {
+      whereCondition.status = status.toUpperCase();
+    }
+
+    // Get all serialized items that have deployment history
+    const deployedItems = await SerializedItem.findAndCountAll({
+      where: whereCondition,
       include: [
         {
           model: InventoryItem,
           as: "item",
-          attributes: ["name", "description", "category_id"],
+          attributes: ["id", "name", "description", "category_id"],
         },
         {
-          model: SerialItemDeployment,
-          as: "deploymentHistory",
+          model: SerializedItemHistory,
+          as: "history",
           include: [
+            {
+              model: User,
+              as: "receiver",
+              attributes: ["id", "firstname", "lastname", "email"],
+              required: false,
+            },
+            {
+              model: User,
+              as: "deployer",
+              attributes: ["id", "firstname", "lastname", "email"],
+              required: false,
+            },
             {
               model: Deployment,
               as: "deployment",
-              include: [
-                {
-                  model: User,
-                  as: "recipient", // User who received the item
-                  attributes: ["id", "firstname", "lastname", "email"],
-                },
-                {
-                  model: User,
-                  as: "deployer", // User who deployed the item
-                  attributes: ["id", "firstname", "lastname", "email"],
-                },
-              ],
-              attributes: [
-                "deployment_type",
-                "deployment_location",
-                "deployment_date",
-                "status",
-              ],
+              attributes: ["id", "deployment_date", "expected_return_date"],
+              required: false,
             },
           ],
-          attributes: [
-            "deployed_at",
-            "returned_at",
-            "return_condition",
-            "notes",
-          ],
-          order: [["deployed_at", "DESC"]], // Most recent deployments first
+          order: [["createdAt", "DESC"]],
         },
       ],
-      attributes: ["id", "serial_number", "status", "condition_notes"],
-      order: [["serial_number", "ASC"]],
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      order: [["updatedAt", "DESC"]],
+      distinct: true,
     });
 
-    // Process the data to create a more readable liability report
-    const processedReport = liabilityReport.map((item) => {
-      const deploymentHistory = item.deploymentHistory.map((deployment) => {
-        const recipient = deployment.deployment?.recipient;
-        const deployer = deployment.deployment?.deployer;
+    // Process the data to show borrower information over time
+    const processedItems = deployedItems.rows.map((item) => {
+      // Get unique borrowers for this item
+      const borrowers = new Set();
+      const borrowingHistory = [];
 
-        // Determine liability status based on return condition
-        let liabilityStatus = "NO_LIABILITY";
-        let liabilityReason = "";
+      item.history.forEach((historyEntry) => {
+        if (historyEntry.receiver) {
+          const borrowerInfo = {
+            id: historyEntry.receiver.id,
+            name: `${historyEntry.receiver.firstname} ${historyEntry.receiver.lastname}`,
+            email: historyEntry.receiver.email,
+          };
 
-        if (deployment.return_condition) {
-          switch (deployment.return_condition) {
-            case "DAMAGED":
-              liabilityStatus = "LIABLE_FOR_DAMAGE";
-              liabilityReason = "Item returned in damaged condition";
-              break;
-            case "LOST":
-              liabilityStatus = "LIABLE_FOR_LOSS";
-              liabilityReason = "Item was lost during deployment";
-              break;
-            case "FAIR":
-              liabilityStatus = "MINOR_LIABILITY";
-              liabilityReason = "Item returned in fair condition (normal wear)";
-              break;
-            case "GOOD":
-              liabilityStatus = "NO_LIABILITY";
-              liabilityReason = "Item returned in good condition";
-              break;
-          }
-        } else if (!deployment.returned_at) {
-          liabilityStatus = "CURRENTLY_DEPLOYED";
-          liabilityReason = "Item is still deployed";
+          borrowers.add(JSON.stringify(borrowerInfo));
+
+          borrowingHistory.push({
+            borrower: borrowerInfo,
+            deployer: historyEntry.deployer
+              ? {
+                  id: historyEntry.deployer.id,
+                  name: `${historyEntry.deployer.firstname} ${historyEntry.deployer.lastname}`,
+                  email: historyEntry.deployer.email,
+                }
+              : null,
+            deploymentDate: historyEntry.deployment?.deployment_date || null,
+            expectedReturnDate:
+              historyEntry.deployment?.expected_return_date || null,
+            oldCondition: historyEntry.old_condition,
+            newCondition: historyEntry.new_condition,
+            notes: historyEntry.notes,
+            createdAt: historyEntry.createdAt,
+          });
         }
-
-        return {
-          deploymentId: deployment.deployment?.id,
-          borrower: recipient
-            ? {
-                id: recipient.id,
-                name: `${recipient.firstname} ${recipient.lastname}`,
-                email: recipient.email,
-              }
-            : null,
-          deployer: deployer
-            ? {
-                id: deployer.id,
-                name: `${deployer.firstname} ${deployer.lastname}`,
-                email: deployer.email,
-              }
-            : null,
-          deployedAt: deployment.deployed_at,
-          returnedAt: deployment.returned_at,
-          returnCondition: deployment.return_condition,
-          deploymentType: deployment.deployment?.deployment_type,
-          deploymentLocation: deployment.deployment?.deployment_location,
-          deploymentStatus: deployment.deployment?.status,
-          liabilityStatus,
-          liabilityReason,
-          notes: deployment.notes,
-          daysDeployed: deployment.returned_at
-            ? Math.ceil(
-                (new Date(deployment.returned_at) -
-                  new Date(deployment.deployed_at)) /
-                  (1000 * 60 * 60 * 24)
-              )
-            : Math.ceil(
-                (new Date() - new Date(deployment.deployed_at)) /
-                  (1000 * 60 * 60 * 24)
-              ),
-        };
       });
 
+      // Get current borrower (most recent deployment)
+      const currentBorrower =
+        borrowingHistory.length > 0 ? borrowingHistory[0].borrower : null;
+
       return {
+        id: item.id,
         serialNumber: item.serial_number,
-        itemId: item.id,
-        itemName: item.item?.name || "Unknown Item",
-        itemDescription: item.item?.description,
-        currentStatus: item.status,
+        status: item.status,
+        itemName: item.item?.name || "N/A",
+        itemDescription: item.item?.description || null,
         conditionNotes: item.condition_notes,
-        totalDeployments: deploymentHistory.length,
-        deploymentHistory,
-        // Summary of liability issues
-        liabilitySummary: {
-          totalDamaged: deploymentHistory.filter(
-            (d) => d.returnCondition === "DAMAGED"
-          ).length,
-          totalLost: deploymentHistory.filter(
-            (d) => d.returnCondition === "LOST"
-          ).length,
-          currentlyDeployed: deploymentHistory.filter((d) => !d.returnedAt)
-            .length,
-          usersWithLiability: [
-            ...new Set(
-              deploymentHistory
-                .filter((d) => d.liabilityStatus.includes("LIABLE"))
-                .map((d) => d.borrower?.id)
-                .filter(Boolean)
-            ),
-          ],
-        },
+        currentBorrower: currentBorrower,
+        totalBorrowers: Array.from(borrowers).map((b) => JSON.parse(b)),
+        borrowingHistory: borrowingHistory,
+        lastUpdated: item.updatedAt,
       };
     });
 
-    // Generate summary statistics
+    // Summary statistics
     const summary = {
-      totalItems: processedReport.length,
-      totalDeployments: processedReport.reduce(
-        (sum, item) => sum + item.totalDeployments,
-        0
-      ),
-      itemsWithLiabilityIssues: processedReport.filter(
-        (item) =>
-          item.liabilitySummary.totalDamaged > 0 ||
-          item.liabilitySummary.totalLost > 0
+      totalItems: deployedItems.count,
+      currentlyDeployed: processedItems.filter(
+        (item) => item.status === "DEPLOYED"
       ).length,
-      currentlyDeployedItems: processedReport.filter(
-        (item) => item.liabilitySummary.currentlyDeployed > 0
-      ).length,
-      totalDamagedReturns: processedReport.reduce(
-        (sum, item) => sum + item.liabilitySummary.totalDamaged,
-        0
-      ),
-      totalLostItems: processedReport.reduce(
-        (sum, item) => sum + item.liabilitySummary.totalLost,
-        0
-      ),
+      lost: processedItems.filter((item) => item.status === "LOST").length,
+      damaged: processedItems.filter((item) => item.status === "DAMAGED")
+        .length,
+      totalUniqueBorrowers: new Set(
+        processedItems.flatMap((item) =>
+          item.totalBorrowers.map((borrower) => borrower.id)
+        )
+      ).size,
     };
 
-    // Get user liability summary
-    const userLiabilityMap = new Map();
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      message: "All deployed items report retrieved successfully",
+      data: {
+        summary,
+        items: processedItems,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(deployedItems.count / limit),
+          totalItems: deployedItems.count,
+          itemsPerPage: parseInt(limit),
+          hasNextPage: page * limit < deployedItems.count,
+          hasPreviousPage: page > 1,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching all deployed items report:", error);
+    next(error);
+  }
+};
 
-    processedReport.forEach((item) => {
-      item.deploymentHistory.forEach((deployment) => {
-        if (
-          deployment.borrower &&
-          deployment.liabilityStatus.includes("LIABLE")
-        ) {
-          const userId = deployment.borrower.id;
-          if (!userLiabilityMap.has(userId)) {
-            userLiabilityMap.set(userId, {
-              user: deployment.borrower,
-              liabilityCount: 0,
-              damagedItems: [],
-              lostItems: [],
-              totalDaysWithItems: 0,
-            });
-          }
+export const getUserLiabilityReport = async (req, res, next) => {
+  try {
+    const { itemId } = req.params;
 
-          const userLiability = userLiabilityMap.get(userId);
-          userLiability.liabilityCount++;
-          userLiability.totalDaysWithItems += deployment.daysDeployed;
+    if (!itemId) {
+      throw new BadRequestError("Item ID is required");
+    }
 
-          if (deployment.returnCondition === "DAMAGED") {
-            userLiability.damagedItems.push({
-              serialNumber: item.serialNumber,
-              itemName: item.itemName,
-              deploymentDate: deployment.deployedAt,
-              returnDate: deployment.returnedAt,
-            });
-          } else if (deployment.returnCondition === "LOST") {
-            userLiability.lostItems.push({
-              serialNumber: item.serialNumber,
-              itemName: item.itemName,
-              deploymentDate: deployment.deployedAt,
-            });
-          }
-        }
-      });
+    const itemHistory = await SerializedItemHistory.findAll({
+      where: { serialized_item_id: itemId },
+      include: [
+        {
+          model: SerializedItem,
+          as: "item",
+          attributes: ["id", "serial_number", "status"],
+          include: [
+            {
+              model: InventoryItem,
+              as: "item",
+              attributes: ["name"],
+            },
+          ],
+        },
+        {
+          model: User,
+          as: "deployer",
+          attributes: ["id", "firstname", "lastname", "email"],
+          required: false,
+        },
+        {
+          model: User,
+          as: "receiver",
+          attributes: ["id", "firstname", "lastname", "email"],
+          required: false,
+        },
+      ],
+      order: [["createdAt", "DESC"]],
     });
 
-    const userLiabilityReport = Array.from(userLiabilityMap.values()).sort(
-      (a, b) => b.liabilityCount - a.liabilityCount
-    );
+    const borrowers = [
+      ...new Set(
+        itemHistory
+          .filter((h) => h.receiver)
+          .map((h) =>
+            JSON.stringify({
+              id: h.receiver.id,
+              name: `${h.receiver.firstname} ${h.receiver.lastname}`,
+              email: h.receiver.email,
+            })
+          )
+      ),
+    ].map((b) => JSON.parse(b));
+
+    const timeline = itemHistory.map((history) => ({
+      serialId: history.item?.serial_number || "N/A",
+      deployedBy: history.deployer
+        ? `${history.deployer.firstname} ${history.deployer.lastname}`
+        : "N/A",
+      deployedTo: history.receiver
+        ? `${history.receiver.firstname} ${history.receiver.lastname}`
+        : "N/A",
+      oldCondition: history.old_condition,
+      newCondition: history.new_condition,
+      notes: history.notes,
+      createdAt: history.createdAt,
+      updatedAt: history.updatedAt,
+    }));
 
     return res.status(StatusCodes.OK).json({
       success: true,
       message: "User liability report generated successfully",
       data: {
-        summary,
-        items: processedReport,
-        userLiabilityReport,
-        generatedAt: new Date().toISOString(),
+        borrowers,
+        timeline,
       },
     });
   } catch (error) {
@@ -1203,5 +1698,4 @@ export {
   getDeploymentById,
   updateDeploymentStatus,
   getOverdueDeployments,
-  getUserLiabilityReport,
 };

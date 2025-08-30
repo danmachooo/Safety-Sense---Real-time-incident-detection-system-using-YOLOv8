@@ -19,6 +19,7 @@ const {
   SerializedItemHistory,
   Batch,
   Category,
+  DeploymentNotes,
 } = models;
 
 export const getHistory = async (req, res, next) => {
@@ -42,6 +43,7 @@ export const getHistory = async (req, res, next) => {
   });
 };
 
+// Updated createDeployment function
 const createDeployment = async (req, res, next) => {
   const t = await sequelize.transaction();
   try {
@@ -49,10 +51,10 @@ const createDeployment = async (req, res, next) => {
       incident_type,
       inventory_item_id,
       quantity_deployed,
-      serialized_item_ids, // IDs of serialized items
-      deployed_to, // user or department ID
+      serialized_item_ids,
+      deployed_to,
       expected_return_date,
-      notes,
+      notes, // This will now go to DeploymentNotes table
       deployment_type,
       deployment_location,
       deployment_date,
@@ -60,7 +62,6 @@ const createDeployment = async (req, res, next) => {
 
     console.log("Request body: ", req.body);
 
-    // Current logged-in user
     const deployed_by = req.user?.id;
     if (!deployed_by) {
       throw new UnauthorizedError("You must be logged in to deploy items");
@@ -84,16 +85,15 @@ const createDeployment = async (req, res, next) => {
       throw new BadRequestError("Invalid deployment date");
     }
 
-    // Lock the inventory item
     const inventoryItem = await InventoryItem.findByPk(inventory_item_id, {
       transaction: t,
       lock: t.LOCK.UPDATE,
     });
     if (!inventoryItem) throw new NotFoundError("Inventory item not found");
 
-    // ======================
+    let deployment; // Declare deployment variable to use in both branches
+
     // SERIALIZED deployment
-    // ======================
     if (serialized_item_ids?.length > 0) {
       if (!Array.isArray(serialized_item_ids)) {
         throw new BadRequestError("serial_item_ids must be an array of IDs");
@@ -115,14 +115,13 @@ const createDeployment = async (req, res, next) => {
         );
       }
 
-      // Decrement stock
       await inventoryItem.decrement("quantity_in_stock", {
         by: serialized_item_ids.length,
         transaction: t,
       });
 
-      // Create parent deployment
-      const deployment = await Deployment.create(
+      // Create parent deployment (WITHOUT notes in the deployment table)
+      deployment = await Deployment.create(
         {
           deployed_by,
           deployed_to,
@@ -130,7 +129,7 @@ const createDeployment = async (req, res, next) => {
           inventory_item_id,
           quantity_deployed: serialized_item_ids.length,
           expected_return_date,
-          notes,
+          // notes, // Remove this - notes will go to DeploymentNotes
           deployment_type,
           deployment_location,
           deployment_date: finalDeploymentDate,
@@ -142,9 +141,9 @@ const createDeployment = async (req, res, next) => {
       // Create serial item deployment links
       const serialDeployments = serialized_item_ids.map((id) => ({
         deployment_id: deployment.id,
-        serialized_item_id: id, // ⚠️ must match your model FK
+        serialized_item_id: id,
         deployed_at: finalDeploymentDate,
-        notes,
+        // notes, // Remove notes from here too
       }));
 
       const createdSerialDeployments = await SerialItemDeployment.bulkCreate(
@@ -156,8 +155,7 @@ const createDeployment = async (req, res, next) => {
         createdSerialDeployments.length
       );
 
-      // Update serialized item statuses
-      const [updatedCount] = await SerializedItem.update(
+      await SerializedItem.update(
         { status: "DEPLOYED" },
         {
           where: { id: { [Op.in]: serialized_item_ids } },
@@ -165,26 +163,19 @@ const createDeployment = async (req, res, next) => {
           lock: t.LOCK.UPDATE,
         }
       );
-      console.log("Updated serialized items:", updatedCount);
 
-      // Insert into history
+      // Update histories without notes in the old table
       const histories = serialized_item_ids.map((id) => ({
         serialized_item_id: id,
         deployed_by,
         deployed_to,
-        notes,
+        // notes, // Remove notes from here
         deployent_id: deployment.id,
       }));
 
-      const createdHistories = await SerializedItemHistory.bulkCreate(
-        histories,
-        { transaction: t }
-      );
-      console.log("Created histories:", createdHistories.length);
+      await SerializedItemHistory.bulkCreate(histories, { transaction: t });
     } else {
-      // ======================
       // NON-SERIALIZED deployment
-      // ======================
       if (!Number.isInteger(quantity_deployed) || quantity_deployed <= 0) {
         throw new BadRequestError("Quantity must be a positive integer");
       }
@@ -197,7 +188,7 @@ const createDeployment = async (req, res, next) => {
         transaction: t,
       });
 
-      await Deployment.create(
+      deployment = await Deployment.create(
         {
           deployed_by,
           deployed_to,
@@ -205,7 +196,7 @@ const createDeployment = async (req, res, next) => {
           inventory_item_id,
           quantity_deployed: quantity_deployed,
           expected_return_date,
-          notes,
+          // notes, // Remove this
           deployment_type,
           deployment_location,
           deployment_date: finalDeploymentDate,
@@ -215,10 +206,34 @@ const createDeployment = async (req, res, next) => {
       );
     }
 
-    // Commit transaction
+    // Add initial deployment notes if provided
+    if (notes && notes.trim()) {
+      await DeploymentNotes.create(
+        {
+          deployment_id: deployment.id,
+          note_text: notes.trim(),
+          note_type: "USER",
+          created_by: deployed_by,
+        },
+        { transaction: t }
+      );
+    }
+
+    // Add system note for deployment creation
+    await DeploymentNotes.create(
+      {
+        deployment_id: deployment.id,
+        note_text: `Deployment created: ${
+          quantity_deployed || serialized_item_ids?.length
+        } ${inventoryItem.name} deployed to ${deployment_location}`,
+        note_type: "SYSTEM",
+        created_by: deployed_by,
+      },
+      { transaction: t }
+    );
+
     await t.commit();
 
-    // Invalidate cache
     try {
       await invalidateItemsCache();
     } catch (cacheErr) {
@@ -230,6 +245,10 @@ const createDeployment = async (req, res, next) => {
       message: serialized_item_ids?.length
         ? "Serialized items deployed successfully"
         : "Non-serialized items deployed successfully",
+      data: {
+        deployment_id: deployment.id,
+        quantity: quantity_deployed || serialized_item_ids?.length,
+      },
     });
   } catch (error) {
     await t.rollback();
@@ -237,14 +256,12 @@ const createDeployment = async (req, res, next) => {
     next(error);
   }
 };
-
 const updateDeploymentStatus = async (req, res, next) => {
   const t = await sequelize.transaction();
   try {
     const { status, actual_return_date, notes, return_condition, serials } =
       req.body;
 
-    // 1️⃣ Find deployment with item details
     const deployment = await Deployment.findByPk(req.params.id, {
       include: [{ model: InventoryItem, as: "item" }],
       transaction: t,
@@ -261,25 +278,21 @@ const updateDeploymentStatus = async (req, res, next) => {
     let damagedItems = [];
     let lostItems = [];
     let stockAdjustment = 0;
-    let skippedItems = []; // ✅ Declare at function level
-    let itemsToProcess = []; // ✅ Also declare this at function level
+    let skippedItems = [];
+    let itemsToProcess = [];
 
-    // 2️⃣ Check if this deployment has serialized items
     const hasSerializedItems = await SerialItemDeployment.count({
       where: { deployment_id: deployment.id },
       transaction: t,
     });
 
     if (hasSerializedItems > 0) {
-      // Determine which items are being returned
       let itemsToReturn = [];
-      let conditionsMap = new Map(); // Map serial_id to return_condition
+      let conditionsMap = new Map();
 
       if (Array.isArray(serials) && serials.length > 0) {
-        // Extract serial IDs and their conditions from the serials array
         const serialIds = serials.map((serial) => serial.id);
 
-        // Validate serial_ids exist in SerialItemDeployment and get current status
         const validSerialItems = await SerialItemDeployment.findAll({
           where: {
             deployment_id: deployment.id,
@@ -293,7 +306,6 @@ const updateDeploymentStatus = async (req, res, next) => {
           (i) => i.serialized_item_id
         );
 
-        // Check if any provided serial_ids are invalid
         if (validSerialIds.length !== serialIds.length) {
           const invalidIds = serialIds.filter(
             (id) => !validSerialIds.includes(id)
@@ -303,8 +315,6 @@ const updateDeploymentStatus = async (req, res, next) => {
           );
         }
 
-        // Filter out items that are already returned in good condition
-        // ✅ Reset these arrays since they're now declared at function level
         itemsToProcess = [];
         skippedItems = [];
 
@@ -314,7 +324,6 @@ const updateDeploymentStatus = async (req, res, next) => {
           );
           const newCondition = serial.return_condition || "GOOD";
 
-          // Skip if item is already returned in good condition and new condition is also good
           if (
             existingItem &&
             existingItem.returned_at &&
@@ -334,7 +343,6 @@ const updateDeploymentStatus = async (req, res, next) => {
 
         itemsToReturn = itemsToProcess.map((serial) => serial.id);
 
-        // Log skipped items for debugging
         if (skippedItems.length > 0) {
           console.log(
             "Skipped items already returned in good condition:",
@@ -342,7 +350,6 @@ const updateDeploymentStatus = async (req, res, next) => {
           );
         }
       } else {
-        // No serials provided, fetch all unreturned items only
         const unreturnedItems = await SerialItemDeployment.findAll({
           where: { deployment_id: deployment.id, returned_at: null },
           attributes: ["serialized_item_id"],
@@ -351,7 +358,6 @@ const updateDeploymentStatus = async (req, res, next) => {
 
         itemsToReturn = unreturnedItems.map((i) => i.serialized_item_id);
 
-        // Apply single condition to all items if provided
         const defaultCondition = return_condition || "GOOD";
         itemsToReturn.forEach((itemId) => {
           conditionsMap.set(itemId, defaultCondition);
@@ -359,7 +365,6 @@ const updateDeploymentStatus = async (req, res, next) => {
       }
 
       if (itemsToReturn.length === 0) {
-        // Check if all items were skipped because they're already returned in good condition
         if (skippedItems && skippedItems.length > 0) {
           return res.status(StatusCodes.OK).json({
             success: true,
@@ -390,7 +395,6 @@ const updateDeploymentStatus = async (req, res, next) => {
 
       const updateDate = actual_return_date || new Date();
 
-      // Separate items by condition using the conditions map
       itemsToReturn.forEach((itemId) => {
         const condition = conditionsMap.get(itemId) || "GOOD";
         if (condition === "DAMAGED") {
@@ -404,8 +408,7 @@ const updateDeploymentStatus = async (req, res, next) => {
         }
       });
 
-      // Handle stock increment/decrement logic
-      // First, get current conditions of items being updated
+      // Stock adjustment calculation
       const currentSerialItems = await SerialItemDeployment.findAll({
         where: {
           deployment_id: deployment.id,
@@ -415,39 +418,32 @@ const updateDeploymentStatus = async (req, res, next) => {
         transaction: t,
       });
 
-      // Calculate stock adjustment based on condition changes
       currentSerialItems.forEach((currentItem) => {
         const oldCondition = currentItem.return_condition;
         const newCondition =
           conditionsMap.get(currentItem.serialized_item_id) || "GOOD";
 
-        // If changing from DAMAGED/LOST to GOOD, increment stock
         if (
           (oldCondition === "DAMAGED" || oldCondition === "LOST") &&
           newCondition === "GOOD"
         ) {
           stockAdjustment += 1;
-        }
-        // If changing from GOOD to DAMAGED/LOST, decrement stock
-        else if (
+        } else if (
           oldCondition === "GOOD" &&
           (newCondition === "DAMAGED" || newCondition === "LOST")
         ) {
           stockAdjustment -= 1;
-        }
-        // If item was never returned before and now returned as GOOD
-        else if (!oldCondition && newCondition === "GOOD") {
+        } else if (!oldCondition && newCondition === "GOOD") {
           stockAdjustment += 1;
         }
       });
 
       returnedGoodCount = goodItems.length;
 
-      // Update SerialItemDeployment history for each item with its specific condition
+      // Update serial items and create history
       for (const itemId of itemsToReturn) {
         const condition = conditionsMap.get(itemId) || "GOOD";
 
-        // Get current state of the serial item BEFORE updating
         const currentSerial = await SerialItemDeployment.findOne({
           where: {
             deployment_id: deployment.id,
@@ -460,12 +456,11 @@ const updateDeploymentStatus = async (req, res, next) => {
         const oldCondition = currentSerial?.return_condition || null;
         const newCondition = condition;
 
-        // Update SerialItemDeployment record
         await SerialItemDeployment.update(
           {
             returned_at: updateDate,
             return_condition: condition,
-            notes: notes || null,
+            // Remove notes from here
           },
           {
             where: {
@@ -476,23 +471,15 @@ const updateDeploymentStatus = async (req, res, next) => {
           }
         );
 
-        // Update SerializedItem current status
         const serialStatus = condition === "GOOD" ? "AVAILABLE" : condition;
         await SerializedItem.update(
           {
             status: serialStatus,
-            ...(notes && {
-              condition_notes: sequelize.fn(
-                "CONCAT",
-                sequelize.fn("COALESCE", sequelize.col("condition_notes"), ""),
-                notes.trim() ? `\n${notes}` : ""
-              ),
-            }),
+            // Remove condition_notes update - this should be handled separately if needed
           },
           { where: { id: itemId }, transaction: t }
         );
 
-        // NEW: Insert into SerializedItemHistory
         await SerializedItemHistory.create(
           {
             serialized_item_id: itemId,
@@ -501,25 +488,23 @@ const updateDeploymentStatus = async (req, res, next) => {
             deployment_id: deployment.id,
             old_condition: oldCondition,
             new_condition: newCondition,
-            notes: notes || null,
+            // Remove notes from here
           },
           { transaction: t }
         );
       }
-
-      // Remove the old bulk update code for SerializedItems since we're doing it individually now
     } else {
-      // Non-serialized: Only increment stock if not damaged/lost
+      // Non-serialized items
       if (return_condition !== "DAMAGED" && return_condition !== "LOST") {
         returnedGoodCount = deployment.quantity_deployed;
       } else if (return_condition === "DAMAGED") {
-        damagedItems.push(1); // Just to track that we have damaged items
+        damagedItems.push(1);
       } else if (return_condition === "LOST") {
-        lostItems.push(1); // Just to track that we have lost items
+        lostItems.push(1);
       }
     }
 
-    // 3️⃣ Apply stock adjustment
+    // Apply stock adjustment
     if (hasSerializedItems > 0 && stockAdjustment !== 0) {
       if (stockAdjustment > 0) {
         await deployment.item.increment("quantity_in_stock", {
@@ -533,17 +518,15 @@ const updateDeploymentStatus = async (req, res, next) => {
         });
       }
     } else if (!hasSerializedItems && returnedGoodCount > 0) {
-      // Non-serialized items - only increment if good condition
       await deployment.item.increment("quantity_in_stock", {
         by: returnedGoodCount,
         transaction: t,
       });
     }
 
-    // 4️⃣ Determine new deployment status
+    // Determine new deployment status
     let newStatus = oldStatus;
     if (hasSerializedItems > 0) {
-      // Get all serial items for this deployment to determine overall status
       const allSerialItems = await SerialItemDeployment.findAll({
         where: { deployment_id: deployment.id },
         attributes: ["serialized_item_id", "returned_at", "return_condition"],
@@ -561,10 +544,8 @@ const updateDeploymentStatus = async (req, res, next) => {
       if (returnedSerials.length === 0) {
         newStatus = "DEPLOYED";
       } else if (unreturnedSerials.length > 0) {
-        // Some items are still not returned
         newStatus = "PARTIAL_RETURN";
       } else {
-        // All items have been returned - determine status based on conditions
         const goodConditions = returnedSerials.filter(
           (item) => item.return_condition === "GOOD" || !item.return_condition
         );
@@ -576,21 +557,16 @@ const updateDeploymentStatus = async (req, res, next) => {
         );
 
         if (lostConditions.length === totalSerials) {
-          // All items are lost
           newStatus = "LOST";
         } else if (damagedConditions.length === totalSerials) {
-          // All items are damaged
           newStatus = "DAMAGED";
         } else if (goodConditions.length === totalSerials) {
-          // All items are in good condition
           newStatus = "RETURNED";
         } else {
-          // Mixed conditions (some good, some damaged, some lost)
           newStatus = "PARTIAL_RETURN";
         }
       }
     } else {
-      // Non-serialized
       if (return_condition === "DAMAGED") {
         newStatus = "DAMAGED";
       } else if (return_condition === "LOST") {
@@ -600,22 +576,66 @@ const updateDeploymentStatus = async (req, res, next) => {
       }
     }
 
-    // 5️⃣ Update deployment record
+    // Update deployment record (remove notes concatenation)
     await deployment.update(
       {
         status: newStatus,
         actual_return_date:
           newStatus !== "DEPLOYED" ? actual_return_date || new Date() : null,
-        notes: notes
-          ? `${deployment.notes || ""}${
-              notes.trim() && deployment.notes ? "\n" : ""
-            }${notes || ""}`
-          : deployment.notes,
+        // Remove notes field update
       },
       { transaction: t }
     );
 
-    // 6️⃣ Create notification
+    // Add user note if provided
+    if (notes && notes.trim()) {
+      await DeploymentNotes.create(
+        {
+          deployment_id: deployment.id,
+          note_text: notes.trim(),
+          note_type: "USER",
+          created_by: req.user.id,
+        },
+        { transaction: t }
+      );
+    }
+
+    // Add system note for status update
+    if (newStatus !== oldStatus) {
+      await DeploymentNotes.create(
+        {
+          deployment_id: deployment.id,
+          note_text: `Status changed from ${oldStatus} to ${newStatus}`,
+          note_type: "SYSTEM",
+          created_by: req.user.id,
+        },
+        { transaction: t }
+      );
+    }
+
+    // Add system note for serial updates if applicable
+    if (hasSerializedItems > 0 && itemsToProcess.length > 0) {
+      const serialDetails = itemsToProcess.map((serial) => ({
+        id: serial.id,
+        condition: conditionsMap.get(serial.id) || "GOOD",
+      }));
+
+      await DeploymentNotes.create(
+        {
+          deployment_id: deployment.id,
+          note_text: `Updated ${
+            itemsToProcess.length
+          } serial(s): ${serialDetails
+            .map((s) => `${s.id} (${s.condition})`)
+            .join(", ")}`,
+          note_type: "SYSTEM",
+          created_by: req.user.id,
+        },
+        { transaction: t }
+      );
+    }
+
+    // Create notification
     let notifMessage;
     if (returnedGoodCount > 0 && badItems.length === 0) {
       notifMessage = `${deployment.item.name} (${returnedGoodCount} units) returned in good condition from ${deployment.deployment_location}`;
@@ -642,14 +662,13 @@ const updateDeploymentStatus = async (req, res, next) => {
 
     await t.commit();
 
-    // Clear cache
     try {
       await invalidateItemsCache();
     } catch (cacheErr) {
       console.error("Cache invalidation failed:", cacheErr);
     }
 
-    // Fetch updated deployment
+    // Fetch updated deployment with notes
     const updatedDeployment = await Deployment.findByPk(deployment.id, {
       attributes: [
         "id",
@@ -658,7 +677,6 @@ const updateDeploymentStatus = async (req, res, next) => {
         "deployment_location",
         "quantity_deployed",
         "actual_return_date",
-        "notes",
       ],
       include: [
         {
@@ -685,14 +703,27 @@ const updateDeploymentStatus = async (req, res, next) => {
         {
           model: SerialItemDeployment,
           as: "itemDeployments",
-          attributes: ["id", "returned_at", "return_condition", "notes"],
+          attributes: ["id", "returned_at", "return_condition"],
           include: [
             {
               model: SerializedItem,
               as: "item",
-              attributes: ["id", "serial_number", "status", "condition_notes"],
+              attributes: ["id", "serial_number", "status"],
             },
           ],
+        },
+        // Include deployment notes
+        {
+          model: DeploymentNotes,
+          as: "notes",
+          include: [
+            {
+              model: User,
+              as: "createdBy",
+              attributes: ["id", "firstname", "lastname", "email"],
+            },
+          ],
+          order: [["createdAt", "DESC"]],
         },
       ],
     });

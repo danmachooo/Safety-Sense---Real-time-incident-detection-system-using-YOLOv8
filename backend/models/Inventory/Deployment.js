@@ -124,10 +124,6 @@ const Deployment = sequelize.define(
         },
       },
     },
-    notes: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-    },
   },
   {
     timestamps: true,

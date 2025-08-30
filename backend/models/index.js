@@ -21,6 +21,7 @@ import InventoryNotification from "./Inventory/InventoryNotification.js";
 import SerializedItem from "./Inventory/SerializedItem.js";
 import SerialItemDeployment from "./Inventory/SerialItemDeployment.js";
 import SerializedItemHistory from "./Inventory/SerializedItemHistory.js";
+import DeploymentNotes from "./Inventory/DeploymentNotes.js";
 // import ActionLog from "./ActionLog.js"; // Uncomment if this exists
 
 // IMPORTANT: Set up associations ONCE here
@@ -46,6 +47,7 @@ const models = {
   SerializedItem,
   SerialItemDeployment,
   SerializedItemHistory,
+  DeploymentNotes,
   // ActionLog, // Uncomment if this exists
 };
 

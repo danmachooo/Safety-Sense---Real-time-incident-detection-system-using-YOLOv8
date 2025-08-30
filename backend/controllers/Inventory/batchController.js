@@ -10,7 +10,7 @@ const {
   SerialItemDeployment,
   SerializedItem,
 } = models;
-import { invalidateItemsCache } from "./utils/cacheUtil.js";
+import { invalidateItemsCache } from "../Inventory/inventoryitemController.js";
 import {
   BadRequestError,
   NotFoundError,

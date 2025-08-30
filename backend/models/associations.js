@@ -18,7 +18,7 @@ import ActionLog from "./Inventory/ActionLog.js";
 import SerialItemDeployment from "./Inventory/SerialItemDeployment.js";
 import SerializedItem from "./Inventory/SerializedItem.js";
 import SerializedItemHistory from "./Inventory/SerializedItemHistory.js"; // 👈 new model
-
+import DeploymentNotes from "./Inventory/DeploymentNotes.js";
 const setupAssociations = () => {
   // ========================================
   // USER ASSOCIATIONS
@@ -208,6 +208,28 @@ const setupAssociations = () => {
   // ========================================
   // DEPLOYMENT TRACKING ASSOCIATIONS
   // ========================================
+
+  Deployment.hasMany(DeploymentNotes, {
+    foreignKey: "deployment_id",
+    as: "notes",
+    onDelete: "CASCADE",
+  });
+
+  DeploymentNotes.belongsTo(Deployment, {
+    foreignKey: "deployment_id",
+    as: "deployment",
+  });
+
+  DeploymentNotes.belongsTo(User, {
+    foreignKey: "created_by",
+    as: "createdBy",
+  });
+
+  User.hasMany(DeploymentNotes, {
+    foreignKey: "created_by",
+    as: "deploymentNotes",
+  });
+
   Deployment.hasMany(SerialItemDeployment, {
     foreignKey: "deployment_id",
     as: "itemDeployments",

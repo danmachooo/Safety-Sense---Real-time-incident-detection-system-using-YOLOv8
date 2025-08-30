@@ -39,7 +39,10 @@ const deploymentLoading = ref(false);
 const isUpdating = ref(false);
 const notification = ref({ show: false, type: "", message: "" });
 const pendingChanges = ref([]); // New state for tracking pending status changes
-
+const deploymentNotes = ref("");
+const newNote = ref(""); // Separate field for new notes
+const showNotesHistory = ref(false);
+const notesHistory = ref([]); // Array to store parsed notes history
 // Define non-returnable item categories/keywords
 const nonReturnableItems = [
   "alcohol",
@@ -61,7 +64,27 @@ const nonReturnableItems = [
   "paper",
   "plastic",
 ];
+const parseNotesHistory = (notesString) => {
+  if (!notesString) return [];
 
+  // Split by newlines and filter empty lines
+  const lines = notesString.split("\n").filter((line) => line.trim());
+
+  // Create history objects with timestamps if possible
+  return lines
+    .map((line, index) => {
+      // Try to detect if it's a system-generated note
+      const isSystemNote = line.includes("Updated ") && line.includes("serial");
+
+      return {
+        id: index,
+        content: line.trim(),
+        isSystem: isSystemNote,
+        timestamp: null, // You might want to add timestamps in the backend
+      };
+    })
+    .reverse(); // Most recent first
+};
 // Helper function to check if an item is returnable
 const isItemReturnable = (itemName) => {
   if (!itemName) return true;
@@ -75,12 +98,11 @@ const shouldShowReturnDate = (deployment) => {
   return isItemReturnable(itemName) && deployment.expected_return_date;
 };
 
-// Helper function to check if status update buttons should be enabled
-const canUpdateStatus = (deployment) => {
-  const itemName = deployment.item?.name || "";
-  return isItemReturnable(itemName) && deployment.status === "DEPLOYED";
+// Update the helper function to allow updates for DAMAGED and LOST items
+const canUpdateSerialStatus = (itemStatus) => {
+  // Allow updates for DEPLOYED, DAMAGED, and LOST items
+  return ["DEPLOYED", "DAMAGED", "LOST"].includes(itemStatus);
 };
-
 // Fetch deployments from API
 const fetchDeployments = async () => {
   try {
@@ -112,7 +134,15 @@ const fetchDeployment = async (id) => {
     deploymentLoading.value = true;
     const response = await api.get(`inventory/deployment/${id}`);
     currentDeployment.value = response.data.data;
-    pendingChanges.value = []; // Reset pending changes when fetching new deployment
+
+    // Parse existing notes history
+    notesHistory.value = parseNotesHistory(currentDeployment.value.notes);
+
+    // Clear the new note field
+    newNote.value = "";
+    deploymentNotes.value = currentDeployment.value.notes || "";
+
+    pendingChanges.value = [];
   } catch (err) {
     console.error("Error fetching deployment details:", err);
     showNotification("Failed to fetch deployment details", "error");
@@ -120,10 +150,15 @@ const fetchDeployment = async (id) => {
     deploymentLoading.value = false;
   }
 };
-
 // Stage a change to be confirmed later
 const stageChange = (serialId, condition) => {
-  pendingChanges.value.push({ id: serialId, condition });
+  // Avoid duplicates: replace if already staged
+  const existing = pendingChanges.value.find((c) => c.id === serialId);
+  if (existing) {
+    existing.condition = condition;
+  } else {
+    pendingChanges.value.push({ id: serialId, condition });
+  }
 };
 
 // Remove a pending change
@@ -137,6 +172,32 @@ const removePendingChange = (serialId) => {
 const confirmChanges = async () => {
   try {
     isUpdating.value = true;
+
+    // Build the notes string properly
+    let notesToSend = "";
+
+    // Add existing notes if they exist
+    if (currentDeployment.value.notes) {
+      notesToSend = currentDeployment.value.notes;
+    }
+
+    // Add new note if provided
+    if (newNote.value.trim()) {
+      if (notesToSend) {
+        notesToSend += "\n" + newNote.value.trim();
+      } else {
+        notesToSend = newNote.value.trim();
+      }
+    }
+
+    // Add system note about the update
+    const systemNote = `Updated ${pendingChanges.value.length} serial(s)`;
+    if (notesToSend) {
+      notesToSend += "\n" + systemNote;
+    } else {
+      notesToSend = systemNote;
+    }
+
     const response = await api.put(
       `inventory/deployment/${currentDeployment.value.id}/status`,
       {
@@ -144,16 +205,22 @@ const confirmChanges = async () => {
           id: change.id,
           return_condition: change.condition,
         })),
-        notes: `Updated ${pendingChanges.value.length} serial(s)`,
+        notes: notesToSend,
       }
     );
+
     currentDeployment.value = response.data.data;
+
+    // Update notes history and clear new note
+    notesHistory.value = parseNotesHistory(response.data.data.notes);
+    newNote.value = "";
+
     showNotification(
       `Successfully updated ${pendingChanges.value.length} serial(s)`,
       "success"
     );
-    pendingChanges.value = []; // Clear pending changes
-    fetchDeployments(); // Refresh list
+    pendingChanges.value = [];
+    fetchDeployments();
   } catch (err) {
     console.error("Error updating serial statuses:", err);
     showNotification("Failed to update serial statuses", "error");
@@ -161,7 +228,6 @@ const confirmChanges = async () => {
     isUpdating.value = false;
   }
 };
-
 // Update deployment status
 const updateDeploymentStatus = async (status) => {
   try {
@@ -186,7 +252,38 @@ const updateDeploymentStatus = async (status) => {
     isUpdating.value = false;
   }
 };
+const addNote = async () => {
+  if (!newNote.value.trim()) return;
 
+  try {
+    isUpdating.value = true;
+
+    let notesToSend = "";
+    if (currentDeployment.value.notes) {
+      notesToSend = currentDeployment.value.notes + "\n" + newNote.value.trim();
+    } else {
+      notesToSend = newNote.value.trim();
+    }
+
+    const response = await api.put(
+      `inventory/deployment/${currentDeployment.value.id}/notes`,
+      {
+        notes: notesToSend,
+      }
+    );
+
+    currentDeployment.value = response.data.data;
+    notesHistory.value = parseNotesHistory(response.data.data.notes);
+    newNote.value = "";
+
+    showNotification("Note added successfully", "success");
+  } catch (err) {
+    console.error("Error adding note:", err);
+    showNotification("Failed to add note", "error");
+  } finally {
+    isUpdating.value = false;
+  }
+};
 // Status color utility
 const statusColor = (status) => {
   switch (status) {
@@ -625,14 +722,14 @@ onMounted(fetchDeployments);
                     </div>
                     <!-- Deployed To -->
                     <div
-                      v-if="deployment.receiver"
+                      v-if="deployment.recipient"
                       class="flex items-center text-sm"
                     >
                       <User class="w-3 h-3 text-blue-400 mr-1" />
                       <span class="text-gray-600">To:</span>
                       <span class="ml-1 font-medium text-blue-900">
                         {{
-                          `${deployment.receiver.firstname} ${deployment.receiver.lastname}`
+                          `${deployment.recipient.firstname} ${deployment.recipient.lastname}`
                         }}
                       </span>
                     </div>
@@ -940,7 +1037,7 @@ onMounted(fetchDeployments);
                       </div>
                     </div>
                     <!-- Deployed To -->
-                    <div v-if="currentDeployment.receiver">
+                    <div v-if="currentDeployment.recipient">
                       <p class="text-sm font-medium text-gray-600 mb-1">
                         Deployed To
                       </p>
@@ -953,7 +1050,7 @@ onMounted(fetchDeployments);
                         <div>
                           <p class="font-semibold text-gray-900">
                             {{
-                              `${currentDeployment.receiver.firstname} ${currentDeployment.receiver.lastname}`
+                              `${currentDeployment.recipient.firstname} ${currentDeployment.recipient.lastname}`
                             }}
                           </p>
                         </div>
@@ -1086,19 +1183,139 @@ onMounted(fetchDeployments);
 
               <!-- Notes Section -->
               <div
-                v-if="currentDeployment.notes"
                 class="bg-gray-50 rounded-2xl p-6 border border-gray-200 mb-8"
               >
-                <div class="flex items-center mb-3">
-                  <FileText class="w-5 h-5 text-gray-600 mr-2" />
-                  <h4 class="text-lg font-semibold text-gray-900">Notes</h4>
+                <div class="flex items-center justify-between mb-4">
+                  <div class="flex items-center">
+                    <FileText class="w-5 h-5 text-gray-600 mr-2" />
+                    <h4 class="text-lg font-semibold text-gray-900">
+                      Notes & Activity
+                    </h4>
+                    <span
+                      v-if="currentDeployment.notes?.length"
+                      class="ml-2 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full"
+                    >
+                      {{ currentDeployment.notes.length }}
+                    </span>
+                  </div>
+                  <button
+                    v-if="currentDeployment.notes?.length > 3"
+                    @click="showNotesHistory = !showNotesHistory"
+                    class="text-sm text-blue-600 hover:text-blue-800 flex items-center transition-colors"
+                  >
+                    {{ showNotesHistory ? "Show Less" : "Show All" }}
+                    <ChevronRight
+                      :class="[
+                        'w-4 h-4 ml-1 transition-transform duration-200',
+                        showNotesHistory ? 'rotate-90' : '',
+                      ]"
+                    />
+                  </button>
                 </div>
-                <p class="text-gray-700 leading-relaxed">
-                  {{ currentDeployment.notes }}
-                </p>
+
+                <!-- Recent Notes (Always visible) -->
+                <div v-if="currentDeployment.notes?.length > 0" class="mb-4">
+                  <div class="space-y-3">
+                    <div
+                      v-for="note in showNotesHistory
+                        ? currentDeployment.notes
+                        : currentDeployment.notes.slice(0, 3)"
+                      :key="note.id"
+                      class="bg-white rounded-lg p-4 border border-gray-200 transition-all duration-200 hover:border-gray-300"
+                      :class="
+                        note.note_type === 'SYSTEM'
+                          ? 'border-l-4 border-l-blue-400'
+                          : 'border-l-4 border-l-emerald-400'
+                      "
+                    >
+                      <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                          <p class="text-gray-700 mb-2 leading-relaxed">
+                            {{ note.note_text }}
+                          </p>
+                          <div class="flex items-center text-xs text-gray-500">
+                            <div class="flex items-center mr-4">
+                              <User class="w-3 h-3 mr-1" />
+                              {{
+                                note.createdBy
+                                  ? `${note.createdBy.firstname} ${note.createdBy.lastname}`
+                                  : "System"
+                              }}
+                            </div>
+                            <div class="flex items-center">
+                              <Clock class="w-3 h-3 mr-1" />
+                              {{ formatDate(note.created_at) }}
+                            </div>
+                          </div>
+                        </div>
+                        <div
+                          :class="[
+                            'ml-3 px-2 py-1 text-xs rounded-full font-medium',
+                            note.note_type === 'SYSTEM'
+                              ? 'bg-blue-100 text-blue-700'
+                              : 'bg-emerald-100 text-emerald-700',
+                          ]"
+                        >
+                          {{ note.note_type === "SYSTEM" ? "System" : "User" }}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Add New Note -->
+                <div class="bg-white rounded-lg p-4 border border-gray-200">
+                  <div class="space-y-3">
+                    <div>
+                      <label
+                        class="block text-sm font-medium text-gray-700 mb-2"
+                      >
+                        Add New Note
+                      </label>
+                      <textarea
+                        v-model="newNote"
+                        class="w-full p-3 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                        rows="3"
+                        placeholder="Add a note about this deployment..."
+                        :disabled="isUpdating"
+                      ></textarea>
+                    </div>
+
+                    <div class="flex justify-end gap-2">
+                      <button
+                        v-if="newNote.trim()"
+                        @click="newNote = ''"
+                        class="px-3 py-2 text-gray-600 hover:text-gray-800 transition-colors rounded-lg hover:bg-gray-100"
+                        :disabled="isUpdating"
+                      >
+                        Clear
+                      </button>
+                      <button
+                        @click="addNote"
+                        class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center transition-all duration-200"
+                        :disabled="isUpdating || !newNote.trim()"
+                      >
+                        <FileText class="w-4 h-4 mr-1" />
+                        Add Note
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Empty state -->
+                <div
+                  v-if="!currentDeployment.notes?.length"
+                  class="text-center py-8 text-gray-500"
+                >
+                  <FileText class="w-8 h-8 mx-auto mb-3 text-gray-400" />
+                  <p class="font-medium">No notes yet</p>
+                  <p class="text-sm">
+                    Add the first note above to track this deployment's
+                    activity.
+                  </p>
+                </div>
               </div>
 
-              <!-- Action Buttons Section -->
               <!-- Serialized Items Section -->
               <div
                 v-if="currentDeployment.itemDeployments?.length"
@@ -1132,7 +1349,9 @@ onMounted(fetchDeployments);
                       :key="deployment.item.id"
                       class="flex items-center justify-between py-4"
                       :class="{
-                        'opacity-60': deployment.item.status !== 'DEPLOYED',
+                        'bg-yellow-50': pendingChanges.some(
+                          (change) => change.id === deployment.item.id
+                        ),
                       }"
                     >
                       <!-- Serial Info -->
@@ -1150,20 +1369,22 @@ onMounted(fetchDeployments);
 
                       <!-- Action Buttons -->
                       <div class="flex gap-2">
+                        <!-- Return (GOOD) Button -->
                         <button
                           v-if="
                             !pendingChanges.some(
                               (change) => change.id === deployment.item.id
                             )
                           "
-                          @click="stageChange(deployment.item.id, 'RETURNED')"
+                          @click="stageChange(deployment.item.id, 'GOOD')"
                           class="btn-status-returned"
                           :class="{
                             'bg-gray-200 text-gray-500 cursor-not-allowed':
-                              deployment.item.status !== 'DEPLOYED',
+                              !canUpdateSerialStatus(deployment.item.status),
                           }"
                           :disabled="
-                            isUpdating || deployment.item.status !== 'DEPLOYED'
+                            isUpdating ||
+                            !canUpdateSerialStatus(deployment.item.status)
                           "
                         >
                           <Check class="w-4 h-4 mr-1" /> Return
@@ -1173,16 +1394,17 @@ onMounted(fetchDeployments);
                             pendingChanges.some(
                               (change) =>
                                 change.id === deployment.item.id &&
-                                change.condition === 'RETURNED'
+                                change.condition === 'GOOD'
                             )
                           "
                           @click="removePendingChange(deployment.item.id)"
-                          class="bg-emerald-100 text-emerald-700 border border-emerald-300"
+                          class="bg-emerald-100 text-emerald-700 border border-emerald-300 px-3 py-2 rounded-lg hover:bg-emerald-200"
                           :disabled="isUpdating"
                         >
                           <X class="w-4 h-4 mr-1" /> Undo Return
                         </button>
 
+                        <!-- Damaged Button -->
                         <button
                           v-if="
                             !pendingChanges.some(
@@ -1193,10 +1415,11 @@ onMounted(fetchDeployments);
                           class="btn-status-damaged"
                           :class="{
                             'bg-gray-200 text-gray-500 cursor-not-allowed':
-                              deployment.item.status !== 'DEPLOYED',
+                              !canUpdateSerialStatus(deployment.item.status),
                           }"
                           :disabled="
-                            isUpdating || deployment.item.status !== 'DEPLOYED'
+                            isUpdating ||
+                            !canUpdateSerialStatus(deployment.item.status)
                           "
                         >
                           <AlertTriangle class="w-4 h-4 mr-1" /> Damaged
@@ -1210,12 +1433,13 @@ onMounted(fetchDeployments);
                             )
                           "
                           @click="removePendingChange(deployment.item.id)"
-                          class="bg-amber-100 text-amber-700 border border-amber-300"
+                          class="bg-amber-100 text-amber-700 border border-amber-300 px-3 py-2 rounded-lg hover:bg-amber-200"
                           :disabled="isUpdating"
                         >
                           <X class="w-4 h-4 mr-1" /> Undo Damaged
                         </button>
 
+                        <!-- Lost Button -->
                         <button
                           v-if="
                             !pendingChanges.some(
@@ -1226,10 +1450,11 @@ onMounted(fetchDeployments);
                           class="btn-status-lost"
                           :class="{
                             'bg-gray-200 text-gray-500 cursor-not-allowed':
-                              deployment.item.status !== 'DEPLOYED',
+                              !canUpdateSerialStatus(deployment.item.status),
                           }"
                           :disabled="
-                            isUpdating || deployment.item.status !== 'DEPLOYED'
+                            isUpdating ||
+                            !canUpdateSerialStatus(deployment.item.status)
                           "
                         >
                           <AlertTriangle class="w-4 h-4 mr-1" /> Lost
@@ -1243,7 +1468,7 @@ onMounted(fetchDeployments);
                             )
                           "
                           @click="removePendingChange(deployment.item.id)"
-                          class="bg-red-100 text-red-700 border border-red-300"
+                          class="bg-red-100 text-red-700 border border-red-300 px-3 py-2 rounded-lg hover:bg-red-200"
                           :disabled="isUpdating"
                         >
                           <X class="w-4 h-4 mr-1" /> Undo Lost

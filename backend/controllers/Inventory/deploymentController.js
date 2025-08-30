@@ -280,6 +280,7 @@ const updateDeploymentStatus = async (req, res, next) => {
     let stockAdjustment = 0;
     let skippedItems = [];
     let itemsToProcess = [];
+    let conditionsMap = new Map();
 
     const hasSerializedItems = await SerialItemDeployment.count({
       where: { deployment_id: deployment.id },
@@ -288,7 +289,6 @@ const updateDeploymentStatus = async (req, res, next) => {
 
     if (hasSerializedItems > 0) {
       let itemsToReturn = [];
-      let conditionsMap = new Map();
 
       if (Array.isArray(serials) && serials.length > 0) {
         const serialIds = serials.map((serial) => serial.id);
@@ -712,7 +712,7 @@ const updateDeploymentStatus = async (req, res, next) => {
             },
           ],
         },
-        // Include deployment notes
+        // Notes (array)
         {
           model: DeploymentNotes,
           as: "notes",
@@ -723,9 +723,10 @@ const updateDeploymentStatus = async (req, res, next) => {
               attributes: ["id", "firstname", "lastname", "email"],
             },
           ],
-          order: [["createdAt", "DESC"]],
         },
       ],
+      // ✅ correct way to order a nested include
+      order: [[{ model: DeploymentNotes, as: "notes" }, "createdAt", "DESC"]],
     });
 
     return res.status(StatusCodes.OK).json({
@@ -872,6 +873,24 @@ const getDeploymentById = async (req, res, next) => {
           model: User,
           as: "deployer",
           attributes: ["id", "firstname", "lastname", "email", "role"],
+        },
+        {
+          model: DeploymentNotes,
+          as: "notes",
+          attributes: [
+            "id",
+            "note_text",
+            "note_type",
+            "createdAt",
+            "updatedAt",
+          ],
+          include: [
+            {
+              model: User,
+              as: "createdBy",
+              attributes: ["id", "firstname", "lastname"],
+            },
+          ],
         },
         {
           model: User,

@@ -23,14 +23,14 @@ import {
 } from "lucide-vue-next";
 import api from "../../../utils/axios";
 
-// Reactive state for filters, pagination and data
+// Reactive state
 const deployments = ref([]);
-const loading = ref(true);
+const loading = ref(false);
 const error = ref(null);
 const currentPage = ref(1);
 const totalPages = ref(1);
 const totalDeployments = ref(0);
-const itemsPerPage = ref(10);
+const itemsPerPage = ref(2);
 const searchQuery = ref("");
 const statusFilter = ref("");
 const showModal = ref(false);
@@ -38,12 +38,41 @@ const currentDeployment = ref(null);
 const deploymentLoading = ref(false);
 const isUpdating = ref(false);
 const notification = ref({ show: false, type: "", message: "" });
-const pendingChanges = ref([]); // New state for tracking pending status changes
+const pendingChanges = ref([]);
 const deploymentNotes = ref("");
-const newNote = ref(""); // Separate field for new notes
+const newNote = ref("");
 const showNotesHistory = ref(false);
-const notesHistory = ref([]); // Array to store parsed notes history
-// Define non-returnable item categories/keywords
+const notesHistory = ref([]);
+const showBorrowersModal = ref(false);
+
+// Borrowers data structure aligned with API response
+const borrowersData = ref({
+  items: [],
+  summary: {
+    totalItems: 0,
+    currentlyDeployed: 0,
+    lost: 0,
+    damaged: 0,
+    totalUniqueBorrowers: 0,
+  },
+  pagination: {
+    currentPage: 1,
+    totalPages: 1,
+    totalItems: 0,
+    itemsPerPage: 50,
+    hasNextPage: false,
+    hasPreviousPage: false,
+  },
+});
+
+// Borrowers filter
+const borrowersFilter = ref({
+  search: "",
+  condition: "",
+  sortBy: "itemName",
+});
+
+// Non-returnable items
 const nonReturnableItems = [
   "alcohol",
   "gloves",
@@ -64,46 +93,215 @@ const nonReturnableItems = [
   "paper",
   "plastic",
 ];
-const parseNotesHistory = (notesString) => {
-  if (!notesString) return [];
 
-  // Split by newlines and filter empty lines
-  const lines = notesString.split("\n").filter((line) => line.trim());
-
-  // Create history objects with timestamps if possible
-  return lines
-    .map((line, index) => {
-      // Try to detect if it's a system-generated note
-      const isSystemNote = line.includes("Updated ") && line.includes("serial");
-
-      return {
-        id: index,
-        content: line.trim(),
-        isSystem: isSystemNote,
-        timestamp: null, // You might want to add timestamps in the backend
-      };
-    })
-    .reverse(); // Most recent first
+// Utility functions
+const calculateDaysBorrowed = (deploymentDate) => {
+  if (!deploymentDate) return 0;
+  const today = new Date();
+  const deployDate = new Date(deploymentDate);
+  return Math.ceil((today - deployDate) / (1000 * 60 * 60 * 24));
 };
-// Helper function to check if an item is returnable
+
+const getConditionColor = (condition) => {
+  switch (condition?.toUpperCase()) {
+    case "GOOD":
+      return "bg-emerald-100 text-emerald-800";
+    case "LOST":
+      return "bg-amber-100 text-amber-800";
+    case "DAMAGED":
+      return "bg-red-100 text-red-800";
+    default:
+      return "bg-gray-100 text-gray-800";
+  }
+};
+
+const formatDate = (dateString) => {
+  if (!dateString) return "N/sA";
+  return new Date(dateString).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+};
+
+// Computed properties
+const filteredBorrowersData = computed(() => {
+  if (
+    !borrowersData.value?.items ||
+    !Array.isArray(borrowersData.value.items)
+  ) {
+    return [];
+  }
+
+  let filtered = borrowersData.value.items.map((item) => {
+    // Get the latest borrowing history entry for current borrower details
+    const latestHistory =
+      Array.isArray(item.borrowingHistory) && item.borrowingHistory.length > 0
+        ? item.borrowingHistory[0]
+        : null;
+
+    return {
+      ...item,
+      currentBorrower: {
+        ...item.currentBorrower,
+        daysBorrowed: latestHistory
+          ? calculateDaysBorrowed(latestHistory.deploymentDate)
+          : 0,
+        expectedReturnDate: latestHistory?.expectedReturnDate || null,
+      },
+      totalBorrowers: Array.isArray(item.totalBorrowers)
+        ? item.totalBorrowers
+        : [],
+    };
+  });
+
+  // Search filter
+  if (borrowersFilter.value.search) {
+    const search = borrowersFilter.value.search.toLowerCase();
+    filtered = filtered.filter((item) => {
+      const itemName = item.itemName?.toLowerCase() || "";
+      const serialNumber = item.serialNumber?.toLowerCase() || "";
+      const currentBorrowerName =
+        item.currentBorrower?.name?.toLowerCase() || "";
+      const borrowerEmails =
+        item.totalBorrowers?.map((b) => b.email?.toLowerCase() || "") || [];
+
+      return (
+        itemName.includes(search) ||
+        serialNumber.includes(search) ||
+        currentBorrowerName.includes(search) ||
+        borrowerEmails.some((email) => email.includes(search))
+      );
+    });
+  }
+
+  // Condition filter
+  if (borrowersFilter.value.condition) {
+    filtered = filtered.filter(
+      (item) =>
+        item.newCondition?.toLowerCase() === borrowersFilter.value.condition
+    );
+  }
+
+  // Sort
+  filtered.sort((a, b) => {
+    switch (borrowersFilter.value.sortBy) {
+      case "itemName":
+        return (a.itemName || "").localeCompare(b.itemName || "");
+      case "borrowerName":
+        return (a.currentBorrower?.name || "").localeCompare(
+          b.currentBorrower?.name || ""
+        );
+      case "daysBorrowed":
+        return (
+          (a.currentBorrower?.daysBorrowed || 0) -
+          (b.currentBorrower?.daysBorrowed || 0)
+        );
+      case "totalBorrowers":
+        return (
+          (b.totalBorrowers?.length || 0) - (a.totalBorrowers?.length || 0)
+        );
+      default:
+        return 0;
+    }
+  });
+
+  return filtered;
+});
+
+const filteredItemsCount = computed(() => filteredBorrowersData.value.length);
+
+const isDataReady = computed(
+  () => !loading.value && borrowersData.value?.items?.length > 0
+);
+
+// Modal functions
+const openBorrowersReport = () => {
+  showBorrowersModal.value = true;
+  fetchBorrowersData();
+};
+
+const closeBorrowersReport = () => {
+  showBorrowersModal.value = false;
+  borrowersFilter.value = { search: "", condition: "", sortBy: "itemName" };
+};
+
+// API functions
+const fetchBorrowersData = async () => {
+  try {
+    loading.value = true;
+    error.value = null;
+
+    const response = await api.get("inventory/deployment/history");
+
+    if (response.data.success) {
+      const rawItems = response.data.data.items || [];
+
+      borrowersData.value = {
+        items: rawItems.map((item) => {
+          // find latest deployment record with dates
+          const latestDeployment = item.borrowingHistory.find(
+            (h) => h.deploymentDate && h.expectedReturnDate
+          );
+
+          return {
+            id: item.id,
+            itemName: item.itemName || "Unknown Item",
+            serialNumber: item.serialNumber || null,
+            itemDescription: item.itemDescription || "",
+            newCondition: latestDeployment?.newCondition || "GOOD", // take from latest history if available
+            currentBorrower: item.currentBorrower,
+            totalBorrowers: item.totalBorrowers || [],
+            borrowingHistory: item.borrowingHistory || [],
+          };
+        }),
+        summary: {
+          totalItems: response.data.data.summary?.totalItems || 0,
+          currentlyDeployed: response.data.data.summary?.currentlyDeployed || 0,
+          lost: response.data.data.summary?.lost || 0,
+          damaged: response.data.data.summary?.damaged || 0,
+          totalUniqueBorrowers:
+            response.data.data.summary?.totalUniqueBorrowers || 0,
+        },
+        pagination: response.data.data.pagination || {
+          currentPage: 1,
+          totalPages: 1,
+          totalItems: 0,
+          itemsPerPage: 50,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
+      };
+    } else {
+      throw new Error(
+        response.data.message || "Failed to fetch borrowers data"
+      );
+    }
+  } catch (err) {
+    console.error("Error fetching borrowers data:", err);
+    error.value = err.message;
+    showNotification("Failed to fetch borrowers data", "error");
+    borrowersData.value = { items: [], summary: {}, pagination: {} };
+  } finally {
+    loading.value = false;
+  }
+};
+
 const isItemReturnable = (itemName) => {
   if (!itemName) return true;
   const lowerItemName = itemName.toLowerCase();
   return !nonReturnableItems.some((keyword) => lowerItemName.includes(keyword));
 };
 
-// Helper function to check if deployment should show return date
 const shouldShowReturnDate = (deployment) => {
   const itemName = deployment.item?.name || "";
   return isItemReturnable(itemName) && deployment.expected_return_date;
 };
 
-// Update the helper function to allow updates for DAMAGED and LOST items
 const canUpdateSerialStatus = (itemStatus) => {
-  // Allow updates for DEPLOYED, DAMAGED, and LOST items
   return ["DEPLOYED", "DAMAGED", "LOST"].includes(itemStatus);
 };
-// Fetch deployments from API
+
 const fetchDeployments = async () => {
   try {
     loading.value = true;
@@ -116,43 +314,20 @@ const fetchDeployments = async () => {
         search: searchQuery.value || undefined,
       },
     });
-    deployments.value = response.data.data;
-    totalPages.value = response.data.meta.pages;
-    totalDeployments.value = response.data.meta.total;
+    deployments.value = response.data.data || [];
+    totalPages.value = response.data.meta?.pages || 1;
+    totalDeployments.value = response.data.meta?.total || 0;
   } catch (err) {
     console.error("Error fetching deployments:", err);
-    error.value = err;
+    error.value = err.message;
     showNotification("Failed to fetch deployments", "error");
+    deployments.value = [];
   } finally {
     loading.value = false;
   }
 };
 
-// Fetch a single deployment by ID
-const fetchDeployment = async (id) => {
-  try {
-    deploymentLoading.value = true;
-    const response = await api.get(`inventory/deployment/${id}`);
-    currentDeployment.value = response.data.data;
-
-    // Parse existing notes history
-    notesHistory.value = parseNotesHistory(currentDeployment.value.notes);
-
-    // Clear the new note field
-    newNote.value = "";
-    deploymentNotes.value = currentDeployment.value.notes || "";
-
-    pendingChanges.value = [];
-  } catch (err) {
-    console.error("Error fetching deployment details:", err);
-    showNotification("Failed to fetch deployment details", "error");
-  } finally {
-    deploymentLoading.value = false;
-  }
-};
-// Stage a change to be confirmed later
 const stageChange = (serialId, condition) => {
-  // Avoid duplicates: replace if already staged
   const existing = pendingChanges.value.find((c) => c.id === serialId);
   if (existing) {
     existing.condition = condition;
@@ -161,60 +336,43 @@ const stageChange = (serialId, condition) => {
   }
 };
 
-// Remove a pending change
 const removePendingChange = (serialId) => {
   pendingChanges.value = pendingChanges.value.filter(
     (change) => change.id !== serialId
   );
 };
 
-// Confirm all pending changes
-const confirmChanges = async () => {
+const updateDeployment = async (payload) => {
   try {
     isUpdating.value = true;
-
-    // Build the notes string properly
-    let notesToSend = "";
-
-    // Add existing notes if they exist
-    if (currentDeployment.value.notes) {
-      notesToSend = currentDeployment.value.notes;
-    }
-
-    // Add new note if provided
-    if (newNote.value.trim()) {
-      if (notesToSend) {
-        notesToSend += "\n" + newNote.value.trim();
-      } else {
-        notesToSend = newNote.value.trim();
-      }
-    }
-
-    // Add system note about the update
-    const systemNote = `Updated ${pendingChanges.value.length} serial(s)`;
-    if (notesToSend) {
-      notesToSend += "\n" + systemNote;
-    } else {
-      notesToSend = systemNote;
-    }
-
     const response = await api.put(
       `inventory/deployment/${currentDeployment.value.id}/status`,
-      {
-        serials: pendingChanges.value.map((change) => ({
-          id: change.id,
-          return_condition: change.condition,
-        })),
-        notes: notesToSend,
-      }
+      payload
     );
-
     currentDeployment.value = response.data.data;
-
-    // Update notes history and clear new note
-    notesHistory.value = parseNotesHistory(response.data.data.notes);
+    notesHistory.value = response.data.data.notes || [];
     newNote.value = "";
+    return response.data;
+  } catch (err) {
+    console.error("Error updating deployment:", err);
+    throw err;
+  } finally {
+    isUpdating.value = false;
+  }
+};
 
+const confirmChanges = async () => {
+  try {
+    const payload = {
+      serials: pendingChanges.value.map((change) => ({
+        id: change.id,
+        return_condition: change.condition,
+      })),
+    };
+    if (newNote.value.trim()) {
+      payload.notes = newNote.value.trim();
+    }
+    await updateDeployment(payload);
     showNotification(
       `Successfully updated ${pendingChanges.value.length} serial(s)`,
       "success"
@@ -222,69 +380,46 @@ const confirmChanges = async () => {
     pendingChanges.value = [];
     fetchDeployments();
   } catch (err) {
-    console.error("Error updating serial statuses:", err);
     showNotification("Failed to update serial statuses", "error");
-  } finally {
-    isUpdating.value = false;
   }
 };
-// Update deployment status
+
 const updateDeploymentStatus = async (status) => {
   try {
-    isUpdating.value = true;
-    const response = await api.put(
-      `inventory/deployment/${currentDeployment.value.id}/status`,
-      {
-        status,
-        actual_return_date:
-          status === "RETURNED" ? new Date().toISOString() : null,
-        notes: `Status updated to ${status}`,
-      }
-    );
-    currentDeployment.value = response.data.data;
+    const payload = {
+      status,
+      actual_return_date:
+        status === "RETURNED" ? new Date().toISOString() : null,
+    };
+    if (newNote.value.trim()) {
+      payload.notes = newNote.value.trim();
+    }
+    await updateDeployment(payload);
     showNotification(`Deployment status updated to ${status}`, "success");
     closeModal();
     fetchDeployments();
   } catch (err) {
-    console.error("Error updating deployment status:", err);
     showNotification("Failed to update deployment status", "error");
-  } finally {
-    isUpdating.value = false;
   }
 };
-const addNote = async () => {
-  if (!newNote.value.trim()) return;
 
+const fetchDeployment = async (id) => {
   try {
-    isUpdating.value = true;
-
-    let notesToSend = "";
-    if (currentDeployment.value.notes) {
-      notesToSend = currentDeployment.value.notes + "\n" + newNote.value.trim();
-    } else {
-      notesToSend = newNote.value.trim();
-    }
-
-    const response = await api.put(
-      `inventory/deployment/${currentDeployment.value.id}/notes`,
-      {
-        notes: notesToSend,
-      }
-    );
-
+    deploymentLoading.value = true;
+    const response = await api.get(`inventory/deployment/${id}`);
     currentDeployment.value = response.data.data;
-    notesHistory.value = parseNotesHistory(response.data.data.notes);
+    notesHistory.value = response.data.data.notes || [];
     newNote.value = "";
-
-    showNotification("Note added successfully", "success");
+    deploymentNotes.value = "";
+    pendingChanges.value = [];
   } catch (err) {
-    console.error("Error adding note:", err);
-    showNotification("Failed to add note", "error");
+    console.error("Error fetching deployment details:", err);
+    showNotification("Failed to fetch deployment details", "error");
   } finally {
-    isUpdating.value = false;
+    deploymentLoading.value = false;
   }
 };
-// Status color utility
+
 const statusColor = (status) => {
   switch (status) {
     case "DEPLOYED":
@@ -325,24 +460,12 @@ const statusColor = (status) => {
   }
 };
 
-// Format date utility
-const formatDate = (dateString) => {
-  if (!dateString) return "N/A";
-  return new Date(dateString).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-};
-
-// Check if deployment is overdue
 const isOverdue = (deployment) => {
   if (deployment.status !== "DEPLOYED") return false;
   if (!deployment.expected_return_date) return false;
   return new Date(deployment.expected_return_date) < new Date();
 };
 
-// Get days until return
 const getDaysUntilReturn = (deployment) => {
   if (deployment.status !== "DEPLOYED") return null;
   if (!deployment.expected_return_date) return null;
@@ -351,11 +474,9 @@ const getDaysUntilReturn = (deployment) => {
   const returnDate = new Date(deployment.expected_return_date);
   returnDate.setHours(0, 0, 0, 0);
   const diffTime = returnDate - today;
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  return diffDays;
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 };
 
-// Show notification
 const showNotification = (message, type) => {
   notification.value = { show: true, type, message };
   setTimeout(() => {
@@ -363,27 +484,23 @@ const showNotification = (message, type) => {
   }, 3000);
 };
 
-// View deployment details
 const viewDeployment = (id) => {
   fetchDeployment(id);
   showModal.value = true;
 };
 
-// Close modal
 const closeModal = () => {
   showModal.value = false;
   setTimeout(() => {
     currentDeployment.value = null;
-    pendingChanges.value = []; // Clear pending changes when closing modal
+    pendingChanges.value = [];
   }, 300);
 };
 
-// Handle status update
 const handleStatusUpdate = async (status) => {
   await updateDeploymentStatus(status);
 };
 
-// Computed stats
 const deployedCount = computed(() => {
   return deployments.value.filter((d) => d.status === "DEPLOYED").length;
 });
@@ -393,14 +510,9 @@ const returnedCount = computed(() => {
 });
 
 const overdueCount = computed(() => {
-  return deployments.value.filter((d) => {
-    if (d.status !== "DEPLOYED") return false;
-    if (!d.expected_return_date) return false;
-    return new Date(d.expected_return_date) < new Date();
-  }).length;
+  return deployments.value.filter((d) => isOverdue(d)).length;
 });
 
-// Visible pages for pagination
 const visiblePages = computed(() => {
   const range = 2;
   let start = Math.max(1, currentPage.value - range);
@@ -412,22 +524,21 @@ const visiblePages = computed(() => {
   return Array.from({ length: end - start + 1 }, (_, i) => start + i);
 });
 
-// Watch for filter changes and reset to first page
+// Watchers
 watch([searchQuery, statusFilter], () => {
   currentPage.value = 1;
   fetchDeployments();
 });
 
-// Pagination
-const goToPage = (page) => {
-  if (page >= 1 && page <= totalPages.value) {
-    currentPage.value = page;
-    fetchDeployments();
-  }
-};
+watch(() => {
+  borrowersFilter.value.search;
+  fetchBorrowersData();
+});
 
-// Initialize data on component mount
-onMounted(fetchDeployments);
+onMounted(() => {
+  fetchBorrowersData();
+  fetchDeployments();
+});
 </script>
 <template>
   <div
@@ -487,10 +598,248 @@ onMounted(fetchDeployments);
                 </p>
               </div>
             </div>
+            <div class="flex items-center space-x-4">
+              <button
+                @click="openBorrowersReport"
+                class="bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-6 py-3 rounded-xl hover:from-indigo-600 hover:to-purple-700 transition-all duration-200 flex items-center shadow-lg hover:shadow-xl"
+              >
+                <Users class="w-5 h-5 mr-2" />
+                View Borrowers Report
+              </button>
+            </div>
           </div>
         </div>
       </div>
+      <div
+        v-if="showBorrowersModal"
+        class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+        @click="closeBorrowersReport"
+      >
+        <div
+          class="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden"
+          @click.stop
+        >
+          <div
+            class="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-6"
+          >
+            <div class="flex items-center justify-between">
+              <div class="flex items-center space-x-3">
+                <Users class="w-6 h-6" />
+                <h2 class="text-2xl font-bold">
+                  Deployed Items & Borrowers Report
+                </h2>
+              </div>
+              <button
+                @click="closeBorrowersReport"
+                class="hover:bg-white/20 p-2 rounded-lg transition-colors"
+              >
+                <X class="w-6 h-6" />
+              </button>
+            </div>
 
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
+              <div class="bg-white/20 rounded-lg p-4">
+                <p class="text-sm opacity-90">Total Items</p>
+                <p class="text-2xl font-bold">
+                  {{ borrowersData.summary?.totalItems || 0 }}
+                </p>
+              </div>
+              <div class="bg-white/20 rounded-lg p-4">
+                <p class="text-sm opacity-90">Unique Borrowers</p>
+                <p class="text-2xl font-bold">
+                  {{ borrowersData.summary?.totalUniqueBorrowers || 0 }}
+                </p>
+              </div>
+              <div class="bg-white/20 rounded-lg p-4">
+                <p class="text-sm opacity-90">Currently Deployed</p>
+                <p class="text-2xl font-bold">
+                  {{ borrowersData.summary?.currentlyDeployed || 0 }}
+                </p>
+              </div>
+              <div class="bg-white/20 rounded-lg p-4">
+                <p class="text-sm opacity-90">Overdue Items</p>
+                <p class="text-2xl font-bold">
+                  {{
+                    borrowersData.summary?.lost +
+                      borrowersData.summary?.damaged || 0
+                  }}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div class="relative">
+                <Search
+                  class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400"
+                />
+                <input
+                  v-model="borrowersFilter.search"
+                  type="text"
+                  placeholder="Search items or borrowers..."
+                  class="pl-10 w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                />
+              </div>
+              <select
+                v-model="borrowersFilter.condition"
+                class="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              >
+                <option value="">All Conditions</option>
+                <option value="good">Good</option>
+                <option value="lost">Lost</option>
+                <option value="damaged">Damaged</option>
+              </select>
+              <select
+                v-model="borrowersFilter.sortBy"
+                class="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              >
+                <option value="itemName">Sort by Item Name</option>
+                <option value="borrowerName">Sort by Borrower</option>
+                <option value="daysBorrowed">Sort by Days Borrowed</option>
+                <option value="totalBorrowers">Sort by Total Borrowers</option>
+              </select>
+            </div>
+
+            <div v-if="loading" class="text-center py-12">
+              <p class="text-gray-500 text-lg">Loading...</p>
+            </div>
+            <div v-else-if="error" class="text-center py-12">
+              <p class="text-red-600 text-lg">Error: {{ error }}</p>
+            </div>
+            <div
+              v-else-if="!filteredBorrowersData.length"
+              class="text-center py-12"
+            >
+              <Package class="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <p class="text-gray-500 text-lg">
+                No items match your current filters
+              </p>
+            </div>
+            <div v-else class="space-y-4">
+              <div
+                v-for="item in filteredBorrowersData"
+                :key="item.id"
+                class="bg-gray-50 rounded-xl p-6 border border-gray-200"
+              >
+                <div class="flex items-start justify-between mb-4">
+                  <div class="flex items-center space-x-4">
+                    <div class="p-3 bg-indigo-100 rounded-lg">
+                      <Package class="w-6 h-6 text-indigo-600" />
+                    </div>
+                    <div>
+                      <h3 class="text-lg font-semibold text-gray-900">
+                        {{ item.itemName || "N/A" }}
+                      </h3>
+                      <p class="text-sm text-gray-600">
+                        {{ item.serialNumber || "N/A" }}
+                      </p>
+                      <p class="text-sm text-gray-500">
+                        {{ item.itemDescription || "No description" }}
+                      </p>
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <span
+                      :class="[
+                        'px-3 py-1 text-sm font-medium rounded-full',
+                        getConditionColor(item.newCondition),
+                      ]"
+                    >
+                      {{ item.newCondition || "N/A" }}
+                    </span>
+                    <p class="text-xs text-gray-500 mt-1">
+                      {{ item.totalBorrowers?.length || 0 }} total borrowers
+                    </p>
+                  </div>
+                </div>
+
+                <div
+                  v-if="item.currentBorrower"
+                  class="bg-white rounded-lg p-4 mb-4"
+                >
+                  <h4 class="font-medium text-gray-900 mb-3 flex items-center">
+                    <User class="w-4 h-4 mr-2 text-indigo-600" />
+                    Current Borrower
+                  </h4>
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <p class="font-medium text-gray-900">
+                        {{
+                          console.log("Borrower: ", item.currentBorrower) ||
+                          "N/A"
+                        }}
+                      </p>
+                      <p class="text-sm text-gray-600">
+                        {{ item.currentBorrower.email || "N/A" }}
+                      </p>
+                    </div>
+                    <div class="text-right">
+                      <p class="text-sm text-gray-600">
+                        {{ item.currentBorrower.daysBorrowed || 0 }} days
+                        borrowed
+                      </p>
+                      <p class="text-xs text-gray-500">
+                        Due:
+                        {{
+                          formatDate(item.currentBorrower.expectedReturnDate)
+                        }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="bg-white rounded-lg p-4">
+                  <h4 class="font-medium text-gray-900 mb-3 flex items-center">
+                    <Clock class="w-4 h-4 mr-2 text-gray-600" />
+                    Borrowing History ({{ item.totalBorrowers?.length || 0 }}
+                    borrowers)
+                  </h4>
+                  <div
+                    v-if="item.totalBorrowers?.length"
+                    class="grid grid-cols-1 md:grid-cols-2 gap-3"
+                  >
+                    <div
+                      v-for="borrower in item.totalBorrowers"
+                      :key="borrower.id"
+                      :class="[
+                        'p-3 rounded-lg border',
+                        borrower.id === item.currentBorrower?.id
+                          ? 'bg-indigo-50 border-indigo-200'
+                          : 'bg-gray-50 border-gray-200',
+                      ]"
+                    >
+                      <div class="flex items-center justify-between">
+                        <div>
+                          <p class="font-medium text-gray-900">
+                            {{ borrower.name || "N/A" }}
+                          </p>
+                          <p class="text-xs text-gray-600">
+                            {{ borrower.email || "N/A" }}
+                          </p>
+                        </div>
+                        <div
+                          v-if="borrower.id === item.currentBorrower?.id"
+                          class="text-xs"
+                        >
+                          <span
+                            class="bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full"
+                          >
+                            Current
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-else class="text-center text-gray-500">
+                    No borrowing history available
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
       <!-- Stats Cards -->
       <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <div
@@ -1244,7 +1593,7 @@ onMounted(fetchDeployments);
                             </div>
                             <div class="flex items-center">
                               <Clock class="w-3 h-3 mr-1" />
-                              {{ formatDate(note.created_at) }}
+                              {{ formatDate(note.createdAt) }}
                             </div>
                           </div>
                         </div>
@@ -1270,34 +1619,24 @@ onMounted(fetchDeployments);
                       <label
                         class="block text-sm font-medium text-gray-700 mb-2"
                       >
-                        Add New Note
+                        Add Note (optional)
                       </label>
                       <textarea
                         v-model="newNote"
                         class="w-full p-3 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
                         rows="3"
-                        placeholder="Add a note about this deployment..."
+                        placeholder="Add a note with your next action..."
                         :disabled="isUpdating"
                       ></textarea>
                     </div>
 
-                    <div class="flex justify-end gap-2">
-                      <button
-                        v-if="newNote.trim()"
-                        @click="newNote = ''"
-                        class="px-3 py-2 text-gray-600 hover:text-gray-800 transition-colors rounded-lg hover:bg-gray-100"
-                        :disabled="isUpdating"
-                      >
-                        Clear
-                      </button>
-                      <button
-                        @click="addNote"
-                        class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center transition-all duration-200"
-                        :disabled="isUpdating || !newNote.trim()"
-                      >
-                        <FileText class="w-4 h-4 mr-1" />
-                        Add Note
-                      </button>
+                    <!-- Note: This note will be included when you confirm serial changes or update deployment status -->
+                    <div
+                      v-if="newNote.trim()"
+                      class="text-sm text-blue-600 bg-blue-50 p-2 rounded"
+                    >
+                      <FileText class="w-4 h-4 inline mr-1" />
+                      This note will be added with your next action
                     </div>
                   </div>
                 </div>

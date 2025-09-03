@@ -1202,7 +1202,15 @@ const getAllDeployedItemsReport = async (req, res, next) => {
         {
           model: InventoryItem,
           as: "item",
-          attributes: ["id", "name", "description", "category_id"],
+          attributes: ["id", "name", "description"],
+          include: [
+            {
+              model: Category,
+              as: "category",
+              attributes: ["id", "name", "type"],
+              required: false,
+            },
+          ],
         },
         {
           model: SerializedItemHistory,
@@ -1273,19 +1281,36 @@ const getAllDeployedItemsReport = async (req, res, next) => {
       });
 
       // Get current borrower (most recent deployment)
-      const currentBorrower =
-        borrowingHistory.length > 0 ? borrowingHistory[0].borrower : null;
+      const latestHistory =
+        item.status === "DEPLOYED" && borrowingHistory.length > 0
+          ? borrowingHistory[0]
+          : null;
+
+      const currentBorrower = latestHistory
+        ? {
+            ...latestHistory.borrower,
+            deploymentDate: latestHistory.deploymentDate,
+            expectedReturnDate: latestHistory.expectedReturnDate,
+            daysBorrowed: latestHistory.deploymentDate
+              ? Math.floor(
+                  (new Date() - new Date(latestHistory.deploymentDate)) /
+                    (1000 * 60 * 60 * 24)
+                )
+              : null,
+          }
+        : null;
 
       return {
         id: item.id,
         serialNumber: item.serial_number,
         status: item.status,
         itemName: item.item?.name || "N/A",
+        itemCategory: item.item?.category?.name || null,
         itemDescription: item.item?.description || null,
         conditionNotes: item.condition_notes,
-        currentBorrower: currentBorrower,
+        currentBorrower,
         totalBorrowers: Array.from(borrowers).map((b) => JSON.parse(b)),
-        borrowingHistory: borrowingHistory,
+        borrowingHistory,
         lastUpdated: item.updatedAt,
       };
     });

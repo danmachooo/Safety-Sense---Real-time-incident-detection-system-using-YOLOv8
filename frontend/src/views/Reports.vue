@@ -60,13 +60,11 @@
         @click.stop
       >
         <!-- Modal Header -->
-        <div
-          class="px-8 py-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 flex-shrink-0"
-        >
+        <div class="px-8 py-6 border-b bg-gray-800 text-white flex-shrink-0">
           <div class="flex items-center justify-between">
             <div>
-              <h2 class="text-2xl font-bold text-gray-900">Export Preview</h2>
-              <p class="text-sm text-gray-600 mt-1">
+              <h2 class="text-2xl font-bold text-white">Export Preview</h2>
+              <p class="text-sm text-white mt-1">
                 Choose your export format and preview the report
               </p>
             </div>
@@ -443,6 +441,15 @@
               class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors duration-200"
             >
               Cancel
+            </button>
+            <button
+              @click="printReport"
+              :disabled="exportLoading"
+              class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors duration-200 disabled:opacity-50"
+            >
+              <Printer class="w-4 h-4 inline mr-2" />
+              <span v-if="exportLoading">Generating...</span>
+              <span v-else>Print {{ selectedExportFormat.toUpperCase() }}</span>
             </button>
             <button
               @click="downloadReport"
@@ -1507,6 +1514,7 @@ import * as XLSX from "xlsx";
 import api from "../utils/axios";
 
 // Reactive state
+const printLoading = ref(false);
 const loading = ref(false);
 const error = ref(null);
 const loadingStep = ref("inventory data");
@@ -1587,6 +1595,162 @@ const downloadReport = async () => {
     alert("Failed to generate report. Please try again.");
   } finally {
     exportLoading.value = false;
+  }
+};
+const printReport = async () => {
+  if (!hasReportData.value || !pdfPreview.value) {
+    alert("No report data available to print");
+    return;
+  }
+
+  printLoading.value = true;
+
+  try {
+    // Generate the PDF blob (same logic as your existing generatePDFReport but return blob instead of download)
+    const pdf = new jsPDF("p", "mm", "a4");
+    const pageWidth = 210;
+    const pageHeight = 297;
+    const margin = 15;
+    const contentWidth = pageWidth - 2 * margin;
+    const headerHeight = 20;
+    const footerHeight = 15;
+    const usableHeight = pageHeight - 2 * margin - headerHeight - footerHeight;
+
+    // Capture the content as canvas (same as your existing code)
+    const canvas = await html2canvas(pdfPreview.value, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: "#ffffff",
+      logging: false,
+      height: pdfPreview.value.scrollHeight,
+      windowHeight: pdfPreview.value.scrollHeight,
+    });
+
+    const imgData = canvas.toDataURL("image/png");
+    const imgWidth = contentWidth;
+    const imgHeight = (canvas.height * contentWidth) / canvas.width;
+    const usableHeightInPixels = (usableHeight * canvas.width) / contentWidth;
+    const totalPages = Math.ceil(imgHeight / usableHeight);
+    const breakPoints = findSmartBreakPoints(
+      canvas,
+      usableHeightInPixels,
+      totalPages
+    );
+
+    // Generate PDF pages (same logic as your existing generatePDFReport)
+    for (let pageNum = 0; pageNum < totalPages; pageNum++) {
+      if (pageNum > 0) {
+        pdf.addPage();
+      }
+
+      // Add header
+      pdf.setFontSize(10);
+      pdf.setTextColor(100, 100, 100);
+      pdf.text(getReportTitle(), margin, margin + 5);
+      pdf.text(
+        `Generated: ${formatDate(new Date())}`,
+        pageWidth - margin - 50,
+        margin + 5
+      );
+      pdf.setDrawColor(200, 200, 200);
+      pdf.line(margin, margin + 8, pageWidth - margin, margin + 8);
+
+      // Calculate content for this page
+      let sourceY, sourceHeight;
+      if (pageNum === 0) {
+        sourceY = 0;
+        sourceHeight = breakPoints[0];
+      } else if (pageNum === totalPages - 1) {
+        sourceY = breakPoints[pageNum - 1];
+        sourceHeight = canvas.height - sourceY;
+      } else {
+        sourceY = breakPoints[pageNum - 1];
+        sourceHeight = breakPoints[pageNum] - sourceY;
+      }
+
+      sourceHeight = Math.min(sourceHeight, canvas.height - sourceY);
+
+      if (sourceHeight > 0) {
+        const pageCanvas = document.createElement("canvas");
+        const pageCtx = pageCanvas.getContext("2d");
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = Math.ceil(sourceHeight);
+
+        pageCtx.fillStyle = "#ffffff";
+        pageCtx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+        pageCtx.drawImage(
+          canvas,
+          0,
+          sourceY,
+          canvas.width,
+          sourceHeight,
+          0,
+          0,
+          canvas.width,
+          sourceHeight
+        );
+
+        const pageImgData = pageCanvas.toDataURL("image/png");
+        const pageImgHeightMM = (sourceHeight * contentWidth) / canvas.width;
+
+        pdf.addImage(
+          pageImgData,
+          "PNG",
+          margin,
+          margin + headerHeight,
+          imgWidth,
+          pageImgHeightMM
+        );
+        pageCanvas.remove();
+      }
+
+      // Add footer
+      const footerY = pageHeight - margin - 5;
+      pdf.setFontSize(8);
+      pdf.setTextColor(150, 150, 150);
+      pdf.line(margin, footerY - 5, pageWidth - margin, footerY - 5);
+      pdf.text(`Page ${pageNum + 1} of ${totalPages}`, margin, footerY);
+      pdf.text("Confidential Report", pageWidth - margin - 30, footerY);
+      pdf.text("Generated by Reports & Analytics System", margin, footerY + 4);
+    }
+
+    // Instead of saving, create a blob URL and open in new window for printing
+    const pdfBlob = pdf.output("blob");
+    const blobUrl = URL.createObjectURL(pdfBlob);
+
+    // Open PDF in new window
+    const printWindow = window.open(blobUrl, "_blank");
+
+    if (!printWindow) {
+      alert("Please allow popups to enable printing");
+      URL.revokeObjectURL(blobUrl);
+      return;
+    }
+
+    // Wait for PDF to load, then trigger print dialog
+    printWindow.onload = () => {
+      setTimeout(() => {
+        printWindow.focus();
+        printWindow.print();
+
+        // Clean up blob URL after printing
+        printWindow.onafterprint = () => {
+          URL.revokeObjectURL(blobUrl);
+          printWindow.close();
+        };
+
+        // Fallback cleanup in case onafterprint doesn't fire
+        setTimeout(() => {
+          URL.revokeObjectURL(blobUrl);
+        }, 30000); // Clean up after 30 seconds
+      }, 1000); // Give PDF time to render
+    };
+  } catch (error) {
+    console.error("Print error:", error);
+    alert("Failed to generate PDF for printing. Please try again.");
+  } finally {
+    printLoading.value = false;
   }
 };
 

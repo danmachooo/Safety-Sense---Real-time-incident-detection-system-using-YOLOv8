@@ -77,7 +77,6 @@ const newItem = ref({
   name: "",
   description: "",
   category_id: "",
-  quantity_in_stock: 0,
   min_stock_level: 0,
   unit_of_measure: "",
   condition: "",
@@ -374,7 +373,6 @@ const openEditModal = (item = null) => {
         name: "",
         description: "",
         category_id: "",
-        quantity_in_stock: 0,
         min_stock_level: 0,
         unit_of_measure: "",
         condition: "",
@@ -516,12 +514,10 @@ const formatFileSize = (bytes) => {
 
 // Update quantity when serialized items are manually selected
 const updateQuantityFromSelection = () => {
-  const selectedCount = deploymentDetails.value.serialized_item_ids.length;
-
-  // Only update if different to avoid loops
-  if (deploymentDetails.value.quantity_deployed !== selectedCount) {
-    deploymentDetails.value.quantity_deployed = selectedCount;
-  }
+  deploymentDetails.value.serialized_item_ids =
+    deploymentDetails.value.serialized_item_ids.map(Number);
+  deploymentDetails.value.quantity_deployed =
+    deploymentDetails.value.serialized_item_ids.length;
 };
 
 const selectAllAvailable = () => {
@@ -540,27 +536,21 @@ const clearSelection = () => {
 watch(
   () => deploymentDetails.value.quantity_deployed,
   (newQty, oldQty) => {
-    // Only auto-select if item is serialized and quantity is valid
     if (
       serializedItems.value.length > 0 &&
       Number.isInteger(newQty) &&
       newQty > 0 &&
-      newQty !== oldQty
+      newQty !== deploymentDetails.value.serialized_item_ids.length
     ) {
-      // Clear current selection first
-      deploymentDetails.value.serialized_item_ids = [];
-
-      // Auto-select the first N available items
       const availableItems = serializedItems.value.filter(
-        (item) => item.status !== "DAMAGED" // Optional: exclude damaged items
+        (item) => item.status !== "DAMAGED"
       );
-
       const itemsToSelect = Math.min(newQty, availableItems.length);
+
       deploymentDetails.value.serialized_item_ids = availableItems
         .slice(0, itemsToSelect)
         .map((item) => item.id);
 
-      // Show warning if not enough items available
       if (newQty > availableItems.length) {
         showNotification(
           `Only ${availableItems.length} serialized items are available.`,
@@ -568,8 +558,7 @@ watch(
         );
       }
     }
-  },
-  { immediate: false }
+  }
 );
 </script>
 
@@ -1401,21 +1390,6 @@ watch(
                     <label
                       class="block text-sm font-semibold text-gray-700 mb-3"
                     >
-                      Current Stock Quantity *
-                    </label>
-                    <input
-                      v-model.number="newItem.quantity_in_stock"
-                      type="number"
-                      min="0"
-                      required
-                      placeholder="0"
-                      class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200"
-                    />
-                  </div>
-                  <div>
-                    <label
-                      class="block text-sm font-semibold text-gray-700 mb-3"
-                    >
                       Minimum Stock Level *
                     </label>
                     <input
@@ -1779,8 +1753,8 @@ watch(
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <label
-                    v-for="sItem in serializedItems"
-                    :key="sItem.id"
+                    v-for="(sItem, index) in serializedItems"
+                    :key="`serialized-${sItem.id}`"
                     class="flex items-center space-x-3 p-3 border rounded-xl cursor-pointer transition-all duration-200"
                     :class="{
                       'bg-indigo-50 border-indigo-200':
@@ -1800,6 +1774,7 @@ watch(
                       v-model="deploymentDetails.serialized_item_ids"
                       @change="updateQuantityFromSelection"
                     />
+
                     <div class="flex-1">
                       <span class="text-sm font-medium text-gray-700">
                         {{ sItem.serial_number }}

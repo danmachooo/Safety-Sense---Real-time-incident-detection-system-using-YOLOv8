@@ -192,7 +192,7 @@ const generateItemDeploymentReport = async (req, res, next) => {
       include: [
         {
           model: InventoryItem,
-          as: "inventoryItem",
+          as: "item",
           attributes: ["id", "name", "location"],
           include: [
             {
@@ -338,7 +338,7 @@ const generateBatchAdditionsReport = async (req, res, next) => {
       include: [
         {
           model: InventoryItem,
-          as: "inventoryItem",
+          as: "item",
           attributes: ["id", "name", "location"],
           where: categoryId ? { category_id: categoryId } : {},
           required: categoryId ? true : false,
@@ -400,7 +400,7 @@ const generateBatchAdditionsReport = async (req, res, next) => {
       include: [
         {
           model: InventoryItem,
-          as: "inventoryItem",
+          as: "item",
           attributes: ["id", "name"],
           include: [
             {

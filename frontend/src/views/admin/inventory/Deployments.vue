@@ -30,7 +30,7 @@ const error = ref(null);
 const currentPage = ref(1);
 const totalPages = ref(1);
 const totalDeployments = ref(0);
-const itemsPerPage = ref(2);
+const itemsPerPage = ref(10);
 const searchQuery = ref("");
 const statusFilter = ref("");
 const showModal = ref(false);
@@ -64,6 +64,11 @@ const borrowersData = ref({
     hasPreviousPage: false,
   },
 });
+const goToPage = async (page) => {
+  if (page < 1 || page > totalPages.value) return; // prevent invalid pages
+  currentPage.value = page;
+  await fetchDeployments(); // refetch deployments for the new page
+};
 
 // Borrowers filter
 const borrowersFilter = ref({
@@ -71,6 +76,10 @@ const borrowersFilter = ref({
   condition: "",
   sortBy: "itemName",
 });
+
+// Borrowers modal pagination (client-side)
+const borrowersCurrentPage = ref(1);
+const borrowersItemsPerPage = ref(10); // Adjustable; 20 items per page for better UX in modal
 
 // Non-returnable items
 const nonReturnableItems = [
@@ -116,7 +125,7 @@ const getConditionColor = (condition) => {
 };
 
 const formatDate = (dateString) => {
-  if (!dateString) return "N/sA";
+  if (!dateString) return "N/A";
   return new Date(dateString).toLocaleDateString("en-US", {
     year: "numeric",
     month: "short",
@@ -126,87 +135,93 @@ const formatDate = (dateString) => {
 
 // Computed properties
 const filteredBorrowersData = computed(() => {
-  if (
-    !borrowersData.value?.items ||
-    !Array.isArray(borrowersData.value.items)
-  ) {
-    return [];
-  }
+  if (!borrowersData.value.items) return [];
 
-  let filtered = borrowersData.value.items.map((item) => {
-    // Get the latest borrowing history entry for current borrower details
-    const latestHistory =
-      Array.isArray(item.borrowingHistory) && item.borrowingHistory.length > 0
-        ? item.borrowingHistory[0]
+  return borrowersData.value.items
+    .map((item) => {
+      const currentBorrower = item.currentBorrower
+        ? {
+            ...item.currentBorrower,
+            daysBorrowed: calculateDaysBorrowed(
+              item.currentBorrower.deploymentDate
+            ),
+            // Suggestion: Add overdue flag based on current date (September 06, 2025).
+            isOverdue:
+              item.currentBorrower.expectedReturnDate &&
+              new Date(item.currentBorrower.expectedReturnDate) <
+                new Date("2025-09-06T00:00:00.000Z"), // Compare to current date.
+          }
         : null;
 
-    return {
-      ...item,
-      currentBorrower: {
-        ...item.currentBorrower,
-        daysBorrowed: latestHistory
-          ? calculateDaysBorrowed(latestHistory.deploymentDate)
-          : 0,
-        expectedReturnDate: latestHistory?.expectedReturnDate || null,
-      },
-      totalBorrowers: Array.isArray(item.totalBorrowers)
-        ? item.totalBorrowers
-        : [],
-    };
-  });
-
-  // Search filter
-  if (borrowersFilter.value.search) {
-    const search = borrowersFilter.value.search.toLowerCase();
-    filtered = filtered.filter((item) => {
-      const itemName = item.itemName?.toLowerCase() || "";
-      const serialNumber = item.serialNumber?.toLowerCase() || "";
-      const currentBorrowerName =
-        item.currentBorrower?.name?.toLowerCase() || "";
-      const borrowerEmails =
-        item.totalBorrowers?.map((b) => b.email?.toLowerCase() || "") || [];
-
+      return {
+        ...item,
+        currentBorrower,
+        totalBorrowers: item.totalBorrowers || [],
+      };
+    })
+    .filter((item) => {
+      const search = borrowersFilter.value.search.toLowerCase();
       return (
-        itemName.includes(search) ||
-        serialNumber.includes(search) ||
-        currentBorrowerName.includes(search) ||
-        borrowerEmails.some((email) => email.includes(search))
+        item.itemName.toLowerCase().includes(search) ||
+        item.serialNumber?.toLowerCase().includes(search) ||
+        item.currentBorrower?.name.toLowerCase().includes(search) ||
+        (item.totalBorrowers || []).some((b) =>
+          b.email?.toLowerCase().includes(search)
+        )
       );
+    })
+    .filter((item) => {
+      if (!borrowersFilter.value.condition) return true;
+      return (
+        item.newCondition?.toLowerCase() ===
+        borrowersFilter.value.condition?.toLowerCase()
+      );
+    })
+    .sort((a, b) => {
+      switch (borrowersFilter.value.sortBy) {
+        case "itemName":
+          return (a.itemName || "").localeCompare(b.itemName || "");
+        case "borrowerName":
+          return (a.currentBorrower?.name || "").localeCompare(
+            b.currentBorrower?.name || ""
+          );
+        case "daysBorrowed":
+          return (
+            (a.currentBorrower?.daysBorrowed || 0) -
+            (b.currentBorrower?.daysBorrowed || 0)
+          );
+        case "totalBorrowers":
+          return (
+            (b.totalBorrowers?.length || 0) - (a.totalBorrowers?.length || 0)
+          );
+        default:
+          return 0;
+      }
     });
+});
+
+const paginatedBorrowersData = computed(() => {
+  const start = (borrowersCurrentPage.value - 1) * borrowersItemsPerPage.value;
+  const end = start + borrowersItemsPerPage.value;
+  return filteredBorrowersData.value.slice(start, end);
+});
+
+const totalBorrowersPages = computed(() =>
+  Math.ceil(filteredBorrowersData.value.length / borrowersItemsPerPage.value)
+);
+
+const visibleBorrowersPages = computed(() => {
+  const range = 2;
+  let start = Math.max(1, borrowersCurrentPage.value - range);
+  let end = Math.min(
+    totalBorrowersPages.value,
+    borrowersCurrentPage.value + range
+  );
+  if (end - start < range * 2) {
+    start = Math.max(1, end - range * 2);
+    end = Math.min(totalBorrowersPages.value, start + range * 2);
   }
-
-  // Condition filter
-  if (borrowersFilter.value.condition) {
-    filtered = filtered.filter(
-      (item) =>
-        item.newCondition?.toLowerCase() === borrowersFilter.value.condition
-    );
-  }
-
-  // Sort
-  filtered.sort((a, b) => {
-    switch (borrowersFilter.value.sortBy) {
-      case "itemName":
-        return (a.itemName || "").localeCompare(b.itemName || "");
-      case "borrowerName":
-        return (a.currentBorrower?.name || "").localeCompare(
-          b.currentBorrower?.name || ""
-        );
-      case "daysBorrowed":
-        return (
-          (a.currentBorrower?.daysBorrowed || 0) -
-          (b.currentBorrower?.daysBorrowed || 0)
-        );
-      case "totalBorrowers":
-        return (
-          (b.totalBorrowers?.length || 0) - (a.totalBorrowers?.length || 0)
-        );
-      default:
-        return 0;
-    }
-  });
-
-  return filtered;
+  return Array.from({ length: end - start + 1 }, (_, i) => start + i);
 });
 
 const filteredItemsCount = computed(() => filteredBorrowersData.value.length);
@@ -224,6 +239,20 @@ const openBorrowersReport = () => {
 const closeBorrowersReport = () => {
   showBorrowersModal.value = false;
   borrowersFilter.value = { search: "", condition: "", sortBy: "itemName" };
+  borrowersCurrentPage.value = 1;
+};
+
+// Pagination handlers for borrowers modal
+const prevBorrowersPage = () => {
+  if (borrowersCurrentPage.value > 1) {
+    borrowersCurrentPage.value--;
+  }
+};
+
+const nextBorrowersPage = () => {
+  if (borrowersCurrentPage.value < totalBorrowersPages.value) {
+    borrowersCurrentPage.value++;
+  }
 };
 
 // API functions
@@ -239,20 +268,23 @@ const fetchBorrowersData = async () => {
 
       borrowersData.value = {
         items: rawItems.map((item) => {
-          // find latest deployment record with dates
-          const latestDeployment = item.borrowingHistory.find(
-            (h) => h.deploymentDate && h.expectedReturnDate
+          // Always sort borrowingHistory DESC just to be safe
+          const sortedHistory = [...(item.borrowingHistory || [])].sort(
+            (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
           );
+
+          const latestHistory = sortedHistory[0];
+          const currentCondition = latestHistory?.newCondition || "GOOD";
 
           return {
             id: item.id,
             itemName: item.itemName || "Unknown Item",
             serialNumber: item.serialNumber || null,
             itemDescription: item.itemDescription || "",
-            newCondition: latestDeployment?.newCondition || "GOOD", // take from latest history if available
+            newCondition: currentCondition, // ✅ Always newest condition
             currentBorrower: item.currentBorrower,
             totalBorrowers: item.totalBorrowers || [],
-            borrowingHistory: item.borrowingHistory || [],
+            borrowingHistory: sortedHistory, // keep sorted for UI
           };
         }),
         summary: {
@@ -530,10 +562,16 @@ watch([searchQuery, statusFilter], () => {
   fetchDeployments();
 });
 
-watch(() => {
-  borrowersFilter.value.search;
-  fetchBorrowersData();
-});
+watch(
+  [
+    () => borrowersFilter.value.search,
+    () => borrowersFilter.value.condition,
+    () => borrowersFilter.value.sortBy,
+  ],
+  () => {
+    borrowersCurrentPage.value = 1;
+  }
+);
 
 onMounted(() => {
   fetchBorrowersData();
@@ -601,7 +639,7 @@ onMounted(() => {
             <div class="flex items-center space-x-4">
               <button
                 @click="openBorrowersReport"
-                class="bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-6 py-3 rounded-xl hover:from-indigo-600 hover:to-purple-700 transition-all duration-200 flex items-center shadow-lg hover:shadow-xl"
+                class="bg-gray-900 text-white px-6 py-3 rounded-xl transition-all duration-200 flex items-center shadow-lg hover:shadow-xl"
               >
                 <Users class="w-5 h-5 mr-2" />
                 View Borrowers Report
@@ -619,9 +657,7 @@ onMounted(() => {
           class="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden"
           @click.stop
         >
-          <div
-            class="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-6"
-          >
+          <div class="bg-gray-900 text-white p-6">
             <div class="flex items-center justify-between">
               <div class="flex items-center space-x-3">
                 <Users class="w-6 h-6" />
@@ -718,7 +754,7 @@ onMounted(() => {
             </div>
             <div v-else class="space-y-4">
               <div
-                v-for="item in filteredBorrowersData"
+                v-for="item in paginatedBorrowersData"
                 :key="item.id"
                 class="bg-gray-50 rounded-xl p-6 border border-gray-200"
               >
@@ -765,10 +801,7 @@ onMounted(() => {
                   <div class="flex items-center justify-between">
                     <div>
                       <p class="font-medium text-gray-900">
-                        {{
-                          console.log("Borrower: ", item.currentBorrower) ||
-                          "N/A"
-                        }}
+                        {{ item.currentBorrower.name || "N/A" }}
                       </p>
                       <p class="text-sm text-gray-600">
                         {{ item.currentBorrower.email || "N/A" }}
@@ -837,6 +870,62 @@ onMounted(() => {
                 </div>
               </div>
             </div>
+
+            <!-- Pagination controls for borrowers modal -->
+            <div
+              v-if="totalBorrowersPages > 1"
+              class="flex items-center justify-between mt-6 px-4"
+            >
+              <button
+                @click="prevBorrowersPage"
+                :disabled="borrowersCurrentPage === 1"
+                class="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              >
+                <ChevronLeft class="w-5 h-5" />
+                <span>Previous</span>
+              </button>
+
+              <div class="flex space-x-2">
+                <button
+                  v-for="page in visibleBorrowersPages"
+                  :key="page"
+                  @click="borrowersCurrentPage = page"
+                  :class="[
+                    'px-4 py-2 rounded-lg',
+                    borrowersCurrentPage === page
+                      ? 'bg-indigo-500 text-white'
+                      : 'border border-gray-300 hover:bg-gray-50',
+                  ]"
+                >
+                  {{ page }}
+                </button>
+              </div>
+
+              <button
+                @click="nextBorrowersPage"
+                :disabled="borrowersCurrentPage === totalBorrowersPages"
+                class="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              >
+                <span>Next</span>
+                <ChevronRight class="w-5 h-5" />
+              </button>
+            </div>
+
+            <!-- Optional: Show current page info -->
+            <p
+              v-if="filteredItemsCount > 0"
+              class="text-center text-sm text-gray-500 mt-4"
+            >
+              Showing
+              {{ (borrowersCurrentPage - 1) * borrowersItemsPerPage + 1 }} -
+              {{
+                Math.min(
+                  borrowersCurrentPage * borrowersItemsPerPage,
+                  filteredItemsCount
+                )
+              }}
+              of {{ filteredItemsCount }} items
+            </p>
           </div>
         </div>
       </div>

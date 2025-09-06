@@ -170,7 +170,8 @@ const createDeployment = async (req, res, next) => {
         deployed_by,
         deployed_to,
         // notes, // Remove notes from here
-        deployent_id: deployment.id,
+        deployment_id: deployment.id,
+        deployed_at: finalDeploymentDate,
       }));
 
       await SerializedItemHistory.bulkCreate(histories, { transaction: t });
@@ -488,7 +489,6 @@ const updateDeploymentStatus = async (req, res, next) => {
             deployment_id: deployment.id,
             old_condition: oldCondition,
             new_condition: newCondition,
-            // Remove notes from here
           },
           { transaction: t }
         );
@@ -1195,7 +1195,7 @@ const getAllDeployedItemsReport = async (req, res, next) => {
       whereCondition.status = status.toUpperCase();
     }
 
-    // Get all serialized items that have deployment history
+    // Get serialized items
     const deployedItems = await SerializedItem.findAndCountAll({
       where: whereCondition,
       include: [
@@ -1215,6 +1215,7 @@ const getAllDeployedItemsReport = async (req, res, next) => {
         {
           model: SerializedItemHistory,
           as: "history",
+          required: true,
           include: [
             {
               model: User,
@@ -1235,7 +1236,6 @@ const getAllDeployedItemsReport = async (req, res, next) => {
               required: false,
             },
           ],
-          order: [["createdAt", "DESC"]],
         },
       ],
       limit: parseInt(limit),
@@ -1245,75 +1245,85 @@ const getAllDeployedItemsReport = async (req, res, next) => {
     });
 
     // Process the data to show borrower information over time
-    const processedItems = deployedItems.rows.map((item) => {
-      // Get unique borrowers for this item
-      const borrowers = new Set();
-      const borrowingHistory = [];
+    const processedItems = deployedItems.rows
+      // ✅ Filter out items with no history
+      .filter((item) => item.history && item.history.length > 0)
+      .map((item) => {
+        // Sort history entries (newest first)
+        const sortedHistory = [...item.history].sort(
+          (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+        );
 
-      item.history.forEach((historyEntry) => {
-        if (historyEntry.receiver) {
-          const borrowerInfo = {
-            id: historyEntry.receiver.id,
-            name: `${historyEntry.receiver.firstname} ${historyEntry.receiver.lastname}`,
-            email: historyEntry.receiver.email,
-          };
+        const borrowers = new Set();
+        const borrowingHistory = sortedHistory
+          .map((historyEntry) => {
+            if (!historyEntry.receiver) return null;
 
-          borrowers.add(JSON.stringify(borrowerInfo));
+            const borrowerInfo = {
+              id: historyEntry.receiver.id,
+              name: `${historyEntry.receiver.firstname} ${historyEntry.receiver.lastname}`,
+              email: historyEntry.receiver.email,
+            };
 
-          borrowingHistory.push({
-            borrower: borrowerInfo,
-            deployer: historyEntry.deployer
-              ? {
-                  id: historyEntry.deployer.id,
-                  name: `${historyEntry.deployer.firstname} ${historyEntry.deployer.lastname}`,
-                  email: historyEntry.deployer.email,
-                }
-              : null,
-            deploymentDate: historyEntry.deployment?.deployment_date || null,
-            expectedReturnDate:
-              historyEntry.deployment?.expected_return_date || null,
-            oldCondition: historyEntry.old_condition,
-            newCondition: historyEntry.new_condition,
-            notes: historyEntry.notes,
-            createdAt: historyEntry.createdAt,
-          });
-        }
-      });
+            borrowers.add(JSON.stringify(borrowerInfo));
 
-      // Get current borrower (most recent deployment)
-      const latestHistory =
-        item.status === "DEPLOYED" && borrowingHistory.length > 0
-          ? borrowingHistory[0]
+            return {
+              borrower: borrowerInfo,
+              deployer: historyEntry.deployer
+                ? {
+                    id: historyEntry.deployer.id,
+                    name: `${historyEntry.deployer.firstname} ${historyEntry.deployer.lastname}`,
+                    email: historyEntry.deployer.email,
+                  }
+                : null,
+              deploymentDate: historyEntry.deployment?.deployment_date || null,
+              expectedReturnDate:
+                historyEntry.deployment?.expected_return_date || null,
+              oldCondition: historyEntry.old_condition,
+              newCondition: historyEntry.new_condition,
+              notes: historyEntry.notes,
+              createdAt: historyEntry.createdAt,
+            };
+          })
+          .filter(Boolean);
+
+        // ✅ Latest borrower is always the newest history entry
+        const latestHistory =
+          item.status === "DEPLOYED" && borrowingHistory.length > 0
+            ? borrowingHistory[0]
+            : null;
+
+        const currentBorrower = latestHistory
+          ? {
+              ...latestHistory.borrower,
+              deploymentDate: latestHistory.deploymentDate,
+              expectedReturnDate: latestHistory.expectedReturnDate,
+              daysBorrowed: latestHistory.deploymentDate
+                ? Math.max(
+                    1,
+                    Math.floor(
+                      (new Date() - new Date(latestHistory.deploymentDate)) /
+                        (1000 * 60 * 60 * 24)
+                    )
+                  )
+                : null,
+            }
           : null;
 
-      const currentBorrower = latestHistory
-        ? {
-            ...latestHistory.borrower,
-            deploymentDate: latestHistory.deploymentDate,
-            expectedReturnDate: latestHistory.expectedReturnDate,
-            daysBorrowed: latestHistory.deploymentDate
-              ? Math.floor(
-                  (new Date() - new Date(latestHistory.deploymentDate)) /
-                    (1000 * 60 * 60 * 24)
-                )
-              : null,
-          }
-        : null;
-
-      return {
-        id: item.id,
-        serialNumber: item.serial_number,
-        status: item.status,
-        itemName: item.item?.name || "N/A",
-        itemCategory: item.item?.category?.name || null,
-        itemDescription: item.item?.description || null,
-        conditionNotes: item.condition_notes,
-        currentBorrower,
-        totalBorrowers: Array.from(borrowers).map((b) => JSON.parse(b)),
-        borrowingHistory,
-        lastUpdated: item.updatedAt,
-      };
-    });
+        return {
+          id: item.id,
+          serialNumber: item.serial_number,
+          status: item.status,
+          itemName: item.item?.name || "N/A",
+          itemCategory: item.item?.category?.name || null,
+          itemDescription: item.item?.description || null,
+          conditionNotes: item.condition_notes,
+          currentBorrower,
+          totalBorrowers: Array.from(borrowers).map((b) => JSON.parse(b)),
+          borrowingHistory,
+          lastUpdated: item.updatedAt,
+        };
+      });
 
     // Summary statistics
     const summary = {

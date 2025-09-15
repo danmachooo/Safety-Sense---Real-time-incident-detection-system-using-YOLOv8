@@ -1,14 +1,5 @@
-
-
-# Node.js modules (frontend and backend)
-
+# Node.js modules (ignore everywhere)
 **/node_modules/
 
-# Backend-specific (Express.js)
-# /backend/.env
-
-# Frontend-specific (Vue.js)
-# /frontend/.env
-/frontend/node_modules/
-
-.env
+# Environment files (ignore everywhere)
+**/.env

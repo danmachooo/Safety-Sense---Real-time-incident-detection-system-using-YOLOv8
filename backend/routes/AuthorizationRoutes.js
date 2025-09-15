@@ -12,8 +12,7 @@ import {
 
 router.patch(
   "/change-role/:id",
-  authMiddleware,
-  adminMiddleware,
+
   changeUserRole
 ); //ok
 router.patch(

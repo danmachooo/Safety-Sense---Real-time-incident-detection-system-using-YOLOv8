@@ -19,7 +19,7 @@ const changeUserRole = async (req, res, next) => {
     const { id } = req.params;
     const { role } = req.body;
 
-    const adminId = req.user.id;
+    // const adminId = req.user.id;
 
     if (!id || !role)
       throw new BadRequestError(
@@ -27,7 +27,7 @@ const changeUserRole = async (req, res, next) => {
       );
 
     const user = await User.findByPk(id);
-    const admin = await User.findByPk(adminId);
+    // const admin = await User.findByPk(adminId);
 
     if (!user) throw new NotFoundError("User not found.");
 
@@ -39,12 +39,12 @@ const changeUserRole = async (req, res, next) => {
     if (!updatedUser || updatedUser.role !== role)
       throw new Error("An error occurred. Cannot update user.");
 
-    await logAccountAction(
-      adminId,
-      id,
-      "ROLE_CHANGE",
-      `${user.firstname}'s role has been changed to ${role} by Admin ${admin.firstname}`
-    );
+    // await logAccountAction(
+    //   adminId,
+    //   id,
+    //   "ROLE_CHANGE",
+    //   `${user.firstname}'s role has been changed to ${role} by Admin ${admin.firstname}`
+    // );
 
     return res.status(StatusCodes.OK).json({
       success: true,

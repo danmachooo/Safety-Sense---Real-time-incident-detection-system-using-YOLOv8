@@ -23,9 +23,9 @@ router.patch("/update-fcm-token", authMiddleware, updateFcmToken);
 router.post("/logout", authMiddleware, logoutUser); //ok
 router.get("/login-history", authMiddleware, getLoginHistory); //ok
 router.post("/register", registerUser); //ok
-router.get("/verify-email", authMiddleware, verifyEmail); //ok
-router.post("/request-password-reset", authMiddleware, requestPasswordReset); //ok
-router.post("/reset-password", authMiddleware, resetPassword); //ok
-router.patch("/change-password", authMiddleware, changePassword); //ok
+router.get("/verify-email", verifyEmail); //ok
+router.post("/request-password-reset", requestPasswordReset); //ok
+router.post("/reset-password", resetPassword); //ok
+router.patch("/change-password", changePassword); //ok
 router.post("/refresh", refreshAccessToken);
 export default router;

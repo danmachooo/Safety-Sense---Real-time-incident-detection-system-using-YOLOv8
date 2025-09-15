@@ -12,10 +12,24 @@ const app = express();
 import apiRouter from "./routes/api.js";
 
 // Middlewares
+const allowedOrigins = [
+  process.env.FRONTEND_LOCAL, // your local frontend
+  process.env.FRONTEND_DOMAIN,
+];
+
 app.use(
   cors({
-    origin: process.env.FRONTEND_DOMAIN,
-    credentials: true,
+    origin: function (origin, callback) {
+      // allow requests with no origin (like Postman)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.indexOf(origin) === -1) {
+        const msg =
+          "The CORS policy for this site does not allow access from the specified Origin.";
+        return callback(new Error(msg), false);
+      }
+      return callback(null, true);
+    },
+    credentials: true, // if using cookies/auth headers
   })
 );
 app.use(cookieParser());

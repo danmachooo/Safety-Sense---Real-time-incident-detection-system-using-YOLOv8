@@ -1,33 +1,34 @@
 import { Sequelize } from "sequelize";
 import mysql from "mysql2/promise";
-
 import dotenv from "dotenv";
+
 dotenv.config();
-// Function to ensure database
+
+// Function to ensure database (for local only)
 async function createDatabaseIfNotExists() {
   try {
-    // Connect to MySQL without specifying a database
     const connection = await mysql.createConnection({
       host: process.env.DB_HOST,
       user: process.env.DB_USER,
       password: process.env.DB_PASSWORD,
     });
 
-    // Create the database if it doesn’t exist
     await connection.query(
       `CREATE DATABASE IF NOT EXISTS \`${process.env.DB_NAME}\`;`
     );
-    console.log(`Database '${process.env.DB_NAME}' ensured to exist.`);
+    console.log(`Database '${process.env.DB_NAME}' ensured to exist (local).`);
     await connection.end();
   } catch (error) {
     console.error("Error ensuring database exists:", error);
   }
 }
 
-// Call function before initializing Sequelize
-(async () => {
-  await createDatabaseIfNotExists();
-})();
+// Only run this in local development
+if (process.env.NODE_ENV !== "production") {
+  (async () => {
+    await createDatabaseIfNotExists();
+  })();
+}
 
 // Initialize Sequelize
 const sequelize = new Sequelize(

@@ -20,7 +20,7 @@
       <!-- Right Section: Login Form -->
       <div class="w-1/2 bg-gray-900 p-8 flex flex-col justify-center">
         <h2 class="text-4xl font-semibold text-white text-center">
-          Welcome back, Admin!
+          Welcome back
         </h2>
         <p class="text-gray-400 text-center text-sm mb-6">
           Sign in to your account

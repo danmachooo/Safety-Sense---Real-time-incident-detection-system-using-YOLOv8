@@ -1,0 +1,9 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "https://api.safetysense.team/api/$1"
+    },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

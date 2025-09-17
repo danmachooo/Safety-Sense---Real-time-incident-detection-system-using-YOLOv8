@@ -14,7 +14,7 @@ import apiRouter from "./routes/api.js";
 // Middlewares
 const allowedOrigins = [
   process.env.FRONTEND_DOMAIN_NOT_SECURE || "http://safetysense.team",
-  process.env.FRONTEND_DOMAIN_SECURE || "https://safetysense.team",
+  process.env.FRONTEND_DOMAIN_SECURE || "https://www.safetysense.team",
   process.env.FRONTEND_LOCAL || "http://localhost:5173",
 ];
 

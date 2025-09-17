@@ -8,17 +8,28 @@ import App from "./App.vue";
 import { VueQueryPlugin } from "@tanstack/vue-query";
 import { useAuthStore } from "./stores/authStore";
 
-const app = createApp(App);
-const pinia = createPinia();
-app.use(pinia); // Register Pinia globally
-app.use(VueQueryPlugin, {
-  enableDevTools: true, // Enable DevTools
-});
+async function bootstrap() {
+  const app = createApp(App);
 
-const authStore = useAuthStore();
-// Wait for auth state to initialize before mounting
-await authStore.initAuth();
-app.use(router);
-app.use(VueCookies);
+  // Pinia
+  const pinia = createPinia();
+  app.use(pinia);
 
-app.mount("#app");
+  // Vue Query
+  app.use(VueQueryPlugin, { enableDevTools: true });
+
+  // Cookies
+  app.use(VueCookies);
+
+  // Initialize auth store before router
+  const authStore = useAuthStore();
+  await authStore.initAuth();
+
+  // Router (after auth initialization)
+  app.use(router);
+
+  app.mount("#app");
+}
+
+// Call the async bootstrap function
+bootstrap();

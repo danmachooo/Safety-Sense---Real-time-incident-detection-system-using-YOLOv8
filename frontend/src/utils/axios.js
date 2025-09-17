@@ -4,7 +4,7 @@ import { useAuthStore } from "../stores/authStore";
 // Base axios instance
 const api = axios.create({
   baseURL:
-    import.meta.env.VITE_BACKEND_URL || "https://www.api.safetysense.team/api",
+    import.meta.env.VITE_BACKEND_URL || "https://api.safetysense.team/api",
   headers: {
     "Content-Type": "application/json",
   },
@@ -81,7 +81,7 @@ api.interceptors.response.use(
         const refreshApi = axios.create({
           baseURL:
             import.meta.env.VITE_BACKEND_URL ||
-            "https://www.api.safetysense.team/api",
+            "https://api.safetysense.team/api",
           withCredentials: true,
         });
 

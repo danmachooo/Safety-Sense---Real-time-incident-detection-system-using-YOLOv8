@@ -100,14 +100,15 @@
 </template>
 
 <script setup>
-import { ref, nextTick } from "vue";
-import { useRouter } from "vue-router";
+import { ref, nextTick, onMounted } from "vue";
+import { useRouter, useRoute } from "vue-router";
 import { useAuthStore } from "../stores/authStore";
 import { storeToRefs } from "pinia";
 import { CheckCircle, AlertCircle, Loader2 } from "lucide-vue-next";
 import logo from "../assets/final.png";
 
 const router = useRouter();
+const route = useRoute();
 const email = ref("");
 const password = ref("");
 const errorMessage = ref("");
@@ -116,6 +117,13 @@ const isLoading = ref(false);
 
 const authStore = useAuthStore();
 const { isAuthenticated } = storeToRefs(authStore);
+
+// Check if user is already authenticated on component mount
+onMounted(() => {
+  if (isAuthenticated.value) {
+    router.push("/admin/dashboard");
+  }
+});
 
 const clearMessages = () => {
   errorMessage.value = "";
@@ -137,16 +145,19 @@ const handleLogin = async () => {
     }
 
     // Attempt login
-    await authStore.login(email.value, password.value);
+    const success = await authStore.login(email.value, password.value);
     await nextTick();
 
-    if (isAuthenticated.value) {
+    if (success && isAuthenticated.value) {
       console.log("Login successful, redirecting...");
       showSuccessMessage.value = true;
 
+      // Get redirect path from query parameter or default to dashboard
+      const redirectPath = route.query.redirect || "/admin/dashboard";
+
       // Add a small delay to show success message before redirect
-      setTimeout(() => {
-        router.push("/admin/dashboard");
+      setTimeout(async () => {
+        await router.push(redirectPath);
       }, 1500);
     } else {
       errorMessage.value = "Invalid email or password. Please try again.";

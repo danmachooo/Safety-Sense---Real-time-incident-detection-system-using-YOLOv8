@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from "vue-router";
+import { useAuthStore } from "../stores/authStore";
 
 import AdminLayout from "../layouts/AdminLayout.vue";
 import LoginForm from "../components/LoginForm.vue";
@@ -25,11 +26,13 @@ const routes = [
   {
     path: "/admin",
     component: AdminLayout,
+    meta: { requiresAuth: true }, // Protect all admin routes
     children: [
       // Dashboard route - added as the default/index route
       { path: "", redirect: "dashboard" }, // Redirect /admin to /admin/dashboard
       { path: "dashboard", component: Dashboard },
       { path: "reports", component: Reports },
+
       // User Management routes
       { path: "users/view", component: ViewUsers },
       { path: "users/create", component: CreateUser },
@@ -53,13 +56,73 @@ const routes = [
   },
   {
     path: "/",
+    name: "login",
     component: LoginForm,
+    meta: { requiresGuest: true }, // Only allow non-authenticated users
+  },
+  {
+    path: "/login",
+    name: "loginAlias",
+    component: LoginForm,
+    meta: { requiresGuest: true },
+  },
+  // Catch-all route for 404 - redirect to login or dashboard based on auth status
+  {
+    path: "/:pathMatch(.*)*",
+    name: "NotFound",
+    redirect: (to) => {
+      const authStore = useAuthStore();
+      return authStore.isAuthenticated ? "/admin/dashboard" : "/";
+    },
   },
 ];
 
 const router = createRouter({
   history: createWebHistory(),
   routes,
+});
+
+// Global navigation guard
+router.beforeEach(async (to, from, next) => {
+  const authStore = useAuthStore();
+
+  // Check if route requires authentication
+  const requiresAuth = to.matched.some((record) => record.meta.requiresAuth);
+  const requiresGuest = to.matched.some((record) => record.meta.requiresGuest);
+
+  // If user is authenticated and trying to access guest-only routes (login)
+  if (requiresGuest && authStore.isAuthenticated) {
+    return next("/admin/dashboard");
+  }
+
+  // If route requires auth but user is not authenticated
+  if (requiresAuth && !authStore.isAuthenticated) {
+    // Try to refresh the token first
+    try {
+      if (authStore.accessToken) {
+        // If we have a token, try to refresh it
+        await authStore.refreshToken();
+
+        // If refresh was successful, allow navigation
+        if (authStore.isAuthenticated) {
+          return next();
+        }
+      }
+    } catch (error) {
+      console.error("Token refresh failed:", error);
+      // Clear any invalid auth state
+      authStore.clearAuthState();
+    }
+
+    // If still not authenticated, redirect to login
+    return next({
+      path: "/",
+      query: { redirect: to.fullPath }, // Save the intended destination
+    });
+  }
+
+  // Allow navigation
+  next();
 });
 
 export default router;

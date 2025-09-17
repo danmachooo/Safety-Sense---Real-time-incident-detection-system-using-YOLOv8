@@ -19,6 +19,9 @@ export const useAuthStore = defineStore("auth", () => {
     if (savedUser && savedToken) {
       accessToken.value = savedToken;
       user.value = JSON.parse(savedUser);
+
+      // Setup auto-refresh after loading auth state
+      setupTokenRefresh();
     }
   };
 
@@ -28,14 +31,14 @@ export const useAuthStore = defineStore("auth", () => {
       return;
     }
 
-    console.log("Updating access token");
     accessToken.value = newAccessToken;
     localStorage.setItem("accessToken", newAccessToken);
+
+    // Setup auto-refresh for the new token
+    setupTokenRefresh();
   };
 
   const clearAuthState = () => {
-    console.log("Clearing auth state");
-
     user.value = null;
     accessToken.value = null;
     isRefreshing.value = false;
@@ -44,7 +47,6 @@ export const useAuthStore = defineStore("auth", () => {
     localStorage.removeItem("accessToken");
     localStorage.removeItem("authUser");
 
-    // Only redirect if we're not already on the login page
     if (
       window.location.pathname !== "/" &&
       window.location.pathname !== "/login"
@@ -55,39 +57,75 @@ export const useAuthStore = defineStore("auth", () => {
     }
   };
 
+  // Check if token is expired or about to expire
+  const isTokenValid = () => {
+    if (!accessToken.value) return false;
+
+    try {
+      // Decode JWT token to check expiration
+      const payload = JSON.parse(atob(accessToken.value.split(".")[1]));
+      const currentTime = Math.floor(Date.now() / 1000);
+
+      // Check if token expires within the next 5 minutes
+      return payload.exp > currentTime + 300;
+    } catch (error) {
+      console.error("Token validation error:", error);
+      return false;
+    }
+  };
+
+  // Auto-refresh token before expiration
+  const setupTokenRefresh = () => {
+    if (!accessToken.value) return;
+
+    try {
+      const payload = JSON.parse(atob(accessToken.value.split(".")[1]));
+      const currentTime = Math.floor(Date.now() / 1000);
+      const expirationTime = payload.exp;
+
+      // Refresh 5 minutes before expiration
+      const refreshTime = (expirationTime - currentTime - 300) * 1000;
+
+      if (refreshTime > 0) {
+        setTimeout(async () => {
+          try {
+            await refreshToken();
+            setupTokenRefresh(); // Setup next refresh
+          } catch (error) {
+            console.error("Auto-refresh failed:", error);
+            clearAuthState();
+          }
+        }, refreshTime);
+      }
+    } catch (error) {
+      console.error("Token refresh setup error:", error);
+    }
+  };
+
   const refreshToken = async () => {
-    // If already refreshing, return the existing promise
     if (isRefreshing.value && refreshPromise.value) {
       return refreshPromise.value;
     }
 
-    console.log("Attempting to refresh token...");
     isRefreshing.value = true;
 
     refreshPromise.value = (async () => {
       try {
-        // Create a separate axios instance for refresh to avoid interceptor loops
-        const refreshApi = api.create({
-          baseURL: "http://localhost:3000/api",
-          withCredentials: true,
-        });
-
-        const response = await refreshApi.post("/auth/refresh");
+        // Use refresh endpoint (cookie-based)
+        const response = await api.post(
+          "/auth/refresh",
+          {},
+          { withCredentials: true }
+        );
 
         if (response.data.success && response.data.token) {
           const newToken = response.data.token;
           updateToken(newToken);
-          console.log("Token refreshed successfully");
           return newToken;
         } else {
           throw new Error("Invalid refresh response");
         }
       } catch (error) {
-        console.error(
-          "Token refresh failed:",
-          error.response?.data?.message || error.message
-        );
-        // If refresh fails, clear auth state and redirect to login
         clearAuthState();
         throw error;
       } finally {
@@ -102,11 +140,11 @@ export const useAuthStore = defineStore("auth", () => {
   const login = async (email, password) => {
     try {
       const loginSource = "web";
-      const response = await api.post("/auth/login", {
-        email,
-        password,
-        loginSource,
-      });
+      const response = await api.post(
+        "/auth/login",
+        { email, password, loginSource },
+        { withCredentials: true } // ensure refresh cookie is set
+      );
 
       const { data } = response;
       if (data.success && data.data) {
@@ -116,14 +154,12 @@ export const useAuthStore = defineStore("auth", () => {
         updateToken(access);
 
         localStorage.setItem("authUser", JSON.stringify(userData));
-        localStorage.setItem("accessToken", access);
 
         return true;
       }
 
       return false;
     } catch (err) {
-      console.error("Login failed:", err.response?.data?.message || err);
       clearAuthState();
       throw err;
     }
@@ -131,14 +167,7 @@ export const useAuthStore = defineStore("auth", () => {
 
   const logout = async () => {
     try {
-      // Try to logout on server, but don't wait too long
-      const logoutPromise = api.post("/auth/logout");
-      await Promise.race([
-        logoutPromise,
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("Logout timeout")), 5000)
-        ),
-      ]);
+      await api.post("/auth/logout", {}, { withCredentials: true });
     } catch (err) {
       console.error("Logout failed:", err.response?.data?.message || err);
     } finally {
@@ -146,7 +175,31 @@ export const useAuthStore = defineStore("auth", () => {
     }
   };
 
-  // Load auth state on store initialization
+  // Verify authentication status with server
+  const verifyAuth = async () => {
+    if (!accessToken.value) {
+      return false;
+    }
+
+    try {
+      // Make a request to a protected endpoint to verify token
+      const response = await api.get("/auth/verify");
+      return response.data.success;
+    } catch (error) {
+      console.error("Auth verification failed:", error);
+
+      // If verification fails, try to refresh token
+      try {
+        await refreshToken();
+        return true;
+      } catch (refreshError) {
+        clearAuthState();
+        return false;
+      }
+    }
+  };
+
+  // Initialize
   loadAuthState();
 
   return {
@@ -159,5 +212,8 @@ export const useAuthStore = defineStore("auth", () => {
     updateToken,
     clearAuthState,
     refreshToken,
+    isTokenValid,
+    verifyAuth,
+    setupTokenRefresh,
   };
 });

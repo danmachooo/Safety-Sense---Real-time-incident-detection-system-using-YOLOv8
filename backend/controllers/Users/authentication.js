@@ -51,8 +51,6 @@ const loginUser = async (req, res, next) => {
   try {
     const { email, password, fcmToken, loginSource } = req.body;
 
-    console.log("Request body: ", req.body.loginSource);
-
     if (!email || !password || !loginSource) {
       throw new BadRequestError(
         "Email, password, and login source are required"
@@ -60,56 +58,34 @@ const loginUser = async (req, res, next) => {
     }
 
     const user = await User.findOne({ where: { email } });
-
-    if (!user || user.isSoftDeleted()) {
-      throw new NotFoundError(
-        "That email and password doesn't exist in our records."
-      );
-    }
-
-    if (user.isBlocked) {
-      throw new ForbiddenError("User is blocked and cannot go any further");
-    }
-
-    if (!user.isVerified) {
-      throw new ForbiddenError(
-        "User is not yet verified and cannot go any further"
-      );
-    }
+    if (!user || user.isSoftDeleted())
+      throw new NotFoundError("Invalid credentials");
+    if (user.isBlocked) throw new ForbiddenError("User is blocked");
+    if (!user.isVerified) throw new ForbiddenError("User not verified");
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      throw new NotFoundError(
-        "That email and password doesn't exist in our records."
-      );
-    }
-
-    if (user.accessToken) {
-      throw new UnauthorizedError(
-        "Another session is already active. Please log out first."
-      );
-    }
+    if (!isMatch) throw new NotFoundError("Invalid credentials");
 
     // Role-source validation
     if (loginSource === "web" && user.role !== "admin") {
       throw new ForbiddenError("Only admins can log in from the web.");
     }
-
     if (loginSource === "app" && user.role !== "rescuer") {
       throw new ForbiddenError("Only rescuers can log in from the app.");
     }
 
     const accessToken = jwt.sign(
-      { userId: user.id, role: user.role, isBlocked: user.isBlocked },
+      { userId: user.id, role: user.role },
       JWT_SECRET,
       { expiresIn: JWT_EXPIRATION || "15m" }
     );
 
     const refreshToken = jwt.sign({ userId: user.id }, REFRESH_SECRET, {
-      expiresIn: REFRESH_EXPIRATION,
+      expiresIn: REFRESH_EXPIRATION || "7d",
     });
 
-    await user.update({ accessToken, refreshToken, fcmToken });
+    // overwrite refresh token (single session)
+    await user.update({ refreshToken, fcmToken });
     await logUserLogin(user.id);
 
     const sanitizedUser = {
@@ -133,14 +109,9 @@ const loginUser = async (req, res, next) => {
     return res.status(StatusCodes.OK).json({
       success: true,
       message: "You are logged in!",
-      data: {
-        access: accessToken,
-        refresh: refreshToken,
-        user: sanitizedUser,
-      },
+      data: { access: accessToken, user: sanitizedUser },
     });
   } catch (error) {
-    console.error("An error occurred during login:", error);
     next(error);
   }
 };
@@ -175,22 +146,18 @@ const logoutUser = async (req, res, next) => {
   try {
     const { fcmToken } = req.body;
     const user = await User.findByPk(req.user.id);
-    console.log(user.id);
-    if (!user) throw new NotFoundError("User not found!.");
-    await user.update({ accessToken: null });
+    if (!user) throw new NotFoundError("User not found");
+
     await user.update({ refreshToken: null });
+
     res.clearCookie("refreshToken", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "Strict",
     });
+
     if (fcmToken === user.fcmToken) {
-      console.log("FCM Token is removed from the user");
       await user.update({ fcmToken: null });
-    } else {
-      console.log(
-        "FCM Token from client is not equal or match to FCM Token in server"
-      );
     }
 
     await logUserLogout(user.id);
@@ -200,7 +167,6 @@ const logoutUser = async (req, res, next) => {
       message: "You are logged out!",
     });
   } catch (error) {
-    console.error("An error occured.");
     next(error);
   }
 };
@@ -326,43 +292,25 @@ const resetPassword = async (req, res, next) => {
 };
 
 const refreshAccessToken = async (req, res, next) => {
-  const refreshToken = req.cookies.refreshToken;
-  console.log("Cookies: ", refreshToken);
-  if (!refreshToken) {
-    throw new BadRequestError("No token provided...");
-  }
-
   try {
+    const { refreshToken } = req.cookies;
+    if (!refreshToken) throw new BadRequestError("No refresh token provided");
+
     const payload = jwt.verify(refreshToken, REFRESH_SECRET);
-    const user = await User.findOne({ where: { id: payload.userId } });
-
-    if (!user) throw new NotFoundError("User not found");
-
-    console.log("User token: ", user.refreshToken);
-    console.log("From cookie: ", refreshToken);
-
+    const user = await User.findByPk(payload.userId);
     if (!user || user.refreshToken !== refreshToken) {
-      throw new ForbiddenError("Invalid Token!!");
+      throw new ForbiddenError("Invalid refresh token");
     }
 
     const newAccessToken = jwt.sign(
-      {
-        userId: user.id,
-        role: user.role,
-        isBlocked: user.isBlocked,
-      },
+      { userId: user.id, role: user.role },
       JWT_SECRET,
-      { expiresIn: JWT_EXPIRATION }
+      { expiresIn: JWT_EXPIRATION || "15m" }
     );
-
-    user.accessToken = newAccessToken;
-    await user.save();
-
-    console.log("Token has been refreshed! \nNew Token: ", newAccessToken);
 
     return res.status(StatusCodes.OK).json({
       success: true,
-      message: "Token has been refreshed",
+      message: "Token refreshed",
       token: newAccessToken,
     });
   } catch (error) {

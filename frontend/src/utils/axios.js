@@ -1,8 +1,10 @@
 import axios from "axios";
 import { useAuthStore } from "../stores/authStore";
 
+// Base axios instance
 const api = axios.create({
-  baseURL: process.env.BACKEND_URL || "https://api.safetysense.team/api",
+  baseURL:
+    import.meta.env.VITE_BACKEND_URL || "https://www.api.safetysense.team/api",
   headers: {
     "Content-Type": "application/json",
   },
@@ -13,34 +15,28 @@ const api = axios.create({
 let isRefreshing = false;
 let failedQueue = [];
 
+// Process queued requests
 const processQueue = (error, token = null) => {
-  failedQueue.forEach(({ resolve, reject }) => {
+  failedQueue.forEach(({ resolve, reject, originalRequest }) => {
     if (error) {
       reject(error);
     } else {
-      resolve(token);
+      if (token) {
+        originalRequest.headers["Authorization"] = `Bearer ${token}`;
+      }
+      resolve(api(originalRequest));
     }
   });
-
   failedQueue = [];
 };
 
-// Request interceptor - attach token to requests
+// Request interceptor - attach access token
 api.interceptors.request.use(
   (config) => {
-    // Skip adding token for refresh endpoint to avoid loops
-    if (config.url === "/auth/refresh") {
-      return config;
-    }
+    if (config.url === "/auth/refresh") return config;
 
-    // Get token from store first, fallback to localStorage
     const authStore = useAuthStore();
-    let token = authStore.accessToken;
-
-    // Fallback to localStorage if store doesn't have token
-    if (!token) {
-      token = localStorage.getItem("accessToken");
-    }
+    let token = authStore.accessToken || localStorage.getItem("accessToken");
 
     if (token) {
       config.headers["Authorization"] = `Bearer ${token}`;
@@ -51,15 +47,14 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor - handle authentication errors and token refresh
+// Response interceptor - handle 401 and refresh token
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
 
-    // Check if this is a 401 error and we haven't already tried to refresh
     if (error.response?.status === 401 && !originalRequest._retry) {
-      // Skip refresh for login and refresh endpoints
+      // Skip login and refresh endpoints
       if (
         originalRequest.url === "/auth/login" ||
         originalRequest.url === "/auth/refresh"
@@ -72,73 +67,49 @@ api.interceptors.response.use(
       originalRequest._retry = true;
 
       if (isRefreshing) {
-        // If already refreshing, queue this request
+        // Queue the request while refresh is in progress
         return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject });
-        })
-          .then(() => {
-            // Retry original request with new token
-            const authStore = useAuthStore();
-            if (authStore.accessToken) {
-              originalRequest.headers[
-                "Authorization"
-              ] = `Bearer ${authStore.accessToken}`;
-            }
-            return api(originalRequest);
-          })
-          .catch((err) => {
-            return Promise.reject(err);
-          });
+          failedQueue.push({ resolve, reject, originalRequest });
+        });
       }
 
-      console.log("401 Unauthorized - attempting token refresh");
       isRefreshing = true;
+      const authStore = useAuthStore();
 
       try {
-        const authStore = useAuthStore();
-        const newToken = await authStore.refreshToken();
+        // Use a separate instance to avoid loops
+        const refreshApi = axios.create({
+          baseURL:
+            import.meta.env.VITE_BACKEND_URL ||
+            "https://www.api.safetysense.team/api",
+          withCredentials: true,
+        });
+
+        const response = await refreshApi.post("/auth/refresh");
+        const newToken = response.data.token;
+
+        if (!newToken) throw new Error("Failed to refresh token");
+
+        // Update store and localStorage
+        authStore.updateToken(newToken);
 
         // Process queued requests
         processQueue(null, newToken);
 
-        // Retry original request with new token
+        // Retry original request
         originalRequest.headers["Authorization"] = `Bearer ${newToken}`;
         return api(originalRequest);
       } catch (refreshError) {
-        // If refresh fails, process queue with error and clear auth
         processQueue(refreshError, null);
+        authStore.clearAuthState();
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;
       }
     }
 
-    // For all other errors, just reject
     return Promise.reject(error);
   }
 );
-
-// Add request/response logging for debugging (remove in production)
-// if (process.env.NODE_ENV === "development") {
-//   api.interceptors.request.use((request) => {
-//     console.log("API Request:", request.method?.toUpperCase(), request.url);
-//     return request;
-//   });
-
-//   api.interceptors.response.use(
-//     (response) => {
-//       console.log("API Response:", response.status, response.config.url);
-//       return response;
-//     },
-//     (error) => {
-//       console.log(
-//         "API Error:",
-//         error.response?.status || "Network Error",
-//         error.config?.url
-//       );
-//       return Promise.reject(error);
-//     }
-//   );
-// }
 
 export default api;

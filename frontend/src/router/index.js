@@ -86,42 +86,17 @@ const router = createRouter({
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore();
 
-  // Check if route requires authentication
-  const requiresAuth = to.matched.some((record) => record.meta.requiresAuth);
-  const requiresGuest = to.matched.some((record) => record.meta.requiresGuest);
+  const requiresAuth = to.matched.some((r) => r.meta.requiresAuth);
+  const requiresGuest = to.matched.some((r) => r.meta.requiresGuest);
 
-  // If user is authenticated and trying to access guest-only routes (login)
   if (requiresGuest && authStore.isAuthenticated) {
     return next("/admin/dashboard");
   }
 
-  // If route requires auth but user is not authenticated
   if (requiresAuth && !authStore.isAuthenticated) {
-    // Try to refresh the token first
-    try {
-      if (authStore.accessToken) {
-        // If we have a token, try to refresh it
-        await authStore.refreshToken();
-
-        // If refresh was successful, allow navigation
-        if (authStore.isAuthenticated) {
-          return next();
-        }
-      }
-    } catch (error) {
-      console.error("Token refresh failed:", error);
-      // Clear any invalid auth state
-      authStore.clearAuthState();
-    }
-
-    // If still not authenticated, redirect to login
-    return next({
-      path: "/",
-      query: { redirect: to.fullPath }, // Save the intended destination
-    });
+    return next({ path: "/", query: { redirect: to.fullPath } });
   }
 
-  // Allow navigation
   next();
 });
 

@@ -2,7 +2,7 @@ import axios from "axios";
 import { useAuthStore } from "../stores/authStore";
 
 const api = axios.create({
-  baseURL: "http://3.27.95.242:3000/api",
+  baseURL: process.env.BACKEND_URL || "https://api.safetysense.team/api",
   headers: {
     "Content-Type": "application/json",
   },

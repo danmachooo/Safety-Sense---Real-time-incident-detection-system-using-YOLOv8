@@ -87,7 +87,12 @@ router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore();
 
   if (authStore.isAuthLoading) {
-    await authStore.initAuth();
+    // 🚨 Only verify if NOT on guest routes
+    if (!to.meta.requiresGuest) {
+      await authStore.initAuth();
+    } else {
+      authStore.isAuthLoading = false; // stop loading on login page
+    }
   }
 
   const requiresAuth = to.matched.some((r) => r.meta.requiresAuth);

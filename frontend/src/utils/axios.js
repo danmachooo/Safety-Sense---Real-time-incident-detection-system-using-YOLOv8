@@ -9,10 +9,21 @@ const api = axios.create({
 });
 
 // Response interceptor for 401 → try refresh
+// utils/axios.ts
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+
+    // 🚨 Skip handling for auth endpoints themselves
+    if (
+      originalRequest.url?.includes("/auth/login") ||
+      originalRequest.url?.includes("/auth/logout") ||
+      originalRequest.url?.includes("/auth/verify") ||
+      originalRequest.url?.includes("/auth/refresh")
+    ) {
+      return Promise.reject(error);
+    }
 
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
@@ -21,18 +32,18 @@ api.interceptors.response.use(
         await api.post("/auth/refresh");
         return api(originalRequest);
       } catch (refreshError) {
-        // Handle different refresh error scenarios
-        if (refreshError.response?.status === 403) {
-          // Refresh token expired or invalid
-          console.log("Session expired, please login again");
-        }
-
         const { useAuthStore } = await import("../stores/authStore");
         const authStore = useAuthStore();
         authStore.clearAuthState();
 
-        // Redirect to login page
-        window.location.href = "/login";
+        // 🚨 Only redirect if not already on login
+        if (
+          window.location.pathname !== "/" &&
+          window.location.pathname !== "/login"
+        ) {
+          window.location.href = "/login";
+        }
+
         return Promise.reject(refreshError);
       }
     }
@@ -40,4 +51,5 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
 export default api;

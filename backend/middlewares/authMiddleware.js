@@ -1,19 +1,14 @@
-// const jwt = require("jsonwebtoken");
-// const { UnauthorizedError } = require("../utils/Error");
-
 import jwt from "jsonwebtoken";
 import { UnauthorizedError } from "../utils/Error.js";
 
 const authMiddleware = async (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  const { accessToken } = req.cookies;
+  if (!accessToken) {
     return next(new UnauthorizedError("No token provided."));
   }
 
-  const token = authHeader.split(" ")[1];
-
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(accessToken, process.env.JWT_SECRET);
 
     // Prevent blocked users from proceeding
     if (decoded.isBlocked) {

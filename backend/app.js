@@ -3,13 +3,13 @@ import cors from "cors";
 import errorHandlerMiddleware from "./middlewares/errorHandlerMiddleware.js";
 import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
+import apiRouter from "./routes/api.js";
 
 // Load environment variables
 dotenv.config();
 
 const app = express();
-
-import apiRouter from "./routes/api.js";
+app.use(helmet());
 
 // Middlewares
 const allowedOrigins = [

@@ -1,23 +1,3 @@
-// const {
-//   BadRequestError,
-//   NotFoundError,
-//   ForbiddenError,
-//   UnauthorizedError,
-// } = require("../../utils/Error");
-// const User = require("../../models/Users/User");
-// const jwt = require("jsonwebtoken");
-// const bcrypt = require("bcryptjs");
-// const crypto = require("crypto");
-// const {
-//   sendVerificationEmail,
-//   sendPasswordResetEmail,
-// } = require("../../services/emailService");
-// const { Op } = require("sequelize");
-// const { StatusCodes } = require("http-status-codes");
-// const { logUserLogin, logUserLogout } = require("./LoginHistory");
-
-// const { logUserCreation } = require("../Notification/Notification");
-
 import {
   BadRequestError,
   NotFoundError,
@@ -42,6 +22,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRATION = process.env.JWT_EXPIRES_IN;
 const REFRESH_SECRET = process.env.REFRESH_SECRET;
 const REFRESH_EXPIRATION = process.env.REFRESH_EXPIRES_IN;
+const DOMAIN = process.env.DOMAIN || ".safetysense.team";
 
 if (!JWT_SECRET) {
   throw new Error("JWT_SECRET is not defined in environment variables");
@@ -74,6 +55,7 @@ const loginUser = async (req, res, next) => {
       throw new ForbiddenError("Only rescuers can log in from the app.");
     }
 
+    // Tokens
     const accessToken = jwt.sign(
       { userId: user.id, role: user.role },
       JWT_SECRET,
@@ -84,7 +66,6 @@ const loginUser = async (req, res, next) => {
       expiresIn: REFRESH_EXPIRATION || "7d",
     });
 
-    // overwrite refresh token (single session)
     await user.update({ refreshToken, fcmToken });
     await logUserLogin(user.id);
 
@@ -99,17 +80,27 @@ const loginUser = async (req, res, next) => {
       isVerified: user.isVerified,
     };
 
+    // Set cookies
+    res.cookie("accessToken", accessToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "None",
+      domain: DOMAIN,
+      maxAge: 15 * 60 * 1000, // 15 min
+    });
+
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "Strict",
+      secure: true,
+      sameSite: "None",
+      domain: DOMAIN,
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
     return res.status(StatusCodes.OK).json({
       success: true,
       message: "You are logged in!",
-      data: { access: accessToken, user: sanitizedUser },
+      data: { user: sanitizedUser }, // 🚨 no accessToken here anymore
     });
   } catch (error) {
     next(error);
@@ -150,10 +141,18 @@ const logoutUser = async (req, res, next) => {
 
     await user.update({ refreshToken: null });
 
+    res.clearCookie("accessToken", {
+      httpOnly: true,
+      secure: true,
+      sameSite: "None",
+      domain: DOMAIN,
+    });
+
     res.clearCookie("refreshToken", {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "Strict",
+      secure: true,
+      sameSite: "None",
+      domain: DOMAIN,
     });
 
     if (fcmToken === user.fcmToken) {
@@ -298,6 +297,7 @@ const refreshAccessToken = async (req, res, next) => {
 
     const payload = jwt.verify(refreshToken, REFRESH_SECRET);
     const user = await User.findByPk(payload.userId);
+
     if (!user || user.refreshToken !== refreshToken) {
       throw new ForbiddenError("Invalid refresh token");
     }
@@ -308,10 +308,17 @@ const refreshAccessToken = async (req, res, next) => {
       { expiresIn: JWT_EXPIRATION || "15m" }
     );
 
+    res.cookie("accessToken", newAccessToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "None",
+      domain: DOMAIN,
+      maxAge: 15 * 60 * 1000,
+    });
+
     return res.status(StatusCodes.OK).json({
       success: true,
       message: "Token refreshed",
-      token: newAccessToken,
     });
   } catch (error) {
     next(error);
@@ -341,6 +348,31 @@ const changePassword = async (req, res, next) => {
   }
 };
 
+const verifyAuth = async (req, res, next) => {
+  try {
+    const user = await User.findByPk(req.user.id);
+
+    if (!user) throw new NotFoundError("User not found.");
+
+    const sanitizedUser = {
+      id: user.id,
+      firstname: user.firstname,
+      lastname: user.lastname,
+      email: user.email,
+      role: user.role,
+      isVerified: user.isVerified,
+      createdAt: user.createdAt,
+    };
+
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      sanitizedUser,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export {
   loginUser,
   logoutUser,
@@ -351,4 +383,5 @@ export {
   updateFcmToken,
   changePassword,
   refreshAccessToken,
+  verifyAuth,
 };

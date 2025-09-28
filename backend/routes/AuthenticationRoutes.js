@@ -8,6 +8,7 @@ import {
   changePassword,
   updateFcmToken,
   refreshAccessToken,
+  verifyAuth,
 } from "../controllers/Users/authentication.js";
 import { getLoginHistory } from "../controllers/Users/LoginHistory.js";
 
@@ -18,7 +19,7 @@ import loginRateLimiter from "../middlewares/loginRateLimiter.js";
 
 const router = express.Router();
 
-router.post("/login", loginUser); //ok
+router.post("/login", loginRateLimiter, loginUser); //ok
 router.patch("/update-fcm-token", authMiddleware, updateFcmToken);
 router.post("/logout", authMiddleware, logoutUser); //ok
 router.get("/login-history", authMiddleware, getLoginHistory); //ok
@@ -26,6 +27,12 @@ router.post("/register", registerUser); //ok
 router.get("/verify-email", verifyEmail); //ok
 router.post("/request-password-reset", requestPasswordReset); //ok
 router.post("/reset-password", resetPassword); //ok
-router.patch("/change-password", changePassword); //ok
+router.patch(
+  "/change-password",
+  authMiddleware,
+  adminMiddleware,
+  changePassword
+); //ok
 router.post("/refresh", refreshAccessToken);
+router.get("/verify", authMiddleware, verifyAuth);
 export default router;

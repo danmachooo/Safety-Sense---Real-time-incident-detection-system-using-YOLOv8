@@ -39,20 +39,18 @@ console.log("Allowed origins:", allowedOrigins);
 // CORS Configuration
 app.use(
   cors({
-    origin: function (origin, callback) {
-      console.log("Request origin:", origin);
-
-      // Allow requests with no origin (like Postman, mobile apps, etc.)
-      if (!origin) return callback(null, true);
-
-      if (allowedOrigins.includes(origin)) {
-        console.log("Origin allowed:", origin);
+    origin: (origin, callback) => {
+      const allowedOrigins = [
+        "http://safetysense.team",
+        "https://safetysense.team",
+        "http://www.safetysense.team",
+        "https://www.safetysense.team",
+        "http://localhost:5173",
+      ];
+      if (!origin || allowedOrigins.includes(origin)) {
         return callback(null, true);
-      } else {
-        console.log("Origin blocked:", origin);
-        const msg = `The CORS policy for this site does not allow access from origin: ${origin}`;
-        return callback(new Error(msg), false);
       }
+      return callback(new Error("Not allowed by CORS"));
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
@@ -64,9 +62,11 @@ app.use(
       "Origin",
     ],
     exposedHeaders: ["Set-Cookie"],
-    optionsSuccessStatus: 200,
   })
 );
+
+// Handle preflight explicitly
+app.options("*", cors());
 
 // Other middlewares
 app.use(cookieParser());

@@ -7,10 +7,12 @@ export const useAuthStore = defineStore("auth", () => {
   const user = ref(null);
 
   const isAuthenticated = computed(() => !!user.value);
+  const isAuthLoading = ref(true); // new state
 
   // -------------------------
   // Init auth state (check if still logged in)
   // -------------------------
+
   const initAuth = async () => {
     try {
       const { data } = await api.get("/auth/verify");
@@ -21,6 +23,8 @@ export const useAuthStore = defineStore("auth", () => {
       }
     } catch {
       clearAuthState();
+    } finally {
+      isAuthLoading.value = false;
     }
   };
 
@@ -63,10 +67,10 @@ export const useAuthStore = defineStore("auth", () => {
       return false;
     }
   };
-
   return {
     user,
     isAuthenticated,
+    isAuthLoading,
     initAuth,
     login,
     logout,

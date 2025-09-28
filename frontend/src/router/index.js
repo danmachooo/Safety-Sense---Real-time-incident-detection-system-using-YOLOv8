@@ -86,6 +86,10 @@ const router = createRouter({
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore();
 
+  if (authStore.isAuthLoading) {
+    await authStore.initAuth();
+  }
+
   const requiresAuth = to.matched.some((r) => r.meta.requiresAuth);
   const requiresGuest = to.matched.some((r) => r.meta.requiresGuest);
 

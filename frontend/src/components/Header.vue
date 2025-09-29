@@ -17,7 +17,7 @@ import {
 import { useRouter } from "vue-router";
 import api from "../utils/axios";
 
-import { useAuthStore } from "../../../stores/authStore";
+import { useAuthStore } from "../stores/authStore";
 import { storeToRefs } from "pinia";
 
 const authStore = useAuthStore();

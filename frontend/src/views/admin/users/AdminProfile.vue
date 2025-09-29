@@ -49,7 +49,7 @@ const editForm = ref({
 
 const fetchProfile = async () => {
   try {
-    console.log("Auth User: ", authUser);
+    console.log("Auth User: ", authUser.data);
     if (!authUser?.id) {
       console.error("Auth user is not provided");
       return;

@@ -23,11 +23,10 @@ import { storeToRefs } from "pinia";
 const authStore = useAuthStore();
 const { authUser } = storeToRefs(authStore);
 
-const loggedInUser = authUser.value;
-const authStore = useAuthStore();
 const router = useRouter();
 const showUserDropdown = ref(false);
 const showNotifications = ref(false);
+const loggedInUser = authUser.value;
 
 // Add logout confirmation state
 const showLogoutConfirmation = ref(false);

@@ -291,6 +291,7 @@ const getRoleColor = (role) => {
       };
 };
 
+
 // Get status color
 const getStatusColor = (isBlocked) => {
   return isBlocked

@@ -80,28 +80,40 @@ const loginUser = async (req, res, next) => {
       isVerified: user.isVerified,
     };
 
-    // Set cookies
-    res.cookie("accessToken", accessToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "None",
-      domain: DOMAIN,
-      maxAge: 15 * 60 * 1000, // 15 min
-    });
+    if (loginSource === "app") {
+      return res.status(200).json({
+        success: true,
+        message: "Logged in!",
+        data: {
+          access: accessToken,
+          refresh: refreshToken,
+          user: sanitizedUser,
+        },
+      });
+    } else {
+      // Set cookies
+      res.cookie("accessToken", accessToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "None",
+        domain: DOMAIN,
+        maxAge: 15 * 60 * 1000, // 15 min
+      });
 
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "None",
-      domain: DOMAIN,
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    });
+      res.cookie("refreshToken", refreshToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "None",
+        domain: DOMAIN,
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      });
 
-    return res.status(StatusCodes.OK).json({
-      success: true,
-      message: "You are logged in!",
-      data: { user: sanitizedUser }, // 🚨 no accessToken here anymore
-    });
+      return res.status(StatusCodes.OK).json({
+        success: true,
+        message: "You are logged in!",
+        data: { user: sanitizedUser }, // 🚨 no accessToken here anymore
+      });
+    }
   } catch (error) {
     next(error);
   }

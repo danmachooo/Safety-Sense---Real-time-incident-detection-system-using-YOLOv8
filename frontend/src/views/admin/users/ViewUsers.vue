@@ -26,6 +26,11 @@ import {
   Mail,
   Phone,
 } from "lucide-vue-next";
+import { useAuthStore } from "../../../stores/authStore";
+import { storeToRefs } from "pinia";
+
+const authStore = useAuthStore();
+const { authUser } = storeToRefs(authStore);
 
 const router = useRouter();
 
@@ -36,8 +41,8 @@ const currentPage = ref(1);
 const totalPages = ref(1);
 const totalUsers = ref(0);
 const itemsPerPage = ref(10);
-const loggedInUser = ref(JSON.parse(localStorage.getItem("authUser")) || {});
-const isCurrentUser = (email) => email === loggedInUser.value.email;
+const loggedInUser = authUser.value;
+const isCurrentUser = (email) => email === loggedInUser.email;
 
 const loadingRoles = ref(new Set());
 const loadingBlocks = ref(new Set());

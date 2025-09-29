@@ -79,10 +79,9 @@ const fetchProfile = async () => {
 const updateProfile = async () => {
   try {
     isLoading.value = true;
-    const authUser = JSON.parse(localStorage.getItem("authUser"));
 
     const response = await api.put(
-      `manage-user/update/${authUser.id}`,
+      `manage-user/update/${authUser.value.id}`,
       editForm.value
     );
 

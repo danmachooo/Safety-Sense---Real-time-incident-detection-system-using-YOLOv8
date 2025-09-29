@@ -4,9 +4,9 @@ import { ref, computed } from "vue";
 import api from "../utils/axios";
 
 export const useAuthStore = defineStore("auth", () => {
-  const user = ref(null);
+  const authUser = ref(null);
 
-  const isAuthenticated = computed(() => !!user.value);
+  const isAuthenticated = computed(() => !!authUser.value);
   const isAuthLoading = ref(true); // new state
 
   // -------------------------
@@ -17,7 +17,7 @@ export const useAuthStore = defineStore("auth", () => {
     try {
       const { data } = await api.get("/auth/verify");
       if (data.success) {
-        user.value = data.sanitizedUser;
+        authUser.value = data.sanitizedUser;
       } else {
         clearAuthState();
       }
@@ -40,7 +40,7 @@ export const useAuthStore = defineStore("auth", () => {
     });
 
     if (data.success && data.data) {
-      user.value = data.data.user;
+      authUser.value = data.data.user;
       return true;
     }
     return false;
@@ -55,7 +55,7 @@ export const useAuthStore = defineStore("auth", () => {
   };
 
   const clearAuthState = () => {
-    user.value = null;
+    authUser.value = null;
   };
 
   const refreshSession = async () => {
@@ -68,7 +68,7 @@ export const useAuthStore = defineStore("auth", () => {
     }
   };
   return {
-    user,
+    authUser,
     isAuthenticated,
     isAuthLoading,
     initAuth,

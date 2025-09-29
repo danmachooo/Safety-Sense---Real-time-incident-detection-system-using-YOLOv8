@@ -18,7 +18,7 @@ import { useAuthStore } from "../../../stores/authStore";
 import { storeToRefs } from "pinia";
 
 const authStore = useAuthStore();
-const { user } = storeToRefs(authStore);
+const { authUser } = storeToRefs(authStore);
 
 const user = ref({
   firstname: "",
@@ -49,9 +49,9 @@ const editForm = ref({
 
 const fetchProfile = async () => {
   try {
-    if (!user?.id) return;
+    if (!authUser?.id) return;
 
-    const response = await api.get(`manage-user/get/${user.id}`);
+    const response = await api.get(`manage-user/get/${authUser.id}`);
     user.value = {
       ...response.data.data,
       createdAt: new Date(response.data.data.createdAt).toLocaleDateString(

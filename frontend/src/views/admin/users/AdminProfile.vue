@@ -49,25 +49,23 @@ const editForm = ref({
 
 const fetchProfile = async () => {
   try {
-    console.log("Auth User: ", authUser.data);
-    if (!authUser?.id) {
+    console.log("Auth User: ", authUser.value);
+
+    if (!authUser.value?.id) {
       console.error("Auth user is not provided");
       return;
     }
-    const response = await api.get(`manage-user/get/${authUser.id}`);
+
+    const response = await api.get(`manage-user/get/${authUser.value.id}`);
+
     user.value = {
       ...response.data.data,
       createdAt: new Date(response.data.data.createdAt).toLocaleDateString(
         "en-US",
-        {
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-        }
+        { year: "numeric", month: "long", day: "numeric" }
       ),
     };
 
-    // Initialize edit form
     editForm.value = {
       firstname: user.value.firstname,
       lastname: user.value.lastname,

@@ -163,14 +163,14 @@ const formatTime = (timestamp) => {
 const fetchUser = async () => {
   try {
     user.value = {
-      firstname: loggedInUser.value.firstname || "",
-      lastname: loggedInUser.value.lastname || "",
-      contact: loggedInUser.value.contact || "",
-      email: loggedInUser.value.email || "",
-      role: loggedInUser.value.role || "",
-      createdAt: loggedInUser.value.createdAt || "",
-      isVerified: loggedInUser.value.isVerified ?? false,
-      isBlocked: loggedInUser.value.isBlocked ?? false,
+      firstname: loggedInUser.firstname || "",
+      lastname: loggedInUser.lastname || "",
+      contact: loggedInUser.contact || "",
+      email: loggedInUser.email || "",
+      role: loggedInUser.role || "",
+      createdAt: loggedInUser.createdAt || "",
+      isVerified: loggedInUser.isVerified ?? false,
+      isBlocked: loggedInUser.isBlocked ?? false,
     };
   } catch (error) {
     console.error("Error fetching user data:", error);

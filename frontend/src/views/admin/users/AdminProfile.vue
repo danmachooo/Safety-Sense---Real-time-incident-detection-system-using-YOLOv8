@@ -49,9 +49,12 @@ const editForm = ref({
 
 const fetchProfile = async () => {
   try {
-    if (!authUser?.id) return;
-
+    if (!authUser?.id) {
+      console.error("Auth user is not provided");
+      return;
+    }
     const response = await api.get(`manage-user/get/${authUser.id}`);
+    console.log("Auth User: ", authUser);
     user.value = {
       ...response.data.data,
       createdAt: new Date(response.data.data.createdAt).toLocaleDateString(

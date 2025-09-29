@@ -14,11 +14,16 @@ import {
   MoreHorizontal,
   AlertTriangle,
 } from "lucide-vue-next";
-import { useAuthStore } from "../stores/authStore";
 import { useRouter } from "vue-router";
 import api from "../utils/axios";
 
-const loggedInUser = ref(JSON.parse(localStorage.getItem("authUser")) || {});
+import { useAuthStore } from "../../../stores/authStore";
+import { storeToRefs } from "pinia";
+
+const authStore = useAuthStore();
+const { authUser } = storeToRefs(authStore);
+
+const loggedInUser = authUser.value;
 const authStore = useAuthStore();
 const router = useRouter();
 const showUserDropdown = ref(false);

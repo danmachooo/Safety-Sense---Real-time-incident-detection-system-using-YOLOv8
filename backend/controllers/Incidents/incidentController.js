@@ -11,7 +11,7 @@ import { sendTopicNotification } from "../../services/firebase/fcmService.js";
 import xlsx from "xlsx";
 import path from "path";
 import { fileURLToPath } from "url";
-import { getFileUrl } from "../../config/multer.js";
+import { getFileUrl, getFilePath } from "../../config/multer.js";
 import supabase from "../../config/supabase/supabase.js";
 
 // Get current directory for ES modules
@@ -168,35 +168,27 @@ const createCitizenReport = async (req, res, next) => {
       snapshotUrl, // Log the snapshotUrl from request body
     });
 
-    // Handle image upload - FIXED LOGIC
+    // Handle image upload - SIMPLIFIED
     let finalSnapshotUrl = null;
     const warnings = [];
 
-    // Priority 1: Check if snapshotUrl was provided in request body (THIS IS YOUR CASE)
+    // Priority 1: Check if snapshotUrl was provided in request body
     if (snapshotUrl && snapshotUrl.trim() !== "") {
-      // Image was uploaded separately and URL/path provided in request body
-      finalSnapshotUrl = snapshotUrl.startsWith("http")
-        ? snapshotUrl // only if you actually want to accept external URLs
-        : getFilePath(snapshotUrl);
-
-      console.log("Image URL from request body:", finalSnapshotUrl);
+      // Image was already uploaded, just use the path as-is
+      finalSnapshotUrl = snapshotUrl;
+      console.log("Image path from request body:", finalSnapshotUrl);
     }
     // Priority 2: Check if file was uploaded through multer middleware
     else if (req.file && req.file.supabasePath && !req.uploadError) {
-      // File uploaded successfully to Supabase via middleware
-      finalSnapshotUrl = getFilePath(req.file.supabasePath);
+      finalSnapshotUrl = req.file.supabasePath;
       console.log("Image uploaded via middleware:", finalSnapshotUrl);
     }
     // Priority 3: Handle upload errors
     else if (req.file && req.uploadError) {
       console.warn("Image upload failed:", req.uploadError.message);
       warnings.push(`Image upload failed: ${req.uploadError.message}`);
-      // Continue without image - set finalSnapshotUrl to null
-    }
-    // Priority 4: No image provided
-    else {
+    } else {
       console.log("No image file provided - proceeding without image");
-      // finalSnapshotUrl remains null
     }
 
     // Validate required fields

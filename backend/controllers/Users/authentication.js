@@ -17,6 +17,7 @@ import { Op } from "sequelize";
 import { StatusCodes } from "http-status-codes";
 import { logUserLogin, logUserLogout } from "./LoginHistory.js";
 import { logUserCreation } from "../Notification/Notification.js";
+import { STATUS_CODES } from "http";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRATION = process.env.JWT_EXPIRES_IN;
@@ -81,9 +82,9 @@ const loginUser = async (req, res, next) => {
     };
 
     if (loginSource === "app") {
-      return res.status(200).json({
+      return res.status(StatusCodes.OK).json({
         success: true,
-        message: "Logged in!",
+        message: "You are logged in (Mobile App)!",
         data: {
           access: accessToken,
           refresh: refreshToken,
@@ -110,7 +111,7 @@ const loginUser = async (req, res, next) => {
 
       return res.status(StatusCodes.OK).json({
         success: true,
-        message: "You are logged in!",
+        message: "You are logged in (Web App)!",
         data: { user: sanitizedUser }, // 🚨 no accessToken here anymore
       });
     }

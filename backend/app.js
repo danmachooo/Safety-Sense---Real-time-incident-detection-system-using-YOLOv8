@@ -10,6 +10,8 @@ import apiRouter from "./routes/api.js";
 dotenv.config();
 
 const app = express();
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // Configure Helmet to work with CORS
 app.use(

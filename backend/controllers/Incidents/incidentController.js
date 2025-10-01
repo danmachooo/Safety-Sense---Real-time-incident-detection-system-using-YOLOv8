@@ -12,6 +12,7 @@ import xlsx from "xlsx";
 import path from "path";
 import { fileURLToPath } from "url";
 import { getFileUrl } from "../../config/multer.js";
+import supabase from "../../config/supabase/supabase.js";
 
 // Get current directory for ES modules
 const __filename = fileURLToPath(import.meta.url);

@@ -305,7 +305,9 @@ const resetPassword = async (req, res, next) => {
 
 const refreshAccessToken = async (req, res, next) => {
   try {
-    const { refreshToken } = req.cookies;
+    // Support both cookies (web) and body (mobile)
+    const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
+
     if (!refreshToken) throw new BadRequestError("No refresh token provided");
 
     const payload = jwt.verify(refreshToken, REFRESH_SECRET);
@@ -321,17 +323,30 @@ const refreshAccessToken = async (req, res, next) => {
       { expiresIn: JWT_EXPIRATION || "15m" }
     );
 
-    res.cookie("accessToken", newAccessToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "None",
-      domain: DOMAIN,
-      maxAge: 15 * 60 * 1000,
-    });
+    // For web: set cookie
+    if (req.cookies.refreshToken) {
+      res.cookie("accessToken", newAccessToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "None",
+        domain: DOMAIN,
+        maxAge: 15 * 60 * 1000,
+      });
 
+      return res.status(StatusCodes.OK).json({
+        success: true,
+        message: "Token refreshed",
+      });
+    }
+
+    // For mobile: return tokens in response body
     return res.status(StatusCodes.OK).json({
       success: true,
       message: "Token refreshed",
+      data: {
+        access: newAccessToken,
+        refresh: refreshToken, // Return same refresh token or rotate it
+      },
     });
   } catch (error) {
     next(error);

@@ -43,7 +43,7 @@ const createCategory = async (req, res, next) => {
 };
 
 const getAllCategories = async (req, res, next) => {
-  const { type, search, page = 1, limit = 10 } = req.query;
+  const { type, search, page = 1, limit } = req.query;
   const offset = (page - 1) * limit;
 
   const whereClause = {};

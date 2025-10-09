@@ -43,23 +43,30 @@ const createCategory = async (req, res, next) => {
 };
 
 const getAllCategories = async (req, res, next) => {
-  const { type, search, page = 1, limit } = req.query;
-  const offset = (page - 1) * limit;
+  const { type, search, page, limit } = req.query;
 
+  // Convert limit/page to numbers safely
+  const parsedLimit = limit ? parseInt(limit, 10) : null;
+  const parsedPage = page ? parseInt(page, 10) : 1;
+  const offset = parsedLimit ? (parsedPage - 1) * parsedLimit : null;
+
+  // Build query filters
   const whereClause = {};
   if (type) whereClause.type = type;
-  if (search) {
-    whereClause.name = { [Op.like]: `%${search}%` };
-  }
+  if (search) whereClause.name = { [Op.like]: `%${search}%` };
+
   const cacheKey = `category:all:${JSON.stringify(req.query)}`;
+
   try {
+    // Try to serve from Redis
     const cached = await getCached(cacheKey);
     if (cached) {
       console.log("Serving categories from redis...");
       return res.status(StatusCodes.OK).json(cached);
     }
 
-    const { count, rows: categories } = await Category.findAndCountAll({
+    // Build base query
+    const queryOptions = {
       where: whereClause,
       include: [
         {
@@ -68,25 +75,41 @@ const getAllCategories = async (req, res, next) => {
           attributes: ["id", "name", "quantity_in_stock"],
         },
       ],
-      limit: parseInt(limit),
-      offset: parseInt(offset),
       order: [["name", "ASC"]],
-    });
+    };
 
+    // If limit is provided, apply pagination
+    if (parsedLimit) {
+      queryOptions.limit = parsedLimit;
+      queryOptions.offset = offset;
+    }
+
+    const { count, rows: categories } = await Category.findAndCountAll(
+      queryOptions
+    );
+
+    // Build response dynamically
     const response = {
       success: true,
       message: "Fetching Categories",
       data: categories,
-      meta: {
-        total: count,
-        pages: Math.ceil(count / limit),
-        currentPage: parseInt(page),
-      },
+      meta: parsedLimit
+        ? {
+            total: count,
+            pages: Math.ceil(count / parsedLimit),
+            currentPage: parsedPage,
+          }
+        : {
+            total: count,
+          },
     };
+
+    // Cache result (60 seconds)
     await setCache(cacheKey, response, 60);
+
     return res.status(StatusCodes.OK).json(response);
   } catch (error) {
-    console.error("Feth Categories error: ", error.message);
+    console.error("Fetch Categories error:", error.message);
     next(error);
   }
 };

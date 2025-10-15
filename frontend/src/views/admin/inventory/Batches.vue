@@ -102,7 +102,7 @@ const openBatchModal = (batch = null) => {
         quantity: 0,
         supplier: "",
         funding_source: "",
-        cost: 0,
+        unit_price: 0,
         notes: "",
         is_active: true,
         batch_number: "", // Ensure it's reset for new batches
@@ -180,17 +180,13 @@ const getStatusText = (batch) => {
   return "Unknown";
 };
 
-const totalValue = computed(() => {
-  const val = batches.value.reduce((sum, batch) => {
-    const cost = parseFloat(batch.cost) || 0;
-    const quantity = parseFloat(batch.quantity) || 0;
-    const batchValue = cost * quantity;
-    console.log(`Cost: ${cost}, Quantity: ${quantity}, Value: ${batchValue}`);
-    return sum + batchValue;
-  }, 0);
-  console.log("Total Inventory Value:", val);
-  return val.toFixed(2);
-});
+const totalValue = computed(() =>
+  batches.value.reduce(
+    (sum, { unit_price, quantity }) =>
+      sum + (parseFloat(unit_price) || 0) * (parseFloat(quantity) || 0),
+    0
+  )
+);
 
 // Visible pages for pagination
 const visiblePages = computed(() => {
@@ -233,6 +229,15 @@ const emptyStateDescription = computed(() => {
   }
   return "Get started by creating your first inventory batch to track stock levels.";
 });
+
+const formatCurrency = (value) => {
+  const number = parseFloat(value) || 0;
+  return number.toLocaleString("en-PH", {
+    style: "currency",
+    currency: "PHP",
+    minimumFractionDigits: 2,
+  });
+};
 </script>
 
 <template>
@@ -469,7 +474,17 @@ const emptyStateDescription = computed(() => {
                 <th
                   class="px-6 py-4 text-left text-sm font-semibold text-gray-700"
                 >
+                  Unit Price
+                </th>
+                <th
+                  class="px-6 py-4 text-left text-sm font-semibold text-gray-700"
+                >
                   Quantity
+                </th>
+                <th
+                  class="px-6 py-4 text-left text-sm font-semibold text-gray-700"
+                >
+                  Amount
                 </th>
                 <th
                   class="px-6 py-4 text-left text-sm font-semibold text-gray-700"
@@ -483,12 +498,14 @@ const emptyStateDescription = computed(() => {
                 </th>
               </tr>
             </thead>
+
             <tbody class="divide-y divide-gray-100">
               <tr
                 v-for="batch in batches"
                 :key="batch.id"
                 class="hover:bg-blue-50/50 transition-colors duration-200"
               >
+                <!-- 🧱 ITEM -->
                 <td class="px-6 py-4">
                   <div class="flex items-center">
                     <div
@@ -498,7 +515,7 @@ const emptyStateDescription = computed(() => {
                     </div>
                     <div>
                       <div class="font-semibold text-gray-900">
-                        {{ batch.item.name || "Unknown Item" }}
+                        {{ batch.item?.name || "Unknown Item" }}
                       </div>
                       <div class="text-sm text-gray-500">
                         {{ batch.supplier || "No supplier" }}
@@ -506,16 +523,30 @@ const emptyStateDescription = computed(() => {
                     </div>
                   </div>
                 </td>
+
+                <!-- 💰 UNIT PRICE -->
+                <td class="px-6 py-4 text-gray-700">
+                  {{ formatCurrency(batch.unit_price) }}
+                </td>
+
+                <!-- 📦 QUANTITY -->
                 <td class="px-6 py-4">
                   <div class="flex items-center">
-                    <span class="font-semibold text-gray-900">{{
-                      batch.quantity
-                    }}</span>
-                    <span class="text-sm text-gray-500 ml-1">{{
-                      batch.item?.unit_of_measure || "units"
-                    }}</span>
+                    <span class="font-semibold text-gray-900">
+                      {{ batch.quantity }}
+                    </span>
+                    <span class="text-sm text-gray-500 ml-1">
+                      {{ batch.item?.unit_of_measure || "units" }}
+                    </span>
                   </div>
                 </td>
+
+                <!-- 🧾 AMOUNT -->
+                <td class="px-6 py-4 text-gray-700 font-medium">
+                  {{ formatCurrency(batch.unit_price * batch.quantity) }}
+                </td>
+
+                <!-- ⚙️ STATUS -->
                 <td class="px-6 py-4">
                   <span
                     :class="[
@@ -529,6 +560,7 @@ const emptyStateDescription = computed(() => {
                   </span>
                 </td>
 
+                <!-- 🧭 ACTIONS -->
                 <td class="px-6 py-4">
                   <div class="flex items-center justify-end space-x-2">
                     <button

@@ -138,7 +138,7 @@ const createBatch = async (req, res, next) => {
       quantity,
       supplier,
       funding_source,
-      cost,
+      unit_price,
       notes,
     } = req.body;
 
@@ -173,6 +173,7 @@ const createBatch = async (req, res, next) => {
         needsSerialization ? "✅ YES" : "❌ NO"
       }`
     );
+    const amount = quantity * unit_price;
 
     // Create batch record
     const newBatch = await Batch.create(
@@ -184,7 +185,8 @@ const createBatch = async (req, res, next) => {
         received_by,
         received_date: new Date(),
         funding_source,
-        cost,
+        unit_price,
+        amount,
         notes,
         is_active: true,
       },
@@ -213,11 +215,11 @@ const createBatch = async (req, res, next) => {
 
       await SerializedItem.bulkCreate(serializedItems, { transaction: t });
       console.log(
-        `✅ Generated ${quantity} serial numbers for ${item.name} (${item.category.type})`
+        `Generated ${quantity} serial numbers for ${item.name} (${item.category.type})`
       );
     } else {
       console.log(
-        `ℹ️  No serialization needed for ${item.name} (${item.category.type}) - consumable/non-trackable item`
+        `No serialization needed for ${item.name} (${item.category.type}) - consumable/non-trackable item`
       );
     }
 
@@ -385,7 +387,6 @@ const getAllBatches = async (req, res, next) => {
   const {
     item_id,
     supplier,
-    expiring_soon,
     is_active,
     search,
     page = 1,
@@ -509,17 +510,19 @@ const updateBatch = async (req, res, next) => {
     const batch = await Batch.findByPk(batchId);
     if (!batch) throw new NotFoundError("Batch not found");
 
-    const { quantity, supplier, funding_source, cost, notes, is_active } =
+    const { quantity, supplier, funding_source, unit_price, notes, is_active } =
       req.body;
 
     // Calculate quantity difference if quantity is being updated
     const quantityDiff = quantity ? quantity - batch.quantity : 0;
+    const newAmount = unit_price * quantity;
 
     await batch.update({
       quantity,
       supplier,
       funding_source,
-      cost,
+      unit_price,
+      newAmount,
       notes,
       is_active,
     });

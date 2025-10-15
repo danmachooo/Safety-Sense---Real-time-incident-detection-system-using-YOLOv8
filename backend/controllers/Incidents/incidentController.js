@@ -1564,13 +1564,12 @@ const getUsersByIncident = async (req, res, next) => {
 
 const generateEmptyTemplate = async (req, res, next) => {
   try {
-    // Empty template with just headers
     const headers = [
       "name",
       "description",
       "category",
       "type",
-      "quantity",
+      "quantity_in_stock",
       "unit_price",
       "min_stock_level",
       "reorder_level",
@@ -1585,22 +1584,18 @@ const generateEmptyTemplate = async (req, res, next) => {
       "notes",
     ];
 
-    // Create workbook with empty template
     const workbook = xlsx.utils.book_new();
     const worksheet = xlsx.utils.aoa_to_sheet([headers]);
 
-    // Set column widths
     worksheet["!cols"] = headers.map(() => ({ wch: 20 }));
 
     xlsx.utils.book_append_sheet(workbook, worksheet, "Inventory Template");
 
-    // Generate buffer
     const buffer = xlsx.write(workbook, {
       type: "buffer",
       bookType: "xlsx",
     });
 
-    // Set response headers
     res.setHeader(
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -1610,9 +1605,8 @@ const generateEmptyTemplate = async (req, res, next) => {
       'attachment; filename="inventory_template_empty.xlsx"'
     );
 
-    return res.status(StatusCodes.OK).send(buffer);
+    res.status(StatusCodes.OK).send(buffer);
   } catch (error) {
-    console.error("Error generating empty template:", error);
     next(error);
   }
 };

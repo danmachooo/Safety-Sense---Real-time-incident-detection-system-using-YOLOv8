@@ -45,7 +45,11 @@ const Batch = sequelize.define(
       type: DataTypes.STRING(255),
       allowNull: true,
     },
-    cost: {
+    unit_price: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+    },
+    amount: {
       type: DataTypes.DECIMAL(10, 2),
       allowNull: true,
     },

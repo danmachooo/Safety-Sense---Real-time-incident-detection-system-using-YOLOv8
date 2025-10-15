@@ -79,7 +79,6 @@ const newItem = ref({
   category_id: "",
   min_stock_level: 0,
   unit_of_measure: "",
-  condition: "",
   location: "",
   is_deployable: false,
   notes: "",
@@ -101,12 +100,11 @@ const deploymentDetails = ref({
 
 // Table configuration
 const columns = [
-  { key: "name", label: "Item Name", sortable: true, width: "20%" },
-  { key: "category.name", label: "Category", sortable: true, width: "15%" },
-  { key: "quantity_in_stock", label: "Stock", sortable: true, width: "10%" },
-  { key: "condition", label: "Condition", sortable: true, width: "12%" },
-  { key: "location", label: "Location", sortable: true, width: "15%" },
-  { key: "actions", label: "Actions", sortable: false, width: "18%" },
+  { key: "name", label: "Item Name", sortable: true, width: "25%" },
+  { key: "category.name", label: "Category", sortable: true, width: "20%" },
+  { key: "quantity_in_stock", label: "Stock", sortable: true, width: "15%" },
+  { key: "location", label: "Location", sortable: true, width: "20%" },
+  { key: "actions", label: "Actions", sortable: false, width: "5%" },
 ];
 
 // Fetch initial data
@@ -375,7 +373,6 @@ const openEditModal = (item = null) => {
         category_id: "",
         min_stock_level: 0,
         unit_of_measure: "",
-        condition: "",
         location: "",
         is_deployable: false,
         notes: "",
@@ -843,11 +840,12 @@ watch(
                   v-for="col in columns"
                   :key="col.key"
                   :class="[
-                    'px-6 py-4 text-left text-sm font-semibold text-gray-700',
+                    'px-6 py-4 text-left text-sm font-semibold text-gray-700 whitespace-nowrap',
                     col.sortable
                       ? 'cursor-pointer hover:bg-gray-200/50 transition-colors duration-200'
                       : '',
                   ]"
+                  :style="{ width: col.width }"
                   @click="col.sortable ? handleSort(col) : null"
                 >
                   <div class="flex items-center space-x-2">
@@ -866,6 +864,7 @@ watch(
                 </th>
               </tr>
             </thead>
+
             <tbody class="divide-y divide-gray-100">
               <tr
                 v-for="item in items"
@@ -928,21 +927,7 @@ watch(
                     }}</span>
                   </div>
                 </td>
-                <td class="px-6 py-4">
-                  <span
-                    class="capitalize px-3 py-1 rounded-full text-sm font-medium border"
-                    :class="{
-                      'bg-emerald-50 text-emerald-700 border-emerald-200':
-                        item.condition === 'NEW',
-                      'bg-amber-50 text-amber-700 border-amber-200':
-                        item.condition === 'USED',
-                      'bg-red-50 text-red-700 border-red-200':
-                        item.condition === 'DAMAGED',
-                    }"
-                  >
-                    {{ item.condition.toLowerCase() }}
-                  </span>
-                </td>
+
                 <td class="px-6 py-4 text-gray-600 font-medium">
                   {{ item.location }}
                 </td>
@@ -1434,22 +1419,6 @@ watch(
                 class="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-6 border border-amber-100"
               >
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div>
-                    <label
-                      class="block text-sm font-semibold text-gray-700 mb-3"
-                    >
-                      Condition *
-                    </label>
-                    <select
-                      v-model="newItem.condition"
-                      required
-                      class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-200"
-                    >
-                      <option value="NEW">New</option>
-                      <option value="USED">Used</option>
-                      <option value="DAMAGED">Damaged</option>
-                    </select>
-                  </div>
                   <div>
                     <label
                       class="block text-sm font-semibold text-gray-700 mb-3"

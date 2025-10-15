@@ -564,11 +564,12 @@ const visiblePages = computed(() => {
                     <div
                       class="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center mr-2"
                     >
-                      <span class="text-sm font-semibold text-gray-700">{{
-                        category.inventoryItems
-                          ? category.inventoryItems.length
-                          : 0
-                      }}</span>
+                      <span class="text-sm font-semibold text-gray-700"
+                        >{{ category.items ? category.items.length : 0
+                        }}{{
+                          console.log("Length: ", category.items.length)
+                        }}</span
+                      >
                     </div>
                     <span class="text-sm text-gray-600">items</span>
                   </div>

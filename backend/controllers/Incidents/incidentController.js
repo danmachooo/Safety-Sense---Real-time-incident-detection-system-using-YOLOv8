@@ -1579,7 +1579,6 @@ const generateEmptyTemplate = async (req, res, next) => {
       "is_deployable",
       "supplier",
       "funding_source",
-      "cost",
       "batch_notes",
       "notes",
     ];

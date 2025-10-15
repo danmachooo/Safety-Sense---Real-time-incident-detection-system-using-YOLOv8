@@ -484,18 +484,7 @@ const emptyStateDescription = computed(() => {
                     }}</span>
                   </div>
                 </td>
-                <td class="px-6 py-4">
-                  <span
-                    :class="[
-                      'px-3 py-1 text-sm font-medium rounded-full border',
-                      statusBadge(batch).bg,
-                      statusBadge(batch).text,
-                      statusBadge(batch).border,
-                    ]"
-                  >
-                    {{ getStatusText(batch) }}
-                  </span>
-                </td>
+
                 <td class="px-6 py-4">
                   <div class="flex items-center justify-end space-x-2">
                     <button

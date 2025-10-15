@@ -6,7 +6,7 @@ import {
   invalidateBatchCache,
   invalidateInventoryCache,
   invalidateItemsCache,
-} from "../../../utils/cache.js";
+} from "../utils/cacheUtil.js";
 
 const { InventoryItem, Category, Batch, Notification, SerializedItem } = models;
 

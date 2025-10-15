@@ -929,7 +929,6 @@ const getDeploymentById = async (req, res, next) => {
                     "id",
                     "batch_number",
                     "supplier",
-                    "expiry_date",
                     "received_date",
                   ],
                 },

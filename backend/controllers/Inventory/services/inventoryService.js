@@ -286,7 +286,6 @@ export const processExcelFile = async (fileBuffer, userId) => {
       }
 
       // 🔧 FIXED: Convert Excel date properly
-      const expiryDate = convertExcelDate(row.expiry_date);
 
       // ✅ Create batch if quantity exists
       if (row.quantity !== undefined && row.quantity > 0) {
@@ -307,7 +306,6 @@ export const processExcelFile = async (fileBuffer, userId) => {
             quantity: row.quantity,
             batch_number: batchNumber,
             supplier: row.supplier || "Unknown",
-            expiry_date: expiryDate,
             received_by: userId,
             received_date: new Date(),
             funding_source: row.funding_source || null,
@@ -354,26 +352,6 @@ export const processExcelFile = async (fileBuffer, userId) => {
           transaction: t,
         });
 
-        // 🔔 Expiry notification
-        if (batch.expiry_date) {
-          const daysUntilExpiry = Math.ceil(
-            (batch.expiry_date - new Date()) / (1000 * 60 * 60 * 24)
-          );
-          if (daysUntilExpiry <= 30) {
-            await Notification.create(
-              {
-                notification_type: "EXPIRING_SOON",
-                inventory_item_id: item.id,
-                user_id: userId,
-                title: "Batch Expiring Soon",
-                message: `Batch ${batch.batch_number} of ${item.name} will expire in ${daysUntilExpiry} days`,
-                priority: daysUntilExpiry <= 7 ? "HIGH" : "MEDIUM",
-              },
-              { transaction: t }
-            );
-          }
-        }
-
         // Determine serialization reason for debugging
         let serializationReason = "not_trackable";
         if (needsSerialization) {
@@ -398,9 +376,7 @@ export const processExcelFile = async (fileBuffer, userId) => {
           category: category.name,
           category_type: category.type,
           current_stock: item.quantity_in_stock + row.quantity,
-          expiry_date: expiryDate
-            ? expiryDate.toISOString().split("T")[0]
-            : null,
+
           serialized: needsSerialization,
           serial_count: needsSerialization ? row.quantity : 0,
           batch_number: batchNumber,
@@ -457,7 +433,6 @@ export const processExcelFile = async (fileBuffer, userId) => {
           category: row.category || "Unknown",
           unit_price: row.unit_price,
           quantity: row.quantity,
-          expiry_date: row.expiry_date,
         },
         error: err.message,
       });

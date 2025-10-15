@@ -136,7 +136,6 @@ const createBatch = async (req, res, next) => {
     const {
       inventory_item_id,
       quantity,
-      expiry_date,
       supplier,
       funding_source,
       cost,
@@ -181,7 +180,6 @@ const createBatch = async (req, res, next) => {
         inventory_item_id,
         batch_number,
         quantity,
-        expiry_date,
         supplier,
         received_by,
         received_date: new Date(),
@@ -224,29 +222,6 @@ const createBatch = async (req, res, next) => {
     }
 
     await item.increment("quantity_in_stock", { by: quantity, transaction: t });
-
-    // Expiry notification
-    if (expiry_date) {
-      const expiryDate = new Date(expiry_date);
-      const today = new Date();
-      const daysUntilExpiry = Math.ceil(
-        (expiryDate - today) / (1000 * 60 * 60 * 24)
-      );
-
-      if (daysUntilExpiry <= 30) {
-        await InventoryNotification.create(
-          {
-            notification_type: "EXPIRING_SOON",
-            inventory_item_id,
-            user_id: received_by,
-            title: "Batch Expiring Soon",
-            message: `Batch ${batch_number} of ${item.name} will expire in ${daysUntilExpiry} days`,
-            priority: daysUntilExpiry <= 7 ? "HIGH" : "MEDIUM",
-          },
-          { transaction: t }
-        );
-      }
-    }
 
     // Determine serialization reason for response
     let serializationReason = "not_trackable";
@@ -423,17 +398,6 @@ const getAllBatches = async (req, res, next) => {
   if (item_id) whereClause.inventory_item_id = item_id;
   if (supplier) whereClause.supplier = { [Op.like]: `%${supplier}%` };
   if (is_active !== undefined) whereClause.is_active = is_active === "true";
-  if (expiring_soon === "true") {
-    const thirtyDaysFromNow = new Date();
-    thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-    whereClause.expiry_date = {
-      [Op.and]: [
-        { [Op.not]: null },
-        { [Op.lte]: thirtyDaysFromNow },
-        { [Op.gt]: new Date() },
-      ],
-    };
-  }
   if (search) {
     whereClause.batch_number = { [Op.like]: `%${search}%` };
   }
@@ -545,22 +509,14 @@ const updateBatch = async (req, res, next) => {
     const batch = await Batch.findByPk(batchId);
     if (!batch) throw new NotFoundError("Batch not found");
 
-    const {
-      quantity,
-      expiry_date,
-      supplier,
-      funding_source,
-      cost,
-      notes,
-      is_active,
-    } = req.body;
+    const { quantity, supplier, funding_source, cost, notes, is_active } =
+      req.body;
 
     // Calculate quantity difference if quantity is being updated
     const quantityDiff = quantity ? quantity - batch.quantity : 0;
 
     await batch.update({
       quantity,
-      expiry_date,
       supplier,
       funding_source,
       cost,
@@ -572,25 +528,6 @@ const updateBatch = async (req, res, next) => {
     if (quantityDiff !== 0) {
       const item = await InventoryItem.findByPk(batch.inventory_item_id);
       await item.increment("quantity_in_stock", { by: quantityDiff });
-    }
-
-    // Check for expiry notification if expiry date is updated
-    if (expiry_date && expiry_date !== batch.expiry_date) {
-      const expiryDate = new Date(expiry_date);
-      const today = new Date();
-      const daysUntilExpiry = Math.ceil(
-        (expiryDate - today) / (1000 * 60 * 60 * 24)
-      );
-
-      if (daysUntilExpiry <= 30) {
-        await InventoryNotification.create({
-          notification_type: "EXPIRING_SOON",
-          inventory_item_id: batch.inventory_item_id,
-          title: "Updated Batch Expiring Soon",
-          message: `Batch ${batch.batch_number} will expire in ${daysUntilExpiry} days`,
-          priority: daysUntilExpiry <= 7 ? "HIGH" : "MEDIUM",
-        });
-      }
     }
 
     // ✅ FIXED: Invalidate relevant caches
@@ -675,66 +612,6 @@ const restoreBatch = async (req, res, next) => {
   }
 };
 
-const getExpiringBatches = async (req, res, next) => {
-  try {
-    const { days = 30, page = 1, limit = 10 } = req.query;
-    const offset = (page - 1) * limit;
-
-    // ✅ FIXED: Add caching for expiring batches
-    const cacheKey = `batch:expiring:${days}:${page}:${limit}`;
-    const cached = await getCached(cacheKey);
-    if (cached) {
-      console.log("Serving expiring batches from redis...");
-      return res.status(StatusCodes.OK).json(cached);
-    }
-
-    const expiryDate = new Date();
-    expiryDate.setDate(expiryDate.getDate() + Number.parseInt(days));
-
-    const { count, rows: batches } = await Batch.findAndCountAll({
-      where: {
-        expiry_date: {
-          [Op.and]: [
-            { [Op.not]: null },
-            { [Op.lte]: expiryDate },
-            { [Op.gt]: new Date() },
-          ],
-        },
-        is_active: true,
-      },
-      include: [
-        {
-          model: InventoryItem,
-          as: "item",
-          attributes: ["id", "name", "unit_of_measure"],
-        },
-      ],
-      limit: Number.parseInt(limit),
-      offset: Number.parseInt(offset),
-      order: [["expiry_date", "ASC"]],
-    });
-
-    const response = {
-      success: true,
-      message: "Fetching Expiring Batches",
-      data: batches,
-      meta: {
-        total: count,
-        pages: Math.ceil(count / limit),
-        currentPage: Number.parseInt(page),
-      },
-    };
-
-    // Cache for shorter time since this is time-sensitive data
-    await setCache(cacheKey, response, 300); // 5 minutes
-
-    return res.status(StatusCodes.OK).json(response);
-  } catch (error) {
-    console.error("Expiring Batches error: ", error.message);
-    next(error);
-  }
-};
-
 export {
   createBatch,
   getSerializedItems,
@@ -743,5 +620,4 @@ export {
   updateBatch,
   deleteBatch,
   restoreBatch,
-  getExpiringBatches,
 };

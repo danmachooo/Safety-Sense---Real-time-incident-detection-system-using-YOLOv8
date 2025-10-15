@@ -28,10 +28,7 @@ const Batch = sequelize.define(
         min: 0,
       },
     },
-    expiry_date: {
-      type: DataTypes.DATE,
-      allowNull: true,
-    },
+
     supplier: {
       type: DataTypes.STRING(255),
       allowNull: true,
@@ -69,9 +66,7 @@ const Batch = sequelize.define(
       {
         fields: ["inventory_item_id"],
       },
-      {
-        fields: ["expiry_date"],
-      },
+
       {
         fields: ["received_date"],
       },

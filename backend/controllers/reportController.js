@@ -386,34 +386,6 @@ const generateBatchAdditionsReport = async (req, res, next) => {
       }
     );
 
-    // Get expiring batches (next 30 days)
-    const expiringBatches = await Batch.findAll({
-      where: {
-        ...whereClause,
-        expiry_date: {
-          [Op.between]: [
-            new Date(),
-            new Date(new Date().setDate(new Date().getDate() + 30)),
-          ],
-        },
-      },
-      include: [
-        {
-          model: InventoryItem,
-          as: "item",
-          attributes: ["id", "name"],
-          include: [
-            {
-              model: Category,
-              as: "category",
-              attributes: ["name"],
-            },
-          ],
-        },
-      ],
-      order: [["expiry_date", "ASC"]],
-    });
-
     const reportData = {
       reportType: "Batch Additions Report",
       generatedAt: new Date(),

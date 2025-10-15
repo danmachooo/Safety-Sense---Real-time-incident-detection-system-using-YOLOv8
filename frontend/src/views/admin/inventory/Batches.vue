@@ -37,7 +37,6 @@ const totalItems = ref(0);
 const totalPages = ref(0);
 const filters = ref({
   supplier: "",
-  expiringSoon: false,
   isActive: true,
 });
 
@@ -46,7 +45,6 @@ const currentBatch = ref({
   id: null,
   inventory_item_id: "",
   quantity: 0,
-  expiry_date: "",
   supplier: "",
   funding_source: "",
   cost: 0,
@@ -79,7 +77,6 @@ const fetchBatches = async () => {
         limit: itemsPerPage.value,
         search: searchQuery.value,
         supplier: filters.value.supplier,
-        expiring_soon: filters.value.expiringSoon,
         is_active: filters.value.isActive,
       },
     });
@@ -103,7 +100,6 @@ const openBatchModal = (batch = null) => {
         id: null,
         inventory_item_id: "",
         quantity: 0,
-        expiry_date: "",
         supplier: "",
         funding_source: "",
         cost: 0,
@@ -152,78 +148,6 @@ const showNotification = (message, type) => {
   setTimeout(() => (notification.value.show = false), 3000);
 };
 
-const statusBadge = (batch) => {
-  if (!batch.expiry_date)
-    return {
-      bg: "bg-gray-50",
-      text: "text-gray-700",
-      border: "border-gray-200",
-    };
-  const expiryDate = new Date(batch.expiry_date);
-  const today = new Date();
-  const diffDays = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
-  if (diffDays < 0)
-    return { bg: "bg-red-50", text: "text-red-700", border: "border-red-200" };
-  if (diffDays <= 30)
-    return {
-      bg: "bg-amber-50",
-      text: "text-amber-700",
-      border: "border-amber-200",
-    };
-  return {
-    bg: "bg-emerald-50",
-    text: "text-emerald-700",
-    border: "border-emerald-200",
-  };
-};
-
-const expiryProgress = (batch) => {
-  if (!batch.expiry_date || !batch.received_date) return 0;
-  const created = new Date(batch.received_date);
-  const expiry = new Date(batch.expiry_date);
-  const now = new Date();
-  const total = expiry - created;
-  const elapsed = now - created;
-  if (total <= 0) return 100;
-  return Math.min((elapsed / total) * 100, 100);
-};
-
-const getStatusText = (batch) => {
-  if (!batch.expiry_date) return "No Expiry";
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const expiry = new Date(batch.expiry_date);
-  expiry.setHours(0, 0, 0, 0);
-  const diffDays = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
-  if (diffDays < 0) return "Expired";
-  if (diffDays <= 30) return "Expiring Soon";
-  return "Active";
-};
-
-// Computed stats
-const expiringBatches = computed(() => {
-  return batches.value.filter((batch) => {
-    if (!batch.expiry_date) return false;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const expiry = new Date(batch.expiry_date);
-    expiry.setHours(0, 0, 0, 0);
-    const diffDays = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
-    return diffDays > 0 && diffDays <= 30;
-  }).length;
-});
-
-const expiredBatches = computed(() => {
-  return batches.value.filter((batch) => {
-    if (!batch.expiry_date) return false;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const expiry = new Date(batch.expiry_date);
-    expiry.setHours(0, 0, 0, 0);
-    return expiry < today;
-  }).length;
-});
-
 const totalValue = computed(() => {
   const val = batches.value.reduce((sum, batch) => {
     const cost = parseFloat(batch.cost) || 0;
@@ -257,9 +181,6 @@ const goToPage = (page) => {
 
 // Computed properties for empty state messages
 const emptyStateTitle = computed(() => {
-  if (filters.value.expiringSoon) {
-    return "No expiring batches found";
-  }
   if (!filters.value.isActive && totalItems.value > 0) {
     // Only show if there are batches but none are inactive
     return "No inactive batches found";
@@ -271,9 +192,6 @@ const emptyStateTitle = computed(() => {
 });
 
 const emptyStateDescription = computed(() => {
-  if (filters.value.expiringSoon) {
-    return "There are currently no batches expiring soon. All active batches are in good standing.";
-  }
   if (!filters.value.isActive && totalItems.value > 0) {
     // Only show if there are batches but none are inactive
     return "There are currently no inactive batches. All batches are active.";
@@ -281,7 +199,7 @@ const emptyStateDescription = computed(() => {
   if (searchQuery.value || filters.value.supplier) {
     return "Try adjusting your search criteria or filters to find what you're looking for.";
   }
-  return "Get started by creating your first inventory batch to track expiration dates and stock levels.";
+  return "Get started by creating your first inventory batch to track stock levels.";
 });
 </script>
 
@@ -338,7 +256,7 @@ const emptyStateDescription = computed(() => {
                   Batch Management
                 </h1>
                 <p class="text-gray-600 mt-1 text-base font-medium">
-                  Track inventory batches and expiration dates
+                  Track inventory batches
                 </p>
               </div>
             </div>
@@ -367,36 +285,7 @@ const emptyStateDescription = computed(() => {
             </div>
           </div>
         </div>
-        <div
-          class="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg"
-        >
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-sm font-medium text-gray-600">Expiring Soon</p>
-              <p class="text-3xl font-bold text-amber-600">
-                {{ expiringBatches }}
-              </p>
-            </div>
-            <div class="p-3 bg-amber-100 rounded-xl">
-              <Clock class="w-6 h-6 text-amber-600" />
-            </div>
-          </div>
-        </div>
-        <div
-          class="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg"
-        >
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-sm font-medium text-gray-600">Expired</p>
-              <p class="text-3xl font-bold text-red-600">
-                {{ expiredBatches }}
-              </p>
-            </div>
-            <div class="p-3 bg-red-100 rounded-xl">
-              <AlertTriangle class="w-6 h-6 text-red-600" />
-            </div>
-          </div>
-        </div>
+
         <div
           class="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg"
         >
@@ -457,17 +346,6 @@ const emptyStateDescription = computed(() => {
           <div class="flex items-center space-x-6">
             <label class="flex items-center space-x-2">
               <input
-                v-model="filters.expiringSoon"
-                type="checkbox"
-                @change="fetchBatches"
-                class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-              />
-              <span class="text-sm font-medium text-gray-700"
-                >Expiring Soon</span
-              >
-            </label>
-            <label class="flex items-center space-x-2">
-              <input
                 v-model="filters.isActive"
                 type="checkbox"
                 @change="fetchBatches"
@@ -519,17 +397,11 @@ const emptyStateDescription = computed(() => {
         </p>
         <div class="flex flex-col sm:flex-row gap-3 justify-center">
           <button
-            v-if="
-              searchQuery ||
-              filters.supplier ||
-              filters.expiringSoon ||
-              !filters.isActive
-            "
+            v-if="searchQuery || filters.supplier || !filters.isActive"
             @click="
               () => {
                 searchQuery = '';
                 filters.supplier = '';
-                filters.expiringSoon = false;
                 filters.isActive = true; // Reset to default active only
                 fetchBatches();
               }
@@ -566,11 +438,6 @@ const emptyStateDescription = computed(() => {
                   class="px-6 py-4 text-left text-sm font-semibold text-gray-700"
                 >
                   Quantity
-                </th>
-                <th
-                  class="px-6 py-4 text-left text-sm font-semibold text-gray-700"
-                >
-                  Expiration Progress
                 </th>
                 <th
                   class="px-6 py-4 text-left text-sm font-semibold text-gray-700"
@@ -615,36 +482,6 @@ const emptyStateDescription = computed(() => {
                     <span class="text-sm text-gray-500 ml-1">{{
                       batch.item?.unit_of_measure || "units"
                     }}</span>
-                  </div>
-                </td>
-                <td class="px-6 py-4">
-                  <div class="flex items-center">
-                    <div
-                      class="w-32 h-3 bg-gray-200 rounded-full overflow-hidden mr-3"
-                    >
-                      <div
-                        class="h-full rounded-full transition-all duration-300"
-                        :class="
-                          batch.expiry_date &&
-                          new Date(batch.expiry_date) < new Date()
-                            ? 'bg-red-500'
-                            : batch.expiry_date &&
-                              (new Date(batch.expiry_date) - new Date()) /
-                                (1000 * 3600 * 24) <=
-                                30
-                            ? 'bg-amber-500'
-                            : 'bg-emerald-500'
-                        "
-                        :style="{ width: `${expiryProgress(batch)}%` }"
-                      ></div>
-                    </div>
-                    <span class="text-sm text-gray-600 font-medium">
-                      {{
-                        batch.expiry_date
-                          ? new Date(batch.expiry_date).toLocaleDateString()
-                          : "No expiry"
-                      }}
-                    </span>
                   </div>
                 </td>
                 <td class="px-6 py-4">
@@ -787,16 +624,7 @@ const emptyStateDescription = computed(() => {
                   class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
                 />
               </div>
-              <div>
-                <label class="block text-sm font-semibold text-gray-700 mb-3"
-                  >Expiry Date</label
-                >
-                <input
-                  v-model="currentBatch.expiry_date"
-                  type="date"
-                  class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                />
-              </div>
+
               <div>
                 <label class="block text-sm font-semibold text-gray-700 mb-3"
                   >Supplier</label

@@ -357,20 +357,6 @@ const getInventoryStats = async (req, res, next) => {
       },
     });
 
-    // Get expiring batches in next 30 days
-    const expiringBatches = await Batch.count({
-      where: {
-        expiry_date: {
-          [Op.between]: [
-            new Date(),
-            new Date(new Date().setDate(new Date().getDate() + 30)),
-          ],
-        },
-        is_active: true,
-        deletedAt: null,
-      },
-    });
-
     // Get total inventory value
     const inventoryValueQuery = await sequelize.query(
       `

@@ -13,7 +13,6 @@ import {
   updateBatch,
   deleteBatch,
   restoreBatch,
-  getExpiringBatches,
   getSerializedItemsByBatch,
 } from "../controllers/Inventory/batchController.js";
 
@@ -89,12 +88,7 @@ router.post("/upload-excel", uploadExcel, authMiddleware, uploadExcelFile);
 router.get("/download-template", generateEmptyTemplate);
 //Batches
 router.get("/batches", authMiddleware, adminMiddleware, getAllBatches);
-router.get(
-  "/batches/expiring",
-  authMiddleware,
-  adminMiddleware,
-  getExpiringBatches
-);
+
 router.get("/batches/:id", authMiddleware, adminMiddleware, getBatchById);
 router.post("/batches", authMiddleware, adminMiddleware, createBatch);
 router.put("/batches/:id", authMiddleware, adminMiddleware, updateBatch);

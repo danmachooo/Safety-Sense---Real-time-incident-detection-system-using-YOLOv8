@@ -422,7 +422,7 @@ const getAllBatches = async (req, res, next) => {
         {
           model: InventoryItem,
           as: "item",
-          attributes: ["id", "name", "unit_of_measure"],
+          attributes: ["id", "name", "unit_of_measure", "condition"],
         },
         {
           model: User,

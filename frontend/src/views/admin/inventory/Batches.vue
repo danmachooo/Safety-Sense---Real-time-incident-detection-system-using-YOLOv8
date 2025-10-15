@@ -148,6 +148,39 @@ const showNotification = (message, type) => {
   setTimeout(() => (notification.value.show = false), 3000);
 };
 
+const statusBadge = (batch) => {
+  const status = batch?.item?.status;
+
+  switch (status) {
+    case "FUNCTIONAL":
+      return {
+        bg: "bg-emerald-50",
+        text: "text-emerald-700",
+        border: "border-emerald-200",
+      };
+    case "UNSERVICEABLE":
+      return {
+        bg: "bg-amber-50",
+        text: "text-amber-700",
+        border: "border-amber-200",
+      };
+    default:
+      return {
+        bg: "bg-gray-50",
+        text: "text-gray-700",
+        border: "border-gray-200",
+      };
+  }
+};
+
+const getStatusText = (batch) => {
+  console.log("Batch :", batch.item);
+  const status = batch?.item?.status;
+  if (status === "FUNCTIONAL") return "Functional";
+  if (status === "UNSERVICEABLE") return "Unserviceable";
+  return "Unknown";
+};
+
 const totalValue = computed(() => {
   const val = batches.value.reduce((sum, batch) => {
     const cost = parseFloat(batch.cost) || 0;
@@ -483,6 +516,18 @@ const emptyStateDescription = computed(() => {
                       batch.item?.unit_of_measure || "units"
                     }}</span>
                   </div>
+                </td>
+                <td class="px-6 py-4">
+                  <span
+                    :class="[
+                      'px-3 py-1 text-sm font-medium rounded-full border',
+                      statusBadge(batch).bg,
+                      statusBadge(batch).text,
+                      statusBadge(batch).border,
+                    ]"
+                  >
+                    {{ getStatusText(batch) }}
+                  </span>
                 </td>
 
                 <td class="px-6 py-4">

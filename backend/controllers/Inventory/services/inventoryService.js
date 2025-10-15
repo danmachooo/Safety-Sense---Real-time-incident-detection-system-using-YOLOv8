@@ -305,7 +305,7 @@ export const processExcelFile = async (fileBuffer, userId) => {
             inventory_item_id: item.id,
             quantity: row.quantity,
             batch_number: batchNumber,
-            supplier: row.supplier || "Unknown",
+            supplier: row.supplier || "DRRMFund/Donation",
             received_by: userId,
             received_date: new Date(),
             funding_source: row.funding_source || null,

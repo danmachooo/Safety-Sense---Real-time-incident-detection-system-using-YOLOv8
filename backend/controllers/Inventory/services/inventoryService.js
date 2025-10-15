@@ -6,7 +6,7 @@ import {
   invalidateBatchCache,
   invalidateInventoryCache,
   invalidateItemsCache,
-} from "../utils/cacheUtil.js";
+} from "../../../services/redis/cache.js";
 
 const { InventoryItem, Category, Batch, Notification, SerializedItem } = models;
 

@@ -45,10 +45,6 @@ const InventoryItem = sequelize.define(
       type: DataTypes.STRING(50),
       allowNull: false,
     },
-    condition: {
-      type: DataTypes.ENUM("FUNCTIONAL", "UNSERVICABLE"),
-      defaultValue: "FUNCTIONAL",
-    },
     last_maintenance_date: {
       type: DataTypes.DATE,
       allowNull: true,

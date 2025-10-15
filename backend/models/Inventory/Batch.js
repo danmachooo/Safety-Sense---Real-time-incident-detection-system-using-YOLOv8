@@ -28,7 +28,10 @@ const Batch = sequelize.define(
         min: 0,
       },
     },
-
+    condition: {
+      type: DataTypes.ENUM("FUNCTIONAL", "UNSERVICABLE"),
+      defaultValue: "FUNCTIONAL",
+    },
     supplier: {
       type: DataTypes.STRING(255),
       allowNull: true,

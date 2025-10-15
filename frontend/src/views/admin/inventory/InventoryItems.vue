@@ -1648,6 +1648,7 @@ watch(
                 class="bg-gradient-to-br from-emerald-50 to-green-50 rounded-2xl p-6 border border-emerald-100"
               >
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <!-- Deployment Type -->
                   <div>
                     <label
                       class="block text-sm font-semibold text-gray-700 mb-3"
@@ -1657,7 +1658,18 @@ watch(
                     <select
                       v-model="deploymentDetails.deployment_type"
                       required
-                      class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200"
+                      :disabled="
+                        !currentDeployItem?.quantity_in_stock ||
+                        currentDeployItem.quantity_in_stock <= 0
+                      "
+                      class="w-full px-4 py-3 border border-gray-200 rounded-xl transition-all duration-200"
+                      :class="{
+                        'bg-gray-100 text-gray-500 cursor-not-allowed':
+                          !currentDeployItem?.quantity_in_stock ||
+                          currentDeployItem.quantity_in_stock <= 0,
+                        'focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500':
+                          currentDeployItem?.quantity_in_stock > 0,
+                      }"
                     >
                       <option value="EMERGENCY">Emergency</option>
                       <option value="TRAINING">Training</option>
@@ -1665,6 +1677,8 @@ watch(
                       <option value="RELIEF_OPERATION">Relief Operation</option>
                     </select>
                   </div>
+
+                  <!-- Quantity to Deploy -->
                   <div>
                     <label
                       class="block text-sm font-semibold text-gray-700 mb-3"
@@ -1677,14 +1691,32 @@ watch(
                       min="1"
                       :max="currentDeployItem?.quantity_in_stock"
                       required
-                      class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200"
+                      :disabled="
+                        !currentDeployItem?.quantity_in_stock ||
+                        currentDeployItem.quantity_in_stock <= 0
+                      "
+                      class="w-full px-4 py-3 border border-gray-200 rounded-xl transition-all duration-200"
+                      :class="{
+                        'bg-gray-100 text-gray-500 cursor-not-allowed':
+                          !currentDeployItem?.quantity_in_stock ||
+                          currentDeployItem.quantity_in_stock <= 0,
+                        'focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500':
+                          currentDeployItem?.quantity_in_stock > 0,
+                      }"
                     />
+                    <p
+                      v-if="currentDeployItem?.quantity_in_stock <= 0"
+                      class="text-xs text-red-500 mt-1"
+                    >
+                      No available stock for this item.
+                    </p>
                   </div>
                 </div>
               </div>
             </div>
+
             <!-- Serialized Items (only if serialized) -->
-            <!-- Replace your existing serialized items section with this -->
+
             <div v-if="serializedItems.length > 0" class="mb-8">
               <div class="flex items-center justify-between mb-6">
                 <div class="flex items-center">
@@ -1912,19 +1944,40 @@ watch(
 
             <!-- Action Buttons -->
             <div
-              class="flex justify-end space-x-4 pt-6 border-t border-gray-200"
+              class="flex flex-col items-end space-y-2 pt-6 border-t border-gray-200"
             >
-              <button
-                type="button"
-                @click="showDeployModal = false"
-                class="btn-secondary"
+              <p
+                v-if="currentDeployItem?.quantity_in_stock <= 0"
+                class="text-sm text-red-500 font-medium"
               >
-                Cancel
-              </button>
-              <button type="submit" class="btn-deploy">
-                <Truck class="w-4 h-4 mr-2" />
-                Deploy Item
-              </button>
+                This item is currently out of stock and cannot be deployed.
+              </p>
+
+              <div class="flex space-x-4">
+                <button
+                  type="button"
+                  @click="showDeployModal = false"
+                  class="btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  class="btn-deploy flex items-center"
+                  :disabled="
+                    !currentDeployItem?.quantity_in_stock ||
+                    currentDeployItem.quantity_in_stock <= 0
+                  "
+                  :class="{
+                    'opacity-50 cursor-not-allowed':
+                      !currentDeployItem?.quantity_in_stock ||
+                      currentDeployItem.quantity_in_stock <= 0,
+                  }"
+                >
+                  <Truck class="w-4 h-4 mr-2" />
+                  Deploy Item
+                </button>
+              </div>
             </div>
           </form>
         </div>

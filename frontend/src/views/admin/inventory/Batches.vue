@@ -47,7 +47,7 @@ const currentBatch = ref({
   quantity: 0,
   supplier: "",
   funding_source: "",
-  cost: 0,
+  unit_price: 0,
   notes: "",
   is_active: true,
   batch_number: "", // This field is for display in the title, not for input in the form
@@ -711,11 +711,27 @@ const formatCurrency = (value) => {
                 />
               </div>
               <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-3">
+                  Status
+                  {{ currentBatch. }}
+                </label>
+                <select
+                  v-model="currentBatch.condition"
+                  class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                  required
+                >
+                  <option disabled value="">Select Status</option>
+                  <option value="FUNCTIONAL">Functional</option>
+                  <option value="UNSERVICEABLE">Unserviceable</option>
+                </select>
+              </div>
+
+              <div>
                 <label class="block text-sm font-semibold text-gray-700 mb-3"
-                  >Cost</label
+                  >Unit Price</label
                 >
                 <input
-                  v-model.number="currentBatch.cost"
+                  v-model.number="currentBatch.unit_price"
                   type="number"
                   step="0.01"
                   min="0"

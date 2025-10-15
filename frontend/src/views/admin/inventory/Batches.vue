@@ -46,6 +46,7 @@ const currentBatch = ref({
   inventory_item_id: "",
   quantity: 0,
   supplier: "",
+  condition: "",
   funding_source: "",
   unit_price: 0,
   notes: "",
@@ -713,7 +714,6 @@ const formatCurrency = (value) => {
               <div>
                 <label class="block text-sm font-semibold text-gray-700 mb-3">
                   Status
-                  {{ currentBatch. }}
                 </label>
                 <select
                   v-model="currentBatch.condition"

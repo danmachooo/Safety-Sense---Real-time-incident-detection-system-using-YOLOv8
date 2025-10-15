@@ -81,7 +81,6 @@ const InventoryItem = sequelize.define(
     indexes: [
       { fields: ["name"] },
       { fields: ["category_id"] },
-      { fields: ["condition"] },
       { fields: ["is_deployable"] },
       { fields: ["is_active"] },
       { fields: ["deletedAt"] },

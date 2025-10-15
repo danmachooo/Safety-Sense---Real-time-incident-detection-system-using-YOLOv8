@@ -140,6 +140,7 @@ const createBatch = async (req, res, next) => {
       funding_source,
       unit_price,
       notes,
+      condition,
     } = req.body;
 
     if (!inventory_item_id || !quantity) {
@@ -187,6 +188,7 @@ const createBatch = async (req, res, next) => {
         funding_source,
         unit_price,
         amount,
+        condition,
         notes,
         is_active: true,
       },
@@ -423,7 +425,7 @@ const getAllBatches = async (req, res, next) => {
         {
           model: InventoryItem,
           as: "item",
-          attributes: ["id", "name", "unit_of_measure", "condition"],
+          attributes: ["id", "name", "unit_of_measure"],
         },
         {
           model: User,
@@ -510,8 +512,15 @@ const updateBatch = async (req, res, next) => {
     const batch = await Batch.findByPk(batchId);
     if (!batch) throw new NotFoundError("Batch not found");
 
-    const { quantity, supplier, funding_source, unit_price, notes, is_active } =
-      req.body;
+    const {
+      quantity,
+      supplier,
+      funding_source,
+      unit_price,
+      notes,
+      is_active,
+      condition,
+    } = req.body;
 
     // Calculate quantity difference if quantity is being updated
     const quantityDiff = quantity ? quantity - batch.quantity : 0;
@@ -524,6 +533,7 @@ const updateBatch = async (req, res, next) => {
       unit_price,
       newAmount,
       notes,
+      condition,
       is_active,
     });
 

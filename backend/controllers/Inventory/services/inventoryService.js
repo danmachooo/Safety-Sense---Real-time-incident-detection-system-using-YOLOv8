@@ -210,6 +210,7 @@ const createBatchAndSerialize = async (row, item, category, userId, t) => {
       funding_source: row.funding_source || null,
       unit_price: row.unit_price || 0,
       amount,
+      condition: row.condition,
       notes: row.batch_notes || "",
       is_active: true,
     },

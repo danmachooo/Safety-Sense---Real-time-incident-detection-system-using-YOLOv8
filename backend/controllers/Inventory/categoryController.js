@@ -22,7 +22,10 @@ const createCategory = async (req, res, next) => {
     if (!name || !type)
       throw new BadRequestError("Required fields are missing");
 
-    const existingCategory = await Category.findOne({ where: { name } });
+    const existingCategory = await Category.findOne({
+      where: { name },
+      paranoid: true,
+    });
     if (existingCategory) throw new BadRequestError("Already Exist Category");
 
     const category = await Category.create({ name, description, type });

@@ -5,9 +5,8 @@ import { BadRequestError } from "../../../utils/Error.js";
 import {
   invalidateBatchCache,
   invalidateInventoryCache,
-  invalidateItemsCache,
 } from "../../../services/redis/cache.js";
-
+import { invalidateItemsCache } from "../utils/cacheUtil.js";
 const { InventoryItem, Category, Batch, Notification, SerializedItem } = models;
 
 /* -------------------------------------------------------------------------- */

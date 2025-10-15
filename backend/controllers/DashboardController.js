@@ -361,7 +361,7 @@ const getInventoryStats = async (req, res, next) => {
     const inventoryValueQuery = await sequelize.query(
       `
       SELECT 
-        SUM(b.cost * b.quantity) as totalValue
+        SUM(b.unit_price * b.quantity) as totalValue
       FROM batches b
       WHERE b.deletedAt IS NULL
       AND b.is_active = true

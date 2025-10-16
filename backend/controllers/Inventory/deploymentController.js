@@ -573,8 +573,7 @@ const updateDeploymentStatus = async (req, res, next) => {
     await deployment.update(
       {
         status: newStatus,
-        actual_return_date:
-          newStatus !== "DEPLOYED" ? actual_return_date || new Date() : null,
+        actual_return_date: newStatus !== "DEPLOYED" ? new Date() : null,
         // Remove notes field update
       },
       { transaction: t }

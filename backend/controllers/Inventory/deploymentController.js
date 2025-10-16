@@ -135,7 +135,7 @@ const createDeployment = async (req, res, next) => {
       const serialDeployments = serialized_item_ids.map((id) => ({
         deployment_id: deployment.id,
         serialized_item_id: id,
-        deployed_at: finalDeploymentDate,
+        deployed_at: deployment_date,
         // notes, // Remove notes from here too
       }));
 
@@ -164,7 +164,7 @@ const createDeployment = async (req, res, next) => {
         deployed_to,
         // notes, // Remove notes from here
         deployment_id: deployment.id,
-        deployed_at: finalDeploymentDate,
+        deployed_at: deployment_date,
       }));
 
       await SerializedItemHistory.bulkCreate(histories, { transaction: t });

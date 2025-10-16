@@ -375,6 +375,7 @@ const removePendingChange = (serialId) => {
 };
 
 const updateDeployment = async (payload) => {
+  console.log("Payload: ", payload);
   try {
     isUpdating.value = true;
     const response = await api.put(
@@ -417,6 +418,7 @@ const confirmChanges = async () => {
 };
 
 const updateDeploymentStatus = async (status) => {
+  console.log("Deployment status: ", status);
   try {
     const payload = {
       status,

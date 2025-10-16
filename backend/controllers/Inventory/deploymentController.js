@@ -254,10 +254,7 @@ const createDeployment = async (req, res, next) => {
 const updateDeploymentStatus = async (req, res, next) => {
   const t = await sequelize.transaction();
   try {
-    const { status, actual_return_date, notes, return_condition, serials } =
-      req.body;
-
-    console.log("Actual return date: ", actual_return_date);
+    const { status, notes, return_condition, serials } = req.body;
 
     const deployment = await Deployment.findByPk(req.params.id, {
       include: [{ model: InventoryItem, as: "item" }],
@@ -390,7 +387,7 @@ const updateDeploymentStatus = async (req, res, next) => {
         throw new BadRequestError("No valid items to return");
       }
 
-      const updateDate = actual_return_date || new Date();
+      const updateDate = new Date();
 
       itemsToReturn.forEach((itemId) => {
         const condition = conditionsMap.get(itemId) || "GOOD";

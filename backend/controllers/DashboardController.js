@@ -332,31 +332,6 @@ const getInventoryStats = async (req, res, next) => {
         deletedAt: null,
       },
     });
-
-    // Get items by condition
-    const itemsByCondition = await InventoryItem.findAll({
-      attributes: [
-        "condition",
-        [sequelize.fn("COUNT", sequelize.col("condition")), "count"],
-      ],
-      where: {
-        is_active: true,
-        deletedAt: null,
-      },
-      group: ["condition"],
-    });
-
-    // Get items needing maintenance
-    const maintenanceItems = await InventoryItem.count({
-      where: {
-        next_maintenance_date: {
-          [Op.lte]: new Date(),
-        },
-        is_active: true,
-        deletedAt: null,
-      },
-    });
-
     // Get total inventory value
     const inventoryValueQuery = await sequelize.query(
       `
@@ -379,7 +354,6 @@ const getInventoryStats = async (req, res, next) => {
       data: {
         itemsByCategory,
         lowStockItems,
-        itemsByCondition,
         maintenanceItems,
         totalValue,
         totalItems: await InventoryItem.count({

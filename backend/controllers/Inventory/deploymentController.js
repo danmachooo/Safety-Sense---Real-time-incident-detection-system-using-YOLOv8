@@ -60,7 +60,7 @@ const createDeployment = async (req, res, next) => {
       deployment_date,
     } = req.body;
 
-    console.log("Request body: ", req.body);
+    console.log("Deployment date: ", deployment_date);
 
     const deployed_by = req.user?.id;
     if (!deployed_by) {
@@ -77,13 +77,6 @@ const createDeployment = async (req, res, next) => {
     if (!deployed_to) {
       throw new BadRequestError("Deploy-to ID is required");
     }
-
-    // const finalDeploymentDate = deployment_date
-    //   ? new Date(deployment_date)
-    //   : new Date();
-    // if (isNaN(finalDeploymentDate.getTime())) {
-    //   throw new BadRequestError("Invalid deployment date");
-    // }
 
     const inventoryItem = await InventoryItem.findByPk(inventory_item_id, {
       transaction: t,

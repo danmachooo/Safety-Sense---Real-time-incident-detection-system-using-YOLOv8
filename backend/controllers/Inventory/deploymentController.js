@@ -61,6 +61,7 @@ const createDeployment = async (req, res, next) => {
     } = req.body;
 
     console.log("Deployment date: ", deployment_date);
+    console.log("Deployment date: ", deployment_date);
 
     const deployed_by = req.user?.id;
     if (!deployed_by) {
@@ -255,6 +256,8 @@ const updateDeploymentStatus = async (req, res, next) => {
   try {
     const { status, actual_return_date, notes, return_condition, serials } =
       req.body;
+
+    console.log("Actual return date: ", actual_return_date);
 
     const deployment = await Deployment.findByPk(req.params.id, {
       include: [{ model: InventoryItem, as: "item" }],

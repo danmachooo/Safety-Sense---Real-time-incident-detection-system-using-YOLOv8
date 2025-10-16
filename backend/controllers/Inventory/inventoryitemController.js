@@ -110,75 +110,104 @@ const uploadExcelFile = async (req, res, next) => {
 };
 
 const getAllItems = async (req, res, next) => {
-  const {
-    category_id,
-    search,
-    condition,
-    is_deployable,
-    page = 1,
-    limit = 10,
-  } = req.query;
-
-  const offset = (page - 1) * limit;
-  const whereClause = {};
-
-  if (category_id) whereClause.category_id = category_id;
-  if (condition) whereClause.condition = condition;
-  if (is_deployable !== undefined) whereClause.is_deployable = is_deployable;
-  if (search) {
-    whereClause[Op.or] = [
-      { name: { [Op.like]: `%${search}%` } },
-      { description: { [Op.like]: `%${search}%` } },
-    ];
-  }
-
-  // Create a more specific cache key
-  const cacheKey = `items:all:${JSON.stringify({
-    category_id,
-    search,
-    condition,
-    is_deployable,
-    page,
-    limit,
-  })}`;
-
   try {
+    const {
+      category_id,
+      search,
+      condition,
+      is_deployable,
+      page,
+      limit,
+      all, // 👈 optional query param, e.g. ?all=true
+    } = req.query;
+
+    const whereClause = {};
+    if (category_id) whereClause.category_id = category_id;
+    if (condition) whereClause.condition = condition;
+    if (is_deployable !== undefined) whereClause.is_deployable = is_deployable;
+    if (search) {
+      whereClause[Op.or] = [
+        { name: { [Op.like]: `%${search}%` } },
+        { description: { [Op.like]: `%${search}%` } },
+      ];
+    }
+
+    // If `all=true`, we return everything (no pagination)
+    const isGetAll = all === "true" || all === true;
+
+    // Compute pagination only if not `all`
+    const pageNumber = parseInt(page) || 1;
+    const limitNumber = parseInt(limit) || 10;
+    const offset = (pageNumber - 1) * limitNumber;
+
+    // Create flexible cache key
+    const cacheKey = `items:${isGetAll ? "all" : "page"}:${JSON.stringify({
+      category_id,
+      search,
+      condition,
+      is_deployable,
+      page: isGetAll ? null : pageNumber,
+      limit: isGetAll ? null : limitNumber,
+    })}`;
+
     const cached = await getCached(cacheKey);
     if (cached) {
       console.log("Serving items from redis...");
       return res.status(StatusCodes.OK).json(cached);
     }
 
-    const { count, rows: items } = await InventoryItem.findAndCountAll({
-      where: whereClause,
-      include: [
-        {
-          model: Category,
-          as: "category",
-          attributes: ["id", "name", "type"],
-        },
-      ],
-      limit: parseInt(limit),
-      offset: parseInt(offset),
-      order: [["name", "ASC"]],
-    });
+    let items, count;
+
+    if (isGetAll) {
+      // Fetch all items (no pagination)
+      items = await InventoryItem.findAll({
+        where: whereClause,
+        include: [
+          {
+            model: Category,
+            as: "category",
+            attributes: ["id", "name", "type"],
+          },
+        ],
+        order: [["name", "ASC"]],
+      });
+      count = items.length;
+    } else {
+      // Fetch paginated
+      const result = await InventoryItem.findAndCountAll({
+        where: whereClause,
+        include: [
+          {
+            model: Category,
+            as: "category",
+            attributes: ["id", "name", "type"],
+          },
+        ],
+        limit: limitNumber,
+        offset: offset,
+        order: [["name", "ASC"]],
+      });
+      items = result.rows;
+      count = result.count;
+    }
 
     const response = {
       success: true,
-      message: "Items has been returned successfully",
+      message: "Items fetched successfully",
       data: items,
-      meta: {
-        total: count,
-        pages: Math.ceil(count / limit),
-        currentPage: parseInt(page),
-      },
+      meta: isGetAll
+        ? null
+        : {
+            total: count,
+            pages: Math.ceil(count / limitNumber),
+            currentPage: pageNumber,
+          },
     };
 
-    // Cache for 5 minutes (300 seconds) instead of 1 minute for better performance
-    await setCache(cacheKey, response, 300);
+    await setCache(cacheKey, response, 300); // cache for 5 mins
     return res.status(StatusCodes.OK).json(response);
   } catch (error) {
-    console.error("Fetching items error: ", error);
+    console.error("Fetching items error:", error);
     next(error);
   }
 };

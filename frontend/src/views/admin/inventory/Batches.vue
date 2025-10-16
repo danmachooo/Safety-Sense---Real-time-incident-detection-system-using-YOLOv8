@@ -25,7 +25,7 @@ import api from "../../../utils/axios";
 
 // Reactive state
 const batches = ref([]);
-const categories = ref([]);
+const items = ref([]);
 const loading = ref(true);
 const error = ref(null);
 const showModal = ref(false);
@@ -61,8 +61,8 @@ onMounted(async () => {
 
 const fetchInventoryItems = async () => {
   try {
-    const response = await api.get("inventory/items");
-    categories.value = response.data.data;
+    const response = await api.get("inventory/items?all=true");
+    items.value = response.data.data;
   } catch (err) {
     showNotification("Failed to fetch inventory items", "error");
   }
@@ -668,11 +668,7 @@ const formatCurrency = (value) => {
                   class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
                 >
                   <option value="" disabled>Select an item</option>
-                  <option
-                    v-for="item in categories"
-                    :key="item.id"
-                    :value="item.id"
-                  >
+                  <option v-for="item in items" :key="item.id" :value="item.id">
                     {{ item.name }}
                   </option>
                 </select>

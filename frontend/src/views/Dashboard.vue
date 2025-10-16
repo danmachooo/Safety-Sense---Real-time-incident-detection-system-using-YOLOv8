@@ -932,23 +932,6 @@ onMounted(() => {
               </p>
             </div>
             <div
-              class="group text-center p-8 bg-gradient-to-br from-amber-50/80 to-amber-100/60 rounded-3xl hover:from-amber-100/80 hover:to-amber-200/60 transition-all duration-300 border border-amber-200/40 cursor-pointer"
-            >
-              <div
-                class="w-16 h-16 bg-gradient-to-r from-amber-500 to-amber-600 rounded-3xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-300 shadow-lg"
-              >
-                <Clock class="w-8 h-8 text-white" />
-              </div>
-              <p class="text-4xl font-bold text-amber-600 mb-3">
-                {{ inventoryStats.data?.maintenanceItems || 0 }}
-              </p>
-              <p
-                class="text-sm font-bold text-amber-700 uppercase tracking-wide"
-              >
-                Need Maintenance
-              </p>
-            </div>
-            <div
               class="group text-center p-8 bg-gradient-to-br from-emerald-50/80 to-emerald-100/60 rounded-3xl hover:from-emerald-100/80 hover:to-emerald-200/60 transition-all duration-300 border border-emerald-200/40 cursor-pointer"
             >
               <div

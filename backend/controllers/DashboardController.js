@@ -354,7 +354,6 @@ const getInventoryStats = async (req, res, next) => {
       data: {
         itemsByCategory,
         lowStockItems,
-        maintenanceItems,
         totalValue,
         totalItems: await InventoryItem.count({
           where: {

@@ -150,7 +150,7 @@ const showNotification = (message, type) => {
 };
 
 const statusBadge = (batch) => {
-  const status = batch?.item?.condition;
+  const status = batch?.condition;
 
   switch (status) {
     case "FUNCTIONAL":
@@ -175,7 +175,7 @@ const statusBadge = (batch) => {
 };
 
 const getStatusText = (batch) => {
-  const status = batch?.item?.condition;
+  const status = batch?.condition;
   if (status === "FUNCTIONAL") return "Functional";
   if (status === "UNSERVICEABLE") return "Unserviceable";
   return "Unknown";

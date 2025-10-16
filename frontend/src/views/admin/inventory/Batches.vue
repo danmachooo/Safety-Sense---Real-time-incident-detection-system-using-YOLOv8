@@ -63,6 +63,7 @@ const fetchInventoryItems = async () => {
   try {
     const response = await api.get("inventory/items?all=true");
     items.value = response.data.data;
+    console.log(response);
   } catch (err) {
     showNotification("Failed to fetch inventory items", "error");
   }

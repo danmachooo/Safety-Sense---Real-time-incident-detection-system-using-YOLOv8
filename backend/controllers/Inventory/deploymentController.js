@@ -865,7 +865,6 @@ const getDeploymentById = async (req, res, next) => {
             "unit_of_measure",
             "quantity_in_stock",
             "location",
-            "condition",
             "is_returnable",
           ],
         },

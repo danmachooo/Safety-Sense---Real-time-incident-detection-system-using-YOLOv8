@@ -78,12 +78,12 @@ const createDeployment = async (req, res, next) => {
       throw new BadRequestError("Deploy-to ID is required");
     }
 
-    const finalDeploymentDate = deployment_date
-      ? new Date(deployment_date)
-      : new Date();
-    if (isNaN(finalDeploymentDate.getTime())) {
-      throw new BadRequestError("Invalid deployment date");
-    }
+    // const finalDeploymentDate = deployment_date
+    //   ? new Date(deployment_date)
+    //   : new Date();
+    // if (isNaN(finalDeploymentDate.getTime())) {
+    //   throw new BadRequestError("Invalid deployment date");
+    // }
 
     const inventoryItem = await InventoryItem.findByPk(inventory_item_id, {
       transaction: t,
@@ -132,7 +132,7 @@ const createDeployment = async (req, res, next) => {
           // notes, // Remove this - notes will go to DeploymentNotes
           deployment_type,
           deployment_location,
-          deployment_date: finalDeploymentDate,
+          deployment_date,
           status: "DEPLOYED",
         },
         { transaction: t }

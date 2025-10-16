@@ -106,16 +106,6 @@ const generateInventorySummaryReport = async (req, res, next) => {
       order: [["quantity_in_stock", "ASC"]],
     });
 
-    // Get items by condition
-    const itemsByCondition = await InventoryItem.findAll({
-      attributes: [
-        "condition",
-        [sequelize.fn("COUNT", sequelize.col("condition")), "count"],
-      ],
-      where: whereClause,
-      group: ["condition"],
-    });
-
     const reportData = {
       reportType: "Inventory Summary Report",
       generatedAt: new Date(),
@@ -128,7 +118,6 @@ const generateInventorySummaryReport = async (req, res, next) => {
       itemsByCategory,
       stockLevels,
       reorderAlerts,
-      itemsByCondition,
     };
 
     return res.status(StatusCodes.OK).json({
@@ -362,7 +351,7 @@ const generateBatchAdditionsReport = async (req, res, next) => {
         DATE(b.createdAt) as addedDate,
         COUNT(*) as batchCount,
         SUM(b.quantity) as totalQuantity,
-        SUM(b.cost * b.quantity) as totalValue
+        SUM(b.unit_price * b.quantity) as totalValue
       FROM batches b
       JOIN inventory_items i ON b.inventory_item_id = i.id
       WHERE b.deletedAt IS NULL 
@@ -392,7 +381,10 @@ const generateBatchAdditionsReport = async (req, res, next) => {
       filters: { startDate, endDate, supplierId, categoryId },
       summary: {
         totalBatches: batches.length,
-        totalValue: batches.reduce((sum, b) => sum + b.cost * b.quantity, 0),
+        totalValue: batches.reduce(
+          (sum, b) => sum + b.unit_price * b.quantity,
+          0
+        ),
         expiringBatchesCount: expiringBatches.length,
       },
       batches,

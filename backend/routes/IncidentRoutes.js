@@ -67,12 +67,10 @@ router.get(
 // Create new incident (general purpose) - kept for backward compatibility
 router.post("/", createIncident);
 
-// Create new incident from citizen report - public endpoint, no auth required
-router.post("/citizen-report", createCitizenReport);
+// Create new incident
+router.post("/citizen", createCitizenReport);
+router.post("/ai", createCameraDetection);
 router.post("/upload-image", uploadSingle, uploadIncidentImage);
-
-// Create new incident from camera detection - requires authentication
-router.post("/camera-detection", authMiddleware, createCameraDetection);
 
 // Accept an incident
 router.post("/:incidentId/accept", authMiddleware, acceptIncident);

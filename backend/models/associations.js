@@ -5,7 +5,7 @@ import LoginHistory from "./Users/LoginHistory.js";
 import Camera from "./Incidents/Camera.js";
 import CameraHealthCheck from "./Incidents/CameraHealthCheck.js";
 import CameraLog from "./Incidents/CameraLog.js";
-import Incident from "./Incidents/Incident.js";
+// import Incident from "./Incidents/Incident.js";
 import IncidentAcceptance from "./Incidents/IncidentAcceptance.js";
 import IncidentDismissal from "./Incidents/IncidentDismissal.js";
 import Notification from "./Notification/Notification.js";
@@ -19,6 +19,11 @@ import SerialItemDeployment from "./Inventory/SerialItemDeployment.js";
 import SerializedItem from "./Inventory/SerializedItem.js";
 import SerializedItemHistory from "./Inventory/SerializedItemHistory.js"; // 👈 new model
 import DeploymentNotes from "./Inventory/DeploymentNotes.js";
+
+import YOLOIncident from "./Incidents/v2Incident/YOLOIncident.js";
+import Incident from "./Incidents/v2Incident/Incident.js";
+import HumanIncident from "./Incidents/v2Incident/HumanIncident.js";
+
 const setupAssociations = () => {
   // ========================================
   // USER ASSOCIATIONS
@@ -86,29 +91,10 @@ const setupAssociations = () => {
   });
 
   // ========================================
-  // CAMERA & INCIDENT SYSTEM ASSOCIATIONS
+  // BASE INCIDENT ASSOCIATIONS
   // ========================================
-  Camera.hasMany(Incident, {
-    foreignKey: "cameraId",
-    as: "incidents",
-    onDelete: "SET NULL",
-  });
-  Incident.belongsTo(Camera, { foreignKey: "cameraId", as: "camera" });
 
-  Camera.hasMany(CameraHealthCheck, {
-    foreignKey: "cameraId",
-    as: "healthChecks",
-    onDelete: "CASCADE",
-  });
-  CameraHealthCheck.belongsTo(Camera, { foreignKey: "cameraId", as: "camera" });
-
-  Camera.hasMany(CameraLog, {
-    foreignKey: "cameraId",
-    as: "logs",
-    onDelete: "CASCADE",
-  });
-  CameraLog.belongsTo(Camera, { foreignKey: "cameraId", as: "camera" });
-
+  // USER ↔ INCIDENT ACCEPTANCE
   User.belongsToMany(Incident, {
     through: IncidentAcceptance,
     as: "acceptedIncidents",
@@ -122,6 +108,7 @@ const setupAssociations = () => {
     otherKey: "userId",
   });
 
+  // USER ↔ INCIDENT DISMISSAL
   User.belongsToMany(Incident, {
     through: IncidentDismissal,
     as: "dismissedIncidents",
@@ -135,6 +122,66 @@ const setupAssociations = () => {
     otherKey: "userId",
   });
 
+  // ========================================
+  // HUMAN INCIDENT ASSOCIATIONS
+  // ========================================
+
+  HumanIncident.belongsTo(Incident, {
+    foreignKey: "id",
+    as: "incidentBaseHuman",
+  });
+  Incident.hasOne(HumanIncident, {
+    foreignKey: "id",
+    as: "HumanIncident",
+  });
+  // ========================================
+  // AI INCIDENT ASSOCIATIONS
+  // ========================================
+
+  YOLOIncident.belongsTo(Incident, {
+    foreignKey: "id",
+    as: "incidentBaseYolo",
+  });
+  Incident.hasOne(YOLOIncident, {
+    foreignKey: "id",
+    as: "YOLOIncident",
+  });
+
+  // CAMERA ↔ INCIDENT
+  Camera.hasMany(Incident, {
+    foreignKey: "cameraId",
+    as: "incidents",
+    onDelete: "SET NULL",
+  });
+  Incident.belongsTo(Camera, {
+    foreignKey: "cameraId",
+    as: "camera",
+  });
+
+  // ========================================
+  // CAMERA HEALTH & LOGGING ASSOCIATIONS
+  // ========================================
+
+  // CAMERA ↔ CAMERA HEALTH & LOG
+  Camera.hasMany(CameraHealthCheck, {
+    foreignKey: "cameraId",
+    as: "healthChecks",
+    onDelete: "CASCADE",
+  });
+  CameraHealthCheck.belongsTo(Camera, {
+    foreignKey: "cameraId",
+    as: "camera",
+  });
+
+  Camera.hasMany(CameraLog, {
+    foreignKey: "cameraId",
+    as: "logs",
+    onDelete: "CASCADE",
+  });
+  CameraLog.belongsTo(Camera, {
+    foreignKey: "cameraId",
+    as: "camera",
+  });
   // ========================================
   // INVENTORY SYSTEM ASSOCIATIONS
   // ========================================

@@ -632,9 +632,10 @@ const getTotalFunctionalUnserviceable = async (req, res, next) => {
       group: ["condition"],
     });
 
-    // Convert results to object form
+    // Normalize and map
     const counts = results.reduce((acc, row) => {
-      acc[row.condition] = Number(row.dataValues.count);
+      const condition = row.condition.toLowerCase(); // convert ENUM to lowercase
+      acc[condition] = Number(row.dataValues.count);
       return acc;
     }, {});
 

@@ -632,9 +632,9 @@ const getTotalFunctionalUnserviceable = async (req, res, next) => {
       group: ["condition"],
     });
 
-    // Convert result to simple object form
+    // Convert results to object form
     const counts = results.reduce((acc, row) => {
-      acc[row.condition] = row.dataValues.count;
+      acc[row.condition] = Number(row.dataValues.count);
       return acc;
     }, {});
 
@@ -642,8 +642,8 @@ const getTotalFunctionalUnserviceable = async (req, res, next) => {
       success: true,
       message: "Status has been counted successfully",
       data: {
-        totalFunctional: counts.functional,
-        totalUnserviceable: counts.unserviceable,
+        totalFunctional: counts.functional || 0,
+        totalUnserviceable: counts.unserviceable || 0,
       },
     });
   } catch (error) {

@@ -640,9 +640,9 @@ const getTotalFunctionalUnserviceable = async (req, res, next) => {
 
     return res.status(StatusCodes.OK).json({
       success: true,
-      message: "Status found successfully",
-      totalFunctional: counts.functional || 0,
-      totalUnserviceable: counts.unserviceable || 0,
+      message: "Status has been counted successfully",
+      totalFunctional: counts.functional,
+      totalUnserviceable: counts.unserviceable,
     });
   } catch (error) {
     next(error);

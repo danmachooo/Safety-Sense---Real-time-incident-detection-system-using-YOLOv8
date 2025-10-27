@@ -46,6 +46,7 @@ const totalUnserviceable = ref(0);
 const fetchStatusCounts = async () => {
   try {
     const response = await api.get("inventory/batches/status/counts");
+    console.log(response.data.totalFunctional);
 
     totalFunctional.value = response.data.totalFunctional;
     totalUnserviceable.value = response.data.totalUnserviceable;

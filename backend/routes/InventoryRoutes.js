@@ -14,6 +14,7 @@ import {
   deleteBatch,
   restoreBatch,
   getSerializedItemsByBatch,
+  getTotalFunctionalUnserviceable,
 } from "../controllers/Inventory/batchController.js";
 
 import {
@@ -94,6 +95,9 @@ router.post("/batches", authMiddleware, adminMiddleware, createBatch);
 router.put("/batches/:id", authMiddleware, adminMiddleware, updateBatch);
 router.delete("/batches/:id", authMiddleware, adminMiddleware, deleteBatch);
 router.patch("/batches/:id", authMiddleware, adminMiddleware, restoreBatch);
+
+//Status count
+router.get("/batches/status/counts", getTotalFunctionalUnserviceable);
 
 //Serialized iTEMS
 router.get("/serialized", authMiddleware, adminMiddleware, getSerializedItems);

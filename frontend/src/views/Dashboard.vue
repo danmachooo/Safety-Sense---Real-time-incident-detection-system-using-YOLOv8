@@ -159,11 +159,10 @@ const refreshData = () => {
 };
 
 const formatDate = (dateString) => {
-  return new Date(dateString).toLocaleDateString("en-US", {
+  return new Date(dateString).toLocaleString("en-US", {
     month: "short",
     day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
+    year: "numeric",
   });
 };
 
@@ -851,7 +850,6 @@ onMounted(() => {
                   </p>
                   <p class="text-xs text-gray-500 font-medium">
                     {{ formatDate(deployment.deployment_date) }}
-                    {{ console.log(formatDate(deployment.deployment_date)) }}
                   </p>
                   <span
                     class="inline-flex px-3 py-1 text-xs font-semibold rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200"

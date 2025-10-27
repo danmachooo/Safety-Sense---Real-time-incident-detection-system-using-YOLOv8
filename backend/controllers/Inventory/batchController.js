@@ -1,4 +1,4 @@
-import { Op, Sequelize } from "sequelize";
+import { Op, Sequelize, fn, col } from "sequelize";
 
 import models from "../../models/index.js";
 const {
@@ -625,6 +625,30 @@ const restoreBatch = async (req, res, next) => {
   }
 };
 
+const getTotalFunctionalUnserviceable = async (req, res, next) => {
+  try {
+    const results = await Batch.findAll({
+      attributes: ["condition", [fn("COUNT", col("condition")), "count"]],
+      group: ["condition"],
+    });
+
+    // Convert result to simple object form
+    const counts = results.reduce((acc, row) => {
+      acc[row.condition] = row.dataValues.count;
+      return acc;
+    }, {});
+
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Status found successfully",
+      totalFunctional: counts.functional || 0,
+      totalUnserviceable: counts.unserviceable || 0,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export {
   createBatch,
   getSerializedItems,
@@ -633,4 +657,5 @@ export {
   updateBatch,
   deleteBatch,
   restoreBatch,
+  getTotalFunctionalUnserviceable,
 };

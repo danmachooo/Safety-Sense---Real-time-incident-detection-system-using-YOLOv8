@@ -13,6 +13,7 @@ import {
   X,
   AlertCircle,
   CheckCircle,
+  CheckCircle2,
   Package2,
   Calendar,
   Clock,
@@ -39,6 +40,20 @@ const filters = ref({
   supplier: "",
   isActive: true,
 });
+const totalFunctional = ref(0);
+const totalUnserviceable = ref(0);
+
+const fetchStatusCounts = async () => {
+  try {
+    const response = await api.get("inventory/batches/status/counts");
+
+    totalFunctional.value = response.data.totalFunctional;
+    totalUnserviceable.value = response.data.totalUnserviceable;
+  } catch (err) {
+    showNotification("Failed to fetch status counts", "error");
+    console.log("Error: ", err);
+  }
+};
 
 // Form state
 const currentBatch = ref({
@@ -56,7 +71,11 @@ const currentBatch = ref({
 
 // Fetch data
 onMounted(async () => {
-  await Promise.all([fetchBatches(), fetchInventoryItems()]);
+  await Promise.all([
+    fetchBatches(),
+    fetchInventoryItems(),
+    fetchStatusCounts(),
+  ]);
 });
 
 const fetchInventoryItems = async () => {
@@ -311,6 +330,7 @@ const formatCurrency = (value) => {
       </div>
       <!-- Stats Cards -->
       <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <!-- Total Batches -->
         <div
           class="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg"
         >
@@ -325,6 +345,7 @@ const formatCurrency = (value) => {
           </div>
         </div>
 
+        <!-- Total Value -->
         <div
           class="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg"
         >
@@ -345,7 +366,42 @@ const formatCurrency = (value) => {
             </div>
           </div>
         </div>
+
+        <!-- Total Functional -->
+        <div
+          class="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg"
+        >
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium text-gray-600">Functional</p>
+              <p class="text-3xl font-bold text-green-600">
+                {{ totalFunctional }}
+              </p>
+            </div>
+            <div class="p-3 bg-green-100 rounded-xl">
+              <CheckCircle2 class="w-6 h-6 text-green-600" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Total Unserviceable -->
+        <div
+          class="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg"
+        >
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium text-gray-600">Unserviceable</p>
+              <p class="text-3xl font-bold text-red-600">
+                {{ totalUnserviceable }}
+              </p>
+            </div>
+            <div class="p-3 bg-red-100 rounded-xl">
+              <AlertTriangle class="w-6 h-6 text-red-600" />
+            </div>
+          </div>
+        </div>
       </div>
+
       <!-- Filters -->
       <div
         class="bg-white/70 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6 mb-8"

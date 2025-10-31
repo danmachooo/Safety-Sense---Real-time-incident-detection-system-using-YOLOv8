@@ -1,7 +1,14 @@
 import { Op } from "sequelize"; // Import models from the index file to ensure associations are loaded
 import models from "../../models/index.js";
-const { Incident, Camera, User, IncidentAcceptance, IncidentDismissal } =
-  models;
+const {
+  Incident,
+  HumanIncident,
+  YOLOIncident,
+  Camera,
+  User,
+  IncidentAcceptance,
+  IncidentDismissal,
+} = models;
 
 import { BadRequestError, NotFoundError } from "../../utils/Error.js";
 import { StatusCodes } from "http-status-codes";
@@ -25,98 +32,10 @@ const __dirname = path.dirname(__filename);
  * @param {Function} next - Express next middleware function
  */
 const createIncident = async (req, res, next) => {
-  let transaction;
-
-  try {
-    transaction = await sequelize.transaction();
-
-    const {
-      cameraId,
-      reportedBy,
-      contact,
-      type,
-      snapshotUrl,
-      description,
-      longitude,
-      latitude,
-    } = req.body;
-
-    // Determine if this is a citizen report or system detection
-    const isCitizenReport = !cameraId;
-
-    // Only require type, snapshotUrl, longitude, and latitude
-    if (!type || !snapshotUrl || !longitude || !latitude) {
-      throw new BadRequestError(
-        "Required fields are missing: type, snapshotUrl, longitude, latitude"
-      );
-    }
-
-    // Validate camera exists if cameraId is provided
-    if (cameraId) {
-      const camera = await Camera.findByPk(cameraId);
-      if (!camera) {
-        throw new NotFoundError("Camera not found");
-      }
-    }
-
-    // Validate incident type
-    const validTypes = [
-      "Fire",
-      "Accident",
-      "Medical",
-      "Crime",
-      "Flood",
-      "Other",
-    ];
-    if (!validTypes.includes(type)) {
-      throw new BadRequestError("Invalid incident type");
-    }
-
-    const incident = await Incident.create(
-      {
-        cameraId, // This will be null for citizen reports
-        reportedBy:
-          reportedBy ||
-          (isCitizenReport ? "Anonymous Citizen" : "System Detection"),
-        contact, // Optional contact info for citizen reports
-        type,
-        snapshotUrl,
-        description,
-        longitude,
-        latitude,
-        status: "pending",
-      },
-      { transaction }
-    );
-
-    await transaction.commit();
-    transaction = null; // Set to null after commit to prevent double rollback
-
-    // Fetch the created incident with associations
-    const createdIncident = await Incident.findByPk(incident.id, {
-      include: [
-        {
-          model: Camera,
-          as: "camera",
-          attributes: ["id", "name", "location", "status"],
-          required: false,
-        },
-      ],
-    });
-
-    return res.status(StatusCodes.CREATED).json({
-      success: true,
-      message: isCitizenReport
-        ? "Citizen report created successfully"
-        : "Incident detected successfully",
-      data: createdIncident,
-    });
-  } catch (error) {
-    // Only roll back if transaction exists and hasn't been committed/rolled back
-    if (transaction) await transaction.rollback();
-
-    console.error("An error occurred: " + error);
-    next(error);
+  if (req.body.cameraId) {
+    return createCameraDetection(req, res, next);
+  } else {
+    return createCitizenReport(req, res, next);
   }
 };
 
@@ -127,29 +46,13 @@ const createIncident = async (req, res, next) => {
  * @param {Function} next - Express next middleware function
  */
 const createCitizenReport = async (req, res, next) => {
-  console.log("Running citizen report");
   let transaction;
-
   try {
     transaction = await sequelize.transaction();
 
-    // Log what we received
-    console.log("Request body:", req.body);
-    console.log("Request file:", req.file ? "Present" : "None");
-    console.log("Upload error:", req.uploadError?.message || "None");
+    const { reportedBy, contact, type, description, longitude, latitude } =
+      req.body;
 
-    // Extract data from form fields or JSON body
-    const {
-      reportedBy,
-      contact,
-      type,
-      description,
-      longitude,
-      latitude,
-      snapshotUrl,
-    } = req.body;
-
-    // Get IP address from request
     const ipAddress =
       req.ip ||
       req.connection.remoteAddress ||
@@ -157,101 +60,45 @@ const createCitizenReport = async (req, res, next) => {
       req.headers["x-forwarded-for"]?.split(",")[0] ||
       "unknown";
 
-    console.debug("Extracted fields:", {
-      type,
-      description,
-      longitude,
-      latitude,
-      ipAddress,
-      reportedBy,
-      contact,
-      snapshotUrl, // Log the snapshotUrl from request body
-    });
-
-    // Handle image upload - SIMPLIFIED
-    let finalSnapshotUrl = null;
-    const warnings = [];
-
-    // Priority 1: Check if snapshotUrl was provided in request body
-    if (snapshotUrl && snapshotUrl.trim() !== "") {
-      // Image was already uploaded, just use the path as-is
-      finalSnapshotUrl = snapshotUrl;
-      console.log("Image path from request body:", finalSnapshotUrl);
-    }
-    // Priority 2: Check if file was uploaded through multer middleware
-    else if (req.file && req.file.supabasePath && !req.uploadError) {
-      finalSnapshotUrl = req.file.supabasePath;
-      console.log("Image uploaded via middleware:", finalSnapshotUrl);
-    }
-    // Priority 3: Handle upload errors
-    else if (req.file && req.uploadError) {
-      console.warn("Image upload failed:", req.uploadError.message);
-      warnings.push(`Image upload failed: ${req.uploadError.message}`);
-    } else {
-      console.log("No image file provided - proceeding without image");
+    // ✅ Handle Supabase upload (from your middleware)
+    let snapshotUrl = null;
+    if (req.file?.supabasePath) {
+      snapshotUrl = getFileUrl(req.file.supabasePath); // Converts to full public URL
     }
 
-    // Validate required fields
-    const missingFields = [];
-    if (!type) missingFields.push("type");
-    if (!description) missingFields.push("description");
-    if (!longitude) missingFields.push("longitude");
-    if (!latitude) missingFields.push("latitude");
+    // ✅ Required fields validation
+    const missing = [];
+    if (!type) missing.push("type");
+    if (!longitude) missing.push("longitude");
+    if (!latitude) missing.push("latitude");
+    if (!snapshotUrl) missing.push("image");
+    if (missing.length > 0)
+      throw new BadRequestError(`Missing fields: ${missing.join(", ")}`);
 
-    if (missingFields.length > 0) {
-      throw new BadRequestError(
-        `Required fields are missing: ${missingFields.join(", ")}`
-      );
-    }
+    // ✅ Create Incident (base table)
+    const incident = await Incident.create(
+      {
+        type,
+        description,
+        snapshotUrl,
+        longitude,
+        latitude,
+        status: "pending",
+      },
+      { transaction }
+    );
 
-    // Validate incident type
-    const validTypes = [
-      "Fire",
-      "Accident",
-      "Medical",
-      "Crime",
-      "Flood",
-      "Other",
-    ];
-    if (!validTypes.includes(type)) {
-      throw new BadRequestError(
-        `Invalid incident type. Must be one of: ${validTypes.join(", ")}`
-      );
-    }
+    // ✅ Create HumanIncident (subtype)
+    const human = await HumanIncident.create(
+      {
+        id: incident.id,
+        reportedBy: reportedBy || "Anonymous Citizen",
+        contact: contact || null,
+        ipAddress,
+      },
+      { transaction }
+    );
 
-    // Validate and parse coordinates
-    const lat = parseFloat(latitude);
-    const lng = parseFloat(longitude);
-
-    if (isNaN(lat) || lat < -90 || lat > 90) {
-      throw new BadRequestError("Invalid latitude. Must be between -90 and 90");
-    }
-
-    if (isNaN(lng) || lng < -180 || lng > 180) {
-      throw new BadRequestError(
-        "Invalid longitude. Must be between -180 and 180"
-      );
-    }
-
-    // Create incident record
-    const incidentData = {
-      cameraId: null,
-      reportedBy: reportedBy || "Anonymous Citizen",
-      contact: contact || "No contact provided",
-      type,
-      snapshotUrl: finalSnapshotUrl, // Use the processed snapshot URL
-      description,
-      longitude: lng,
-      latitude: lat,
-      ipAddress,
-      status: "pending",
-    };
-
-    console.log("Creating incident with data:", incidentData);
-
-    const incident = await Incident.create(incidentData, { transaction });
-
-    // Send push notification to responders
     try {
       const shortDescription =
         incident.description.length > 100
@@ -259,7 +106,7 @@ const createCitizenReport = async (req, res, next) => {
           : incident.description;
 
       const notificationTitle = `${type} Incident Alert!`;
-      const notificationBody = `${shortDescription} - Reported by: ${incident.reportedBy}`;
+      const notificationBody = `${shortDescription} - Reported by: ${human.reportedBy}`;
 
       console.log("Broadcasting notification to:", process.env.RESPONDER_TOPIC);
 
@@ -279,48 +126,21 @@ const createCitizenReport = async (req, res, next) => {
       console.log("Notification sent successfully");
     } catch (notificationError) {
       console.error("FCM notification failed:", notificationError);
-      warnings.push("Notification to responders failed");
-      // Don't fail the request if notification fails
     }
 
     await transaction.commit();
-    transaction = null;
 
-    // Success response
-    const responseMessage =
-      warnings.length > 0
-        ? "Citizen report created successfully with warnings"
-        : "Citizen report created successfully";
+    const created = await Incident.findByPk(incident.id, {
+      include: [{ model: HumanIncident, as: "HumanIncident" }],
+    });
 
     return res.status(StatusCodes.CREATED).json({
       success: true,
-      message: responseMessage,
-      data: {
-        id: incident.id,
-        type: incident.type,
-        description: incident.description,
-        latitude: incident.latitude,
-        longitude: incident.longitude,
-        reportedBy: incident.reportedBy,
-        contact: incident.contact,
-        snapshotUrl: incident.snapshotUrl,
-        status: incident.status,
-        createdAt: incident.createdAt,
-        hasImage: !!incident.snapshotUrl,
-      },
-      warnings: warnings.length > 0 ? warnings : undefined,
+      message: "Citizen report created successfully",
+      data: created,
     });
   } catch (error) {
-    // Rollback transaction if it exists
-    if (transaction) {
-      try {
-        await transaction.rollback();
-      } catch (rollbackError) {
-        console.error("Transaction rollback failed:", rollbackError);
-      }
-    }
-
-    console.error("Error creating citizen report:", error);
+    if (transaction) await transaction.rollback();
     next(error);
   }
 };
@@ -333,47 +153,37 @@ const createCitizenReport = async (req, res, next) => {
  */
 const createCameraDetection = async (req, res, next) => {
   let transaction;
-
   try {
     transaction = await sequelize.transaction();
 
-    const { cameraId, type, snapshotUrl, description, longitude, latitude } =
-      req.body;
+    const {
+      cameraId,
+      aiType,
+      confidence,
+      description,
+      type,
+      longitude,
+      latitude,
+      snapshotUrl, // optional pre-signed or Supabase URL
+    } = req.body;
 
-    // Validate required fields
-    if (!cameraId || !type || !snapshotUrl || !longitude || !latitude) {
-      throw new BadRequestError(
-        "Required fields are missing: cameraId, type, snapshotUrl, longitude, latitude"
-      );
-    }
+    if (!cameraId || !type || !longitude || !latitude)
+      throw new BadRequestError("Missing required fields");
 
-    // Validate camera exists
     const camera = await Camera.findByPk(cameraId);
-    if (!camera) {
-      throw new NotFoundError("Camera not found");
-    }
+    if (!camera) throw new NotFoundError("Camera not found");
 
-    // Validate incident type
-    const validTypes = [
-      "Fire",
-      "Accident",
-      "Medical",
-      "Crime",
-      "Flood",
-      "Other",
-    ];
-    if (!validTypes.includes(type)) {
-      throw new BadRequestError("Invalid incident type");
+    // ✅ If file uploaded via middleware, use it
+    let finalSnapshotUrl = snapshotUrl;
+    if (req.file?.supabasePath) {
+      finalSnapshotUrl = getFileUrl(req.file.supabasePath);
     }
 
     const incident = await Incident.create(
       {
-        cameraId,
-        reportedBy: "System Detection",
-        contact: null,
         type,
-        snapshotUrl,
         description,
+        snapshotUrl: finalSnapshotUrl,
         longitude,
         latitude,
         status: "pending",
@@ -381,31 +191,59 @@ const createCameraDetection = async (req, res, next) => {
       { transaction }
     );
 
-    await transaction.commit();
-    transaction = null; // Set to null after commit to prevent double rollback
+    const yolo = await YOLOIncident.create(
+      {
+        id: incident.id,
+        cameraId,
+        aiType: aiType || "ObjectDetected",
+        confidence: confidence || 1.0,
+      },
 
-    // Fetch the created incident with camera association
-    const createdIncident = await Incident.findByPk(incident.id, {
-      include: [
+      { transaction }
+    );
+
+    try {
+      const shortDescription =
+        incident.description.length > 100
+          ? `${incident.description.substring(0, 100)}...`
+          : incident.description;
+
+      const notificationTitle = `${type} Incident Alert!`;
+      const notificationBody = `${shortDescription} - AI Reported`;
+
+      console.log("Broadcasting notification to:", process.env.RESPONDER_TOPIC);
+
+      await sendTopicNotification(
+        process.env.RESPONDER_TOPIC || "all_responders",
+        notificationTitle,
+        notificationBody,
         {
-          model: Camera,
-          as: "camera",
-          attributes: ["id", "name", "location", "status"],
-          required: false,
-        },
-      ],
+          incidentId: incident.id.toString(),
+          type: incident.type,
+          latitude: incident.latitude.toString(),
+          longitude: incident.longitude.toString(),
+          hasImage: !!incident.snapshotUrl,
+        }
+      );
+
+      console.log("Notification sent successfully");
+    } catch (notificationError) {
+      console.error("FCM notification failed:", notificationError);
+    }
+
+    await transaction.commit();
+
+    const created = await Incident.findByPk(incident.id, {
+      include: [{ model: YOLOIncident, as: "YOLOIncident" }],
     });
 
     return res.status(StatusCodes.CREATED).json({
       success: true,
-      message: "Camera detection created successfully",
-      data: createdIncident,
+      message: "AI detection recorded successfully",
+      data: created,
     });
   } catch (error) {
-    // Only roll back if transaction exists and hasn't been committed/rolled back
     if (transaction) await transaction.rollback();
-
-    console.error("An error occurred: " + error);
     next(error);
   }
 };
@@ -416,6 +254,7 @@ const createCameraDetection = async (req, res, next) => {
  * @param {Object} res - Express response object
  * @param {Function} next - Express next middleware function
  */
+
 const getIncidents = async (req, res, next) => {
   try {
     const {
@@ -425,14 +264,17 @@ const getIncidents = async (req, res, next) => {
       cameraId,
       startDate,
       endDate,
-      page,
-      limit,
-      showDeleted,
-      sortBy,
-      sortOrder,
+      page = 1,
+      limit = 10,
+      showDeleted = "false",
+      sortBy = "createdAt",
+      sortOrder = "desc",
       source,
     } = req.query;
 
+    // ==========================
+    //  WHERE condition
+    // ==========================
     const whereCondition = {};
 
     if (search) {
@@ -459,24 +301,28 @@ const getIncidents = async (req, res, next) => {
       if (endDate) whereCondition.createdAt[Op.lte] = new Date(endDate);
     }
 
-    const pageNumber = Number.parseInt(page) || 1;
-    const limitNumber = Number.parseInt(limit) || 10;
+    // ==========================
+    // Pagination + Sorting
+    // ==========================
+    const pageNumber = parseInt(page, 10);
+    const limitNumber = parseInt(limit, 10);
     const offset = (pageNumber - 1) * limitNumber;
 
-    const paranoidOption = showDeleted === "true" ? false : true;
+    const paranoidOption = showDeleted !== "true";
 
     const validSortColumns = ["createdAt", "type", "status", "updatedAt"];
     const validSortOrders = ["asc", "desc"];
 
-    let order = [["createdAt", "desc"]];
+    const sortColumn = validSortColumns.includes(sortBy) ? sortBy : "createdAt";
+    const sortDirection = validSortOrders.includes(sortOrder.toLowerCase())
+      ? sortOrder.toLowerCase()
+      : "desc";
 
-    if (sortBy && validSortColumns.includes(sortBy.toLowerCase())) {
-      const direction = validSortOrders.includes(sortOrder?.toLowerCase())
-        ? sortOrder
-        : "desc";
-      order = [[sortBy, direction]];
-    }
+    const order = [[sortColumn, sortDirection]];
 
+    // ==========================
+    // Query with JOINs
+    // ==========================
     const { count, rows } = await Incident.findAndCountAll({
       where: whereCondition,
       include: [
@@ -484,20 +330,29 @@ const getIncidents = async (req, res, next) => {
           model: Camera,
           as: "camera",
           attributes: ["id", "name", "location", "status"],
-          required: false,
         },
         {
           model: User,
           as: "accepters",
           attributes: ["id", "firstname", "lastname", "email", "contact"],
           through: { attributes: ["acceptedAt"] },
-          required: false,
         },
         {
           model: User,
           as: "dismissers",
           attributes: ["id", "firstname", "lastname", "email", "contact"],
           through: { attributes: ["dismissedAt"] },
+        },
+        {
+          model: YOLOIncident,
+          as: "YOLOIncident", // ✅ alias from your model association
+          attributes: ["id", "confidence", "label", "snapshotUrl"], // adjust fields to match your YOLOIncident model
+          required: false,
+        },
+        {
+          model: HumanIncident,
+          as: "HumanIncident", // ✅ alias from your model association
+          attributes: ["id", "witnessName", "details", "snapshotUrl"], // adjust based on your schema
           required: false,
         },
       ],
@@ -508,18 +363,39 @@ const getIncidents = async (req, res, next) => {
       distinct: true,
     });
 
-    // Generate signed URLs for snapshot paths
+    // ==========================
+    //  Add signed URLs
+    // ==========================
     const dataWithSignedUrls = await Promise.all(
       rows.map(async (incident) => {
+        const signedUrls = {};
+
+        // Handle main incident snapshot
         if (incident.snapshotUrl) {
           const { data: signed, error } = await supabase.storage
-            .from("uploads") // your bucket name
-            .createSignedUrl(incident.snapshotUrl, 3600); // 1 hour expiry
-
-          if (!error && signed?.signedUrl) {
-            incident.dataValues.snapshotSignedUrl = signed.signedUrl;
-          }
+            .from("uploads")
+            .createSignedUrl(incident.snapshotUrl, 3600);
+          if (!error && signed?.signedUrl) signedUrls.main = signed.signedUrl;
         }
+
+        // Handle YOLOIncident snapshot
+        if (incident.YOLOIncident?.snapshotUrl) {
+          const { data: signed, error } = await supabase.storage
+            .from("uploads")
+            .createSignedUrl(incident.YOLOIncident.snapshotUrl, 3600);
+          if (!error && signed?.signedUrl) signedUrls.ai = signed.signedUrl;
+        }
+
+        // Handle HumanIncident snapshot
+        if (incident.HumanIncident?.snapshotUrl) {
+          const { data: signed, error } = await supabase.storage
+            .from("uploads")
+            .createSignedUrl(incident.HumanIncident.snapshotUrl, 3600);
+          if (!error && signed?.signedUrl) signedUrls.human = signed.signedUrl;
+        }
+
+        incident.dataValues.snapshotSignedUrls = signedUrls;
+
         return incident;
       })
     );
@@ -527,24 +403,27 @@ const getIncidents = async (req, res, next) => {
     return res.status(StatusCodes.OK).json({
       success: true,
       message: "Incidents retrieved successfully",
-      totalIncidents: count,
-      totalPages: Math.ceil(count / limitNumber),
-      currentPage: pageNumber,
+      pagination: {
+        total: count,
+        totalPages: Math.ceil(count / limitNumber),
+        currentPage: pageNumber,
+        limit: limitNumber,
+      },
       data: dataWithSignedUrls,
     });
   } catch (error) {
-    console.error("An error occurred: " + error);
+    console.error("Error fetching incidents:", error);
     next(error);
   }
 };
 
 const getIncidentsForHeatmap = async (req, res, next) => {
   try {
-    const { filter, startDate, endDate, type } = req.query;
+    const { filter, startDate, endDate, type, source } = req.query;
 
     const where = {};
 
-    // 🔎 Date filtering logic
+    // Date filtering
     if (filter === "last7days") {
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -557,60 +436,90 @@ const getIncidentsForHeatmap = async (req, res, next) => {
       if (endDate) where.createdAt[Op.lte] = new Date(endDate);
     }
 
-    // 🎯 Incident type filter
+    // Type filtering (ensure correct casing)
     if (type) {
-      where.type = type.toLowerCase();
+      where.type = {
+        [Op.eq]: type.charAt(0).toUpperCase() + type.slice(1).toLowerCase(),
+      };
     }
 
-    // 📥 Query incidents (only what's needed)
+    // Source filtering
+    if (source === "citizen") {
+      where.cameraId = null; // Human-reported only
+    } else if (source === "camera") {
+      where.cameraId = { [Op.not]: null }; // AI-detected only
+    }
+
+    // Query incidents
     const incidents = await Incident.findAll({
       where,
-      attributes: ["latitude", "longitude", "type"],
+      attributes: ["latitude", "longitude", "type", "cameraId"],
+      include: [
+        {
+          model: YOLOIncident,
+          as: "YOLOIncident",
+          attributes: ["aiType", "confidence"],
+          required: false,
+        },
+        {
+          model: HumanIncident,
+          as: "HumanIncident",
+          attributes: ["reportedBy", "contact"],
+          required: false,
+        },
+      ],
       raw: true,
     });
 
-    // 📊 Intensity weights by type
+    // Intensity weights
     const TYPE_INTENSITY = {
-      fire: 5,
-      medical: 4,
-      accident: 3,
-      crime: 4,
-      flood: 3,
-      other: 1,
+      Fire: 5,
+      Medical: 4,
+      Accident: 3,
+      Crime: 4,
+      Flood: 3,
+      Other: 1,
     };
 
     const coordMap = {};
-    const round = (val, precision = 4) => Number(val).toFixed(precision); // ~10m accuracy
+    const round = (val, precision = 4) => Number(val).toFixed(precision);
 
-    for (const { latitude, longitude, type } of incidents) {
+    for (const incident of incidents) {
+      const {
+        latitude,
+        longitude,
+        type,
+        "YOLOIncident.aiType": aiType,
+      } = incident;
       if (!latitude || !longitude) continue;
 
       const lat = round(latitude);
       const lon = round(longitude);
       const key = `${lat},${lon}`;
 
-      const normalizedType = type?.toLowerCase() || "other";
-      const intensity = TYPE_INTENSITY[normalizedType] || TYPE_INTENSITY.other;
+      // Determine type weight (fallback to AI type if type is null)
+      const normalizedType = type || aiType || "Other";
+      const intensity = TYPE_INTENSITY[normalizedType] || TYPE_INTENSITY.Other;
 
       coordMap[key] = (coordMap[key] || 0) + intensity;
     }
 
-    // 🔄 Transform to frontend-friendly format
+    // 🔄 Format for frontend heatmap
     const heatmapData = Object.entries(coordMap).map(([key, intensity]) => {
       const [lat, lon] = key.split(",").map(Number);
       return [lat, lon, intensity];
     });
 
-    // 🧪 Optional debugging log
-    console.log(`Heatmap response: ${heatmapData.length} bubbles`);
+    console.log(`Heatmap generated: ${heatmapData.length} points`);
 
     return res.status(StatusCodes.OK).json({
       success: true,
+      message: "Heatmap data generated successfully",
       data: heatmapData,
     });
   } catch (error) {
-    console.error("Heatmap Error:", error.message);
-    return next(error);
+    console.error("Heatmap Error:", error);
+    next(error);
   }
 };
 
@@ -620,10 +529,10 @@ const getIncidentsForHeatmap = async (req, res, next) => {
  * @param {Object} res - Express response object
  * @param {Function} next - Express next middleware function
  */
+
 const getIncident = async (req, res, next) => {
   try {
     const { id } = req.params;
-
     if (!id) throw new BadRequestError("Incident ID is required");
 
     const incident = await Incident.findByPk(id, {
@@ -632,7 +541,7 @@ const getIncident = async (req, res, next) => {
           model: Camera,
           as: "camera",
           attributes: ["id", "name", "location", "status", "ipAddress"],
-          required: false, // LEFT JOIN
+          required: false,
         },
         {
           model: User,
@@ -640,18 +549,58 @@ const getIncident = async (req, res, next) => {
           attributes: ["id", "firstname", "lastname", "email", "contact"],
           through: { attributes: ["acceptedAt"] },
         },
+        {
+          model: YOLOIncident,
+          as: "YOLOIncident",
+          attributes: ["aiType", "confidence", "framePath", "modelVersion"],
+          required: false,
+        },
+        {
+          model: HumanIncident,
+          as: "HumanIncident",
+          attributes: ["reportedBy", "contact", "description"],
+          required: false,
+        },
       ],
     });
 
     if (!incident) throw new NotFoundError("Incident not found");
 
+    // ✅ Generate signed snapshot URL (1-hour expiry)
+    if (incident.snapshotUrl) {
+      const { data: signed, error } = await supabase.storage
+        .from("uploads")
+        .createSignedUrl(incident.snapshotUrl, 3600);
+
+      if (!error && signed?.signedUrl) {
+        incident.dataValues.snapshotSignedUrl = signed.signedUrl;
+      }
+    }
+
+    // ✅ Add signed frame URL for AI incidents
+    if (incident.YOLOIncident?.framePath) {
+      const { data: signed, error } = await supabase.storage
+        .from("uploads")
+        .createSignedUrl(incident.YOLOIncident.framePath, 3600);
+
+      if (!error && signed?.signedUrl) {
+        incident.dataValues.aiFrameSignedUrl = signed.signedUrl;
+      }
+    }
+
+    // ✅ Determine source type
+    const sourceType = incident.cameraId ? "camera" : "citizen";
+
     return res.status(StatusCodes.OK).json({
       success: true,
-      message: "Incident found",
-      data: incident,
+      message: "Incident retrieved successfully",
+      data: {
+        ...incident.toJSON(),
+        sourceType,
+      },
     });
   } catch (error) {
-    console.error("An error occurred: " + error);
+    console.error("Error in getIncident:", error);
     next(error);
   }
 };
@@ -679,6 +628,11 @@ const updateIncident = async (req, res, next) => {
       status,
       longitude,
       latitude,
+      source,
+      aiConfidence,
+      aiModelVersion,
+      aiImageUrl,
+      aiDetectedAt,
     } = req.body;
 
     if (!id) throw new BadRequestError("Incident ID is required");
@@ -688,45 +642,46 @@ const updateIncident = async (req, res, next) => {
       !reportedBy &&
       !contact &&
       !type &&
-      !snapshotUrl &&
+      snapshotUrl === undefined &&
       description === undefined &&
       !status &&
-      !longitude &&
-      !latitude
+      longitude === undefined &&
+      latitude === undefined &&
+      !source &&
+      aiConfidence === undefined &&
+      !aiModelVersion &&
+      !aiImageUrl &&
+      !aiDetectedAt
     ) {
       throw new BadRequestError("At least one field to update is required");
     }
 
     const incident = await Incident.findByPk(id);
+    if (!incident) throw new NotFoundError("Incident not found");
 
-    if (!incident) {
-      throw new NotFoundError("Incident not found");
-    }
-
-    // Validate camera if provided
+    // ✅ Validate camera
     if (cameraId) {
       const camera = await Camera.findByPk(cameraId);
-      if (!camera) {
-        throw new NotFoundError("Camera not found");
-      }
+      if (!camera) throw new NotFoundError("Camera not found");
     }
 
-    // Validate incident type if provided
+    // ✅ Validate and normalize type
     if (type) {
       const validTypes = [
-        "Fire",
-        "Accident",
-        "Medical",
-        "Crime",
-        "Flood",
-        "Other",
+        "fire",
+        "accident",
+        "medical",
+        "crime",
+        "flood",
+        "other",
       ];
-      if (!validTypes.includes(type)) {
+      const normalizedType = type.toLowerCase();
+      if (!validTypes.includes(normalizedType))
         throw new BadRequestError("Invalid incident type");
-      }
+      incident.type = normalizedType;
     }
 
-    // Validate status if provided
+    // ✅ Validate status
     if (status) {
       const validStatuses = [
         "pending",
@@ -735,30 +690,56 @@ const updateIncident = async (req, res, next) => {
         "resolved",
         "dismissed",
       ];
-      if (!validStatuses.includes(status)) {
+      if (!validStatuses.includes(status))
         throw new BadRequestError("Invalid incident status");
-      }
     }
 
-    // Update incident with only provided fields
+    // ✅ Prepare update data
     const updateData = {};
-    // Allow setting cameraId to null explicitly
     if (cameraId === null || cameraId) updateData.cameraId = cameraId;
     if (reportedBy) updateData.reportedBy = reportedBy;
     if (contact) updateData.contact = contact;
-    if (type) updateData.type = type;
-    if (snapshotUrl) updateData.snapshotUrl = snapshotUrl;
+    if (type) updateData.type = type.toLowerCase();
+    if (snapshotUrl !== undefined) updateData.snapshotUrl = snapshotUrl;
     if (description !== undefined) updateData.description = description;
     if (status) updateData.status = status;
-    if (longitude) updateData.longitude = longitude;
-    if (latitude) updateData.latitude = latitude;
+    if (longitude !== undefined) updateData.longitude = longitude;
+    if (latitude !== undefined) updateData.latitude = latitude;
+    if (source) updateData.source = source;
 
     await incident.update(updateData, { transaction });
 
-    await transaction.commit();
-    transaction = null; // Set to null after commit to prevent double rollback
+    // ========================================
+    // 🤖 AI INCIDENT HANDLING (YOLOIncident)
+    // ========================================
+    if (source?.toLowerCase() === "ai" || aiConfidence || aiModelVersion) {
+      const existingYoloIncident = await YOLOIncident.findOne({
+        where: { id },
+        transaction,
+      });
 
-    // Fetch updated incident with associations
+      const yoloData = {
+        id,
+        confidence: aiConfidence ?? existingYoloIncident?.confidence,
+        modelVersion: aiModelVersion ?? existingYoloIncident?.modelVersion,
+        imageUrl: aiImageUrl ?? existingYoloIncident?.imageUrl,
+        detectedAt:
+          aiDetectedAt ?? existingYoloIncident?.detectedAt ?? new Date(),
+      };
+
+      if (existingYoloIncident) {
+        await existingYoloIncident.update(yoloData, { transaction });
+      } else {
+        await YOLOIncident.create(yoloData, { transaction });
+      }
+    }
+
+    await transaction.commit();
+    transaction = null;
+
+    // ========================================
+    // 🔄 Fetch updated data with associations
+    // ========================================
     const updatedIncident = await Incident.findByPk(id, {
       include: [
         {
@@ -773,6 +754,18 @@ const updateIncident = async (req, res, next) => {
           attributes: ["id", "firstname", "lastname", "email"],
           through: { attributes: ["acceptedAt"] },
         },
+        {
+          model: YOLOIncident,
+          as: "YOLOIncident",
+          attributes: ["confidence", "modelVersion", "detectedAt", "imageUrl"],
+          required: false,
+        },
+        {
+          model: HumanIncident,
+          as: "HumanIncident",
+          attributes: ["reportedAt", "imageUrl", "notes"],
+          required: false,
+        },
       ],
     });
 
@@ -782,20 +775,11 @@ const updateIncident = async (req, res, next) => {
       data: updatedIncident,
     });
   } catch (error) {
-    // Only roll back if transaction exists and hasn't been committed/rolled back
     if (transaction) await transaction.rollback();
-
     console.error("An error occurred: " + error);
     next(error);
   }
 };
-
-/**
- * Soft delete incident
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- * @param {Function} next - Express next middleware function
- */
 const softDeleteIncident = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -803,7 +787,6 @@ const softDeleteIncident = async (req, res, next) => {
     if (!id) throw new BadRequestError("Incident ID is required");
 
     const incident = await Incident.findByPk(id);
-
     if (!incident) throw new NotFoundError("Incident not found");
 
     await incident.destroy(); // Soft delete since paranoid is true
@@ -820,9 +803,6 @@ const softDeleteIncident = async (req, res, next) => {
 
 /**
  * Restore soft deleted incident
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- * @param {Function} next - Express next middleware function
  */
 const restoreIncident = async (req, res, next) => {
   try {
@@ -830,7 +810,10 @@ const restoreIncident = async (req, res, next) => {
 
     if (!id) throw new BadRequestError("Incident ID is required");
 
-    const incident = await Incident.findOne({ where: { id }, paranoid: false });
+    const incident = await Incident.findOne({
+      where: { id },
+      paranoid: false,
+    });
 
     if (!incident) throw new NotFoundError("Incident not found");
 
@@ -848,14 +831,20 @@ const restoreIncident = async (req, res, next) => {
 
 /**
  * Get deleted incidents
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- * @param {Function} next - Express next middleware function
  */
 const getDeletedIncidents = async (req, res, next) => {
   try {
-    const { search, status, type, cameraId, page, limit, sortBy, sortOrder } =
-      req.query;
+    const {
+      search,
+      status,
+      type,
+      reportType,
+      cameraId,
+      page,
+      limit,
+      sortBy,
+      sortOrder,
+    } = req.query;
 
     const whereCondition = {
       deletedAt: { [Op.ne]: null }, // Fetch only soft-deleted incidents
@@ -863,17 +852,13 @@ const getDeletedIncidents = async (req, res, next) => {
 
     // Search condition
     if (search) {
-      whereCondition[Op.or] = [
-        { description: { [Op.like]: `%${search}%` } },
-        { reportedBy: { [Op.like]: `%${search}%` } },
-        { contact: { [Op.like]: `%${search}%` } },
-      ];
+      whereCondition[Op.or] = [{ description: { [Op.like]: `%${search}%` } }];
     }
 
     // Filter conditions
     if (status) whereCondition.status = status;
     if (type) whereCondition.type = type;
-    if (cameraId) whereCondition.cameraId = cameraId;
+    if (reportType) whereCondition.reportType = reportType;
 
     // Pagination
     const pageNumber = Number.parseInt(page) || 1;
@@ -893,15 +878,34 @@ const getDeletedIncidents = async (req, res, next) => {
       order = [[sortBy, direction]];
     }
 
-    // Modified to handle optional camera association
     const { count, rows } = await Incident.findAndCountAll({
       where: whereCondition,
       include: [
         {
-          model: Camera,
-          as: "camera",
-          attributes: ["id", "name", "location", "status"],
-          required: false, // Make this a LEFT JOIN instead of INNER JOIN
+          model: HumanIncident,
+          as: "humanDetails",
+          attributes: ["reportedBy", "contact", "ipAddress"],
+          required: false,
+        },
+        {
+          model: YOLOIncident,
+          as: "yoloDetails",
+          attributes: [
+            "cameraId",
+            "aiType",
+            "confidence",
+            "modelVersion",
+            "detectionFrameUrl",
+          ],
+          include: [
+            {
+              model: Camera,
+              as: "camera",
+              attributes: ["id", "name", "location", "status"],
+              required: false,
+            },
+          ],
+          required: false,
         },
       ],
       paranoid: false, // Include soft-deleted records
@@ -926,9 +930,6 @@ const getDeletedIncidents = async (req, res, next) => {
 
 /**
  * Accept an incident by a user
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- * @param {Function} next - Express next middleware function
  */
 const acceptIncident = async (req, res, next) => {
   let transaction;
@@ -944,22 +945,15 @@ const acceptIncident = async (req, res, next) => {
 
     // Validate incident exists
     const incident = await Incident.findByPk(incidentId);
-    if (!incident) {
-      throw new NotFoundError("Incident not found");
-    }
+    if (!incident) throw new NotFoundError("Incident not found");
 
     // Validate user exists
     const user = await User.findByPk(userId);
-    if (!user) {
-      throw new NotFoundError("User not found");
-    }
+    if (!user) throw new NotFoundError("User not found");
 
     // Check if already accepted
     const existingAcceptance = await IncidentAcceptance.findOne({
-      where: {
-        incidentId,
-        userId,
-      },
+      where: { incidentId, userId },
     });
 
     if (existingAcceptance) {
@@ -978,25 +972,18 @@ const acceptIncident = async (req, res, next) => {
 
     // Update incident status to accepted if not already
     if (incident.status === "pending" || incident.status === "verified") {
-      await incident.update(
-        {
-          status: "accepted",
-        },
-        { transaction }
-      );
+      await incident.update({ status: "accepted" }, { transaction });
     }
 
     await transaction.commit();
-    transaction = null; // Set to null after commit to prevent double rollback
+    transaction = null;
 
     return res.status(StatusCodes.OK).json({
       success: true,
       message: "Incident accepted successfully",
     });
   } catch (error) {
-    // Only roll back if transaction exists and hasn't been committed/rolled back
     if (transaction) await transaction.rollback();
-
     console.error("An error occurred: " + error);
     next(error);
   }
@@ -1004,9 +991,6 @@ const acceptIncident = async (req, res, next) => {
 
 /**
  * Resolve an incident
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- * @param {Function} next - Express next middleware function
  */
 const resolveIncident = async (req, res, next) => {
   let transaction;
@@ -1020,10 +1004,7 @@ const resolveIncident = async (req, res, next) => {
     if (!id) throw new BadRequestError("Incident ID is required");
 
     const incident = await Incident.findByPk(id);
-
-    if (!incident) {
-      throw new NotFoundError("Incident not found");
-    }
+    if (!incident) throw new NotFoundError("Incident not found");
 
     // Update incident status to resolved
     await incident.update(
@@ -1045,9 +1026,28 @@ const resolveIncident = async (req, res, next) => {
     const resolvedIncident = await Incident.findByPk(id, {
       include: [
         {
-          model: Camera,
-          as: "camera",
-          attributes: ["id", "name", "location", "status"],
+          model: HumanIncident,
+          as: "humanDetails",
+          attributes: ["reportedBy", "contact", "ipAddress"],
+        },
+        {
+          model: YOLOIncident,
+          as: "yoloDetails",
+          attributes: [
+            "cameraId",
+            "aiType",
+            "confidence",
+            "modelVersion",
+            "detectionFrameUrl",
+          ],
+          include: [
+            {
+              model: Camera,
+              as: "camera",
+              attributes: ["id", "name", "location", "status"],
+              required: false,
+            },
+          ],
           required: false,
         },
         {
@@ -1073,9 +1073,6 @@ const resolveIncident = async (req, res, next) => {
 
 /**
  * Dismiss an incident for a specific user (per-user dismissal)
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- * @param {Function} next - Express next middleware function
  */
 const dismissIncident = async (req, res, next) => {
   let transaction;
@@ -1091,22 +1088,15 @@ const dismissIncident = async (req, res, next) => {
 
     // Validate incident exists
     const incident = await Incident.findByPk(incidentId);
-    if (!incident) {
-      throw new NotFoundError("Incident not found");
-    }
+    if (!incident) throw new NotFoundError("Incident not found");
 
     // Validate user exists
     const user = await User.findByPk(userId);
-    if (!user) {
-      throw new NotFoundError("User not found");
-    }
+    if (!user) throw new NotFoundError("User not found");
 
     // Check if already dismissed by this user
     const existingDismissal = await IncidentDismissal.findOne({
-      where: {
-        incidentId,
-        userId,
-      },
+      where: { incidentId, userId },
     });
 
     if (existingDismissal) {
@@ -1125,16 +1115,14 @@ const dismissIncident = async (req, res, next) => {
     );
 
     await transaction.commit();
-    transaction = null; // Set to null after commit to prevent double rollback
+    transaction = null;
 
     return res.status(StatusCodes.OK).json({
       success: true,
       message: "Incident dismissed for this user successfully",
     });
   } catch (error) {
-    // Only roll back if transaction exists and hasn't been committed/rolled back
     if (transaction) await transaction.rollback();
-
     console.error("An error occurred: " + error);
     next(error);
   }
@@ -1142,9 +1130,6 @@ const dismissIncident = async (req, res, next) => {
 
 /**
  * Globally dismiss an incident (admin only)
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- * @param {Function} next - Express next middleware function
  */
 const globalDismissIncident = async (req, res, next) => {
   let transaction;
@@ -1160,19 +1145,13 @@ const globalDismissIncident = async (req, res, next) => {
 
     // Validate incident exists
     const incident = await Incident.findByPk(id);
-    if (!incident) {
-      throw new NotFoundError("Incident not found");
-    }
+    if (!incident) throw new NotFoundError("Incident not found");
 
     // If userId is provided, validate user exists and record the dismissal
     if (userId) {
       const user = await User.findByPk(userId);
-      if (!user) {
-        throw new NotFoundError("User not found");
-      }
+      if (!user) throw new NotFoundError("User not found");
 
-      // Check if user has admin privileges (this should be handled by middleware)
-      // For now, we'll just create the dismissal record
       await IncidentDismissal.create(
         {
           incidentId: id,
@@ -1202,9 +1181,28 @@ const globalDismissIncident = async (req, res, next) => {
     const dismissedIncident = await Incident.findByPk(id, {
       include: [
         {
-          model: Camera,
-          as: "camera",
-          attributes: ["id", "name", "location", "status"],
+          model: HumanIncident,
+          as: "humanDetails",
+          attributes: ["reportedBy", "contact", "ipAddress"],
+        },
+        {
+          model: YOLOIncident,
+          as: "yoloDetails",
+          attributes: [
+            "cameraId",
+            "aiType",
+            "confidence",
+            "modelVersion",
+            "detectionFrameUrl",
+          ],
+          include: [
+            {
+              model: Camera,
+              as: "camera",
+              attributes: ["id", "name", "location", "status"],
+              required: false,
+            },
+          ],
           required: false,
         },
         {
@@ -1235,10 +1233,7 @@ const globalDismissIncident = async (req, res, next) => {
 };
 
 /**
- * Get incidents dismissed by a user
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- * @param {Function} next - Express next middleware function
+ * Get dismissed incidents by a user
  */
 const getDismissedIncidentsByUser = async (req, res, next) => {
   try {
@@ -1264,9 +1259,29 @@ const getDismissedIncidentsByUser = async (req, res, next) => {
           as: "dismissedIncidents",
           include: [
             {
-              model: Camera,
-              as: "camera",
-              attributes: ["id", "name", "location", "status"],
+              model: HumanIncident,
+              as: "humanDetails",
+              attributes: ["reportedBy", "contact", "ipAddress"],
+              required: false,
+            },
+            {
+              model: YOLOIncident,
+              as: "yoloDetails",
+              attributes: [
+                "cameraId",
+                "aiType",
+                "confidence",
+                "modelVersion",
+                "detectionFrameUrl",
+              ],
+              include: [
+                {
+                  model: Camera,
+                  as: "camera",
+                  attributes: ["id", "name", "location", "status"],
+                  required: false,
+                },
+              ],
               required: false,
             },
           ],
@@ -1300,9 +1315,6 @@ const getDismissedIncidentsByUser = async (req, res, next) => {
 
 /**
  * Get users who dismissed an incident
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- * @param {Function} next - Express next middleware function
  */
 const getUsersByDismissedIncident = async (req, res, next) => {
   try {
@@ -1355,9 +1367,6 @@ const getUsersByDismissedIncident = async (req, res, next) => {
 
 /**
  * Get incident statistics
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- * @param {Function} next - Express next middleware function
  */
 const getIncidentStats = async (req, res, next) => {
   try {
@@ -1379,15 +1388,38 @@ const getIncidentStats = async (req, res, next) => {
       group: ["type"],
     });
 
-    // Get recent incidents - with limited associations to avoid issues
+    // Count incidents by report type (human vs yolo)
+    const reportTypeCounts = await Incident.findAll({
+      attributes: [
+        "reportType",
+        [sequelize.fn("COUNT", sequelize.col("reportType")), "count"],
+      ],
+      group: ["reportType"],
+    });
+
+    // Get recent incidents with details
     const recentIncidents = await Incident.findAll({
       limit: 5,
       order: [["createdAt", "DESC"]],
       include: [
         {
-          model: Camera,
-          as: "camera",
-          attributes: ["id", "name", "location"],
+          model: HumanIncident,
+          as: "humanDetails",
+          attributes: ["reportedBy", "contact"],
+          required: false,
+        },
+        {
+          model: YOLOIncident,
+          as: "yoloDetails",
+          attributes: ["cameraId", "aiType", "confidence"],
+          include: [
+            {
+              model: Camera,
+              as: "camera",
+              attributes: ["id", "name", "location"],
+              required: false,
+            },
+          ],
           required: false,
         },
       ],
@@ -1411,15 +1443,15 @@ const getIncidentStats = async (req, res, next) => {
       },
     });
 
-    // Count incidents by source (camera vs user reported) using raw SQL with backticks for MariaDB
+    // Count incidents by source using raw SQL
     const sourceStats = await sequelize.query(
       `
       SELECT 
-        CASE WHEN \`cameraId\` IS NULL THEN 'user-reported' ELSE 'camera-detected' END as source,
+        CASE WHEN i.\`reportType\` = 'human' THEN 'user-reported' ELSE 'camera-detected' END as source,
         COUNT(*) as count
-      FROM \`Incidents\`
-      WHERE \`deletedAt\` IS NULL
-      GROUP BY CASE WHEN \`cameraId\` IS NULL THEN 'user-reported' ELSE 'camera-detected' END
+      FROM \`Incidents\` i
+      WHERE i.\`deletedAt\` IS NULL
+      GROUP BY i.\`reportType\`
     `,
       { type: sequelize.QueryTypes.SELECT }
     );
@@ -1430,6 +1462,7 @@ const getIncidentStats = async (req, res, next) => {
       data: {
         byStatus: statusCounts,
         byType: typeCounts,
+        byReportType: reportTypeCounts,
         bySource: sourceStats,
         recentIncidents,
         last24Hours,
@@ -1445,9 +1478,6 @@ const getIncidentStats = async (req, res, next) => {
 
 /**
  * Get incidents accepted by a user
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- * @param {Function} next - Express next middleware function
  */
 const getIncidentsByUser = async (req, res, next) => {
   try {
@@ -1473,9 +1503,29 @@ const getIncidentsByUser = async (req, res, next) => {
           as: "acceptedIncidents",
           include: [
             {
-              model: Camera,
-              as: "camera",
-              attributes: ["id", "name", "location", "status"],
+              model: HumanIncident,
+              as: "humanDetails",
+              attributes: ["reportedBy", "contact", "ipAddress"],
+              required: false,
+            },
+            {
+              model: YOLOIncident,
+              as: "yoloDetails",
+              attributes: [
+                "cameraId",
+                "aiType",
+                "confidence",
+                "modelVersion",
+                "detectionFrameUrl",
+              ],
+              include: [
+                {
+                  model: Camera,
+                  as: "camera",
+                  attributes: ["id", "name", "location", "status"],
+                  required: false,
+                },
+              ],
               required: false,
             },
           ],
@@ -1509,9 +1559,6 @@ const getIncidentsByUser = async (req, res, next) => {
 
 /**
  * Get users who accepted an incident
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- * @param {Function} next - Express next middleware function
  */
 const getUsersByIncident = async (req, res, next) => {
   try {

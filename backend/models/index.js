@@ -9,7 +9,7 @@ import LoginHistory from "./Users/LoginHistory.js";
 import Camera from "./Incidents/Camera.js";
 import CameraHealthCheck from "./Incidents/CameraHealthCheck.js";
 import CameraLog from "./Incidents/CameraLog.js";
-import Incident from "./Incidents/Incident.js";
+// import Incident from "./Incidents/Incident.js";
 import IncidentAcceptance from "./Incidents/IncidentAcceptance.js";
 import IncidentDismissal from "./Incidents/IncidentDismissal.js";
 import Notification from "./Notification/Notification.js";
@@ -22,6 +22,9 @@ import SerializedItem from "./Inventory/SerializedItem.js";
 import SerialItemDeployment from "./Inventory/SerialItemDeployment.js";
 import SerializedItemHistory from "./Inventory/SerializedItemHistory.js";
 import DeploymentNotes from "./Inventory/DeploymentNotes.js";
+import Incident from "./Incidents/v2Incident/Incident.js";
+import HumanIncident from "./Incidents/v2Incident/HumanIncident.js";
+import YOLOIncident from "./Incidents/v2Incident/YOLOIncident.js";
 // import ActionLog from "./ActionLog.js"; // Uncomment if this exists
 
 // IMPORTANT: Set up associations ONCE here
@@ -32,12 +35,6 @@ const models = {
   sequelize,
   User,
   LoginHistory,
-  Camera,
-  CameraHealthCheck,
-  CameraLog,
-  Incident,
-  IncidentAcceptance,
-  IncidentDismissal,
   Notification,
   InventoryItem,
   Batch,
@@ -47,7 +44,15 @@ const models = {
   SerializedItem,
   SerialItemDeployment,
   SerializedItemHistory,
+  Camera,
   DeploymentNotes,
+  HumanIncident,
+  YOLOIncident,
+  CameraHealthCheck,
+  CameraLog,
+  Incident,
+  IncidentAcceptance,
+  IncidentDismissal,
   // ActionLog, // Uncomment if this exists
 };
 

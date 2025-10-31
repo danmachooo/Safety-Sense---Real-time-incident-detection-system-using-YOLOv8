@@ -59,7 +59,6 @@ const Camera = sequelize.define(
     },
   },
   {
-    tableName: "Cameras",
     timestamps: true,
     paranoid: true,
     indexes: [

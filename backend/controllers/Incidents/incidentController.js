@@ -1024,14 +1024,12 @@ const resolveIncident = async (req, res, next) => {
             "modelVersion",
             "detectionFrameUrl",
           ],
-          include: [
-            {
-              model: Camera,
-              as: "camera",
-              attributes: ["id", "name", "location", "status"],
-              required: false,
-            },
-          ],
+          required: false,
+        },
+        {
+          model: Camera,
+          as: "camera",
+          attributes: ["id", "name", "location", "status"],
           required: false,
         },
         {

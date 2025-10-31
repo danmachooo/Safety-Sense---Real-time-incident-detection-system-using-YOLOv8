@@ -17,7 +17,7 @@ import {
   Package2,
   Calendar,
   Clock,
-  DollarSign,
+  PhilippinePeso,
   TrendingDown,
   AlertTriangle,
   RefreshCcw, // Added for the retry button icon
@@ -391,7 +391,7 @@ const formatCurrency = (value) => {
             </div>
 
             <div class="flex-shrink-0 p-3 bg-emerald-100 rounded-xl">
-              <DollarSign class="w-6 h-6 text-emerald-600" />
+              <PhilippinePeso class="w-6 h-6 text-emerald-600" />
             </div>
           </div>
         </div>

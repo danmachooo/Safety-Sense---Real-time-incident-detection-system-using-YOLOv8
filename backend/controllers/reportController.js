@@ -1320,7 +1320,7 @@ const generateTopLocationsByIncidentsReport = async (req, res, next) => {
         y.confidence as yoloConfidence,
         h.reportedBy as humanReporter
       FROM Incidents i
-      LEFT JOIN cameras c ON i.cameraId = c.id
+      LEFT JOIN Cameras c ON i.cameraId = c.id
       LEFT JOIN YOLOIncidents y ON i.id = y.incidentId
       LEFT JOIN HumanIncidents h ON i.id = h.incidentId
       WHERE i.deletedAt IS NULL

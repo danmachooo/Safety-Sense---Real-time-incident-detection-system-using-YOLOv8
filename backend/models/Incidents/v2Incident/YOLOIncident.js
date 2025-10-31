@@ -24,7 +24,7 @@ const YOLOIncident = sequelize.define(
     },
     detectionFrameUrl: {
       type: DataTypes.STRING,
-      allowNull: false,
+      allowNull: true,
     },
     detectedObjects: {
       type: DataTypes.JSON,

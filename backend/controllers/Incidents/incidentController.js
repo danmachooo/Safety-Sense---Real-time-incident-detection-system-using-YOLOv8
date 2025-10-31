@@ -539,7 +539,12 @@ const getIncident = async (req, res, next) => {
         {
           model: YOLOIncident,
           as: "YOLOIncident",
-          attributes: ["aiType", "confidence", "framePath", "modelVersion"],
+          attributes: [
+            "aiType",
+            "confidence",
+            "detectionFrameUrl",
+            "modelVersion",
+          ],
           required: false,
         },
         {
@@ -565,10 +570,10 @@ const getIncident = async (req, res, next) => {
     }
 
     // ✅ Add signed frame URL for AI incidents
-    if (incident.YOLOIncident?.framePath) {
+    if (incident.YOLOIncident?.detectionFrameUrl) {
       const { data: signed, error } = await supabase.storage
         .from("uploads")
-        .createSignedUrl(incident.YOLOIncident.framePath, 3600);
+        .createSignedUrl(incident.YOLOIncident.detectionFrameUrl, 3600);
 
       if (!error && signed?.signedUrl) {
         incident.dataValues.aiFrameSignedUrl = signed.signedUrl;

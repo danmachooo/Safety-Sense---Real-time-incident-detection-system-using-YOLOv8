@@ -12,7 +12,6 @@ const HumanIncident = sequelize.define(
     contact: {
       type: DataTypes.STRING,
       allowNull: true,
-      validate: { isEmail: true },
     },
     ipAddress: {
       type: DataTypes.STRING,

@@ -329,7 +329,7 @@ const getIncidents = async (req, res, next) => {
         },
         {
           model: YOLOIncident,
-          as: "yoloDetails", // ✅ fixed alias
+          as: "yoloDetails", // fixed alias
           attributes: [
             "id",
             "cameraId",
@@ -341,7 +341,7 @@ const getIncidents = async (req, res, next) => {
         },
         {
           model: HumanIncident,
-          as: "humanDetails", // ✅ fixed alias
+          as: "humanDetails", // fixed alias
           attributes: ["id", "reportedBy", "contact", "ipAddress"],
           required: false,
         },
@@ -353,7 +353,7 @@ const getIncidents = async (req, res, next) => {
       distinct: true,
     });
 
-    // ✅ Add signed URLs for all snapshot fields
+    // Add signed URLs for all snapshot fields
     const dataWithSignedUrls = await Promise.all(
       rows.map(async (incident) => {
         const signedUrls = {};

@@ -384,11 +384,9 @@ const generateBatchAdditionsReport = async (req, res, next) => {
           (sum, b) => sum + b.unit_price * b.quantity,
           0
         ),
-        expiringBatchesCount: expiringBatches.length,
       },
       batches,
       batchStats,
-      expiringBatches,
     };
 
     return res.status(StatusCodes.OK).json({

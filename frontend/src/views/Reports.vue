@@ -2610,7 +2610,7 @@ const fetchInventoryReports = async (dateRange) => {
       await Promise.all([
         api
           .get(
-            `${API_BASE}/inventory-summary?${new URLSearchParams(dateRange)}`
+            `${API_BASE}/inventory/summary?${new URLSearchParams(dateRange)}`
           )
           .catch((err) => ({
             data: {
@@ -2619,7 +2619,11 @@ const fetchInventoryReports = async (dateRange) => {
             },
           })),
         api
-          .get(`${API_BASE}/item-deployment?${new URLSearchParams(dateRange)}`)
+          .get(
+            `${API_BASE}/inventory/deployments?${new URLSearchParams(
+              dateRange
+            )}`
+          )
           .catch((err) => ({
             data: {
               success: false,
@@ -2627,7 +2631,11 @@ const fetchInventoryReports = async (dateRange) => {
             },
           })),
         api
-          .get(`${API_BASE}/batch-additions?${new URLSearchParams(dateRange)}`)
+          .get(
+            `${API_BASE}/inventory/batch-additions?${new URLSearchParams(
+              dateRange
+            )}`
+          )
           .catch((err) => ({
             data: {
               success: false,
@@ -2635,7 +2643,11 @@ const fetchInventoryReports = async (dateRange) => {
             },
           })),
         api
-          .get(`${API_BASE}/stock-movement?${new URLSearchParams(dateRange)}`)
+          .get(
+            `${API_BASE}/inventory/stock-movements?${new URLSearchParams(
+              dateRange
+            )}`
+          )
           .catch((err) => ({
             data: {
               success: false,
@@ -2684,7 +2696,7 @@ const fetchIncidentReports = async (dateRange) => {
       await Promise.all([
         api
           .get(
-            `${API_BASE}/incident-summary?${new URLSearchParams({
+            `${API_BASE}/incidents/summary?${new URLSearchParams({
               ...dateRange,
               period: selectedPeriod.value,
             })}`
@@ -2696,7 +2708,11 @@ const fetchIncidentReports = async (dateRange) => {
             },
           })),
         api
-          .get(`${API_BASE}/top-locations?${new URLSearchParams(dateRange)}`)
+          .get(
+            `${API_BASE}/incidents/top-locations?${new URLSearchParams(
+              dateRange
+            )}`
+          )
           .catch((err) => ({
             data: {
               success: false,
@@ -2705,7 +2721,9 @@ const fetchIncidentReports = async (dateRange) => {
           })),
         api
           .get(
-            `${API_BASE}/resolved-unresolved?${new URLSearchParams(dateRange)}`
+            `${API_BASE}/incidents/resolved-vs-unresolved?${new URLSearchParams(
+              dateRange
+            )}`
           )
           .catch((err) => ({
             data: {
@@ -2715,7 +2733,7 @@ const fetchIncidentReports = async (dateRange) => {
           })),
         api
           .get(
-            `${API_BASE}/responder-performance?${new URLSearchParams(
+            `${API_BASE}/incidents/responder-performance?${new URLSearchParams(
               dateRange
             )}`
           )

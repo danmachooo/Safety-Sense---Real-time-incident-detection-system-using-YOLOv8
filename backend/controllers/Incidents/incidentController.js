@@ -65,6 +65,7 @@ const createCitizenReport = async (req, res, next) => {
     if (req.file?.supabasePath) {
       snapshotUrl = getFileUrl(req.file.supabasePath); // Converts to full public URL
     }
+    console.log("Snapshot url: ", snapshotUrl);
 
     // ✅ Required fields validation
     const missing = [];

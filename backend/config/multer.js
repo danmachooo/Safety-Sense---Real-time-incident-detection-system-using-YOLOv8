@@ -194,6 +194,7 @@ const getFileUrl = (filename, bucket = "uploads") => {
       ? filename
       : `incidents/${filename}`;
     const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
+    console.log("Public url: ", data.publicUrl);
     return data.publicUrl;
   } catch (error) {
     console.error("Error getting file URL:", error);

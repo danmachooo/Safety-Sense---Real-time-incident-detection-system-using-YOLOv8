@@ -807,14 +807,15 @@ const generateTopLocationsByIncidentsReport = async (req, res, next) => {
       limit = 10,
     } = req.query;
 
-    // Socorro Municipality Barangay Database (same as before)
+    // Socorro Municipality Barangay Database
     const getSocorroLocation = (lat, lng) => {
       const numLat = parseFloat(lat);
       const numLng = parseFloat(lng);
 
       // Define Socorro barangays with their approximate boundaries
+      // Socorro is located at approximately 121°20' longitude and 13°03' latitude
       const socorroBarangays = [
-        // ... (same barangay data as before)
+        // Central/Poblacion area
         {
           name: "Zone I",
           city: "Socorro",
@@ -827,7 +828,316 @@ const generateTopLocationsByIncidentsReport = async (req, res, next) => {
           },
           population: 1114,
         },
-        // ... include all other barangays from your original code
+        {
+          name: "Zone II",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 13.04,
+            maxLat: 13.05,
+            minLng: 121.335,
+            maxLng: 121.345,
+          },
+          population: 950,
+        },
+        {
+          name: "Zone III",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 13.035,
+            maxLat: 13.045,
+            minLng: 121.34,
+            maxLng: 121.35,
+          },
+          population: 800,
+        },
+        {
+          name: "Zone IV",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 13.03,
+            maxLat: 13.04,
+            minLng: 121.345,
+            maxLng: 121.355,
+          },
+          population: 1200,
+        },
+
+        // Northern barangays (near Naujan Lake)
+        {
+          name: "Subaan",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 13.06,
+            maxLat: 13.08,
+            minLng: 121.32,
+            maxLng: 121.35,
+          },
+          population: 2772,
+        },
+        {
+          name: "Bagsok",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 13.05,
+            maxLat: 13.07,
+            minLng: 121.3,
+            maxLng: 121.33,
+          },
+          population: 1884,
+        },
+        {
+          name: "Malugay",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 13.07,
+            maxLat: 13.09,
+            minLng: 121.31,
+            maxLng: 121.34,
+          },
+          population: 734,
+        },
+
+        // Eastern barangays (towards Pola boundary)
+        {
+          name: "Bayuin",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 13.02,
+            maxLat: 13.045,
+            minLng: 121.36,
+            maxLng: 121.39,
+          },
+          population: 1500,
+        },
+        {
+          name: "Catiningan",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 13.03,
+            maxLat: 13.06,
+            minLng: 121.37,
+            maxLng: 121.4,
+          },
+          population: 2100,
+        },
+        {
+          name: "Ma. Concepcion",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 13.01,
+            maxLat: 13.04,
+            minLng: 121.38,
+            maxLng: 121.41,
+          },
+          population: 1800,
+        },
+
+        // Western barangays (towards Occidental Mindoro boundary)
+        {
+          name: "Fortuna",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 13.0,
+            maxLat: 13.03,
+            minLng: 121.28,
+            maxLng: 121.31,
+          },
+          population: 1600,
+        },
+        {
+          name: "Kilo-kilo",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 13.01,
+            maxLat: 13.04,
+            minLng: 121.29,
+            maxLng: 121.32,
+          },
+          population: 1300,
+        },
+        {
+          name: "Leuteboro",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 12.99,
+            maxLat: 13.02,
+            minLng: 121.3,
+            maxLng: 121.33,
+          },
+          population: 1400,
+        },
+
+        // Southern barangays (towards Pinamalayan boundary)
+        {
+          name: "Calubcub",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 12.96,
+            maxLat: 12.99,
+            minLng: 121.32,
+            maxLng: 121.35,
+          },
+          population: 1100,
+        },
+        {
+          name: "Cabugao",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 12.97,
+            maxLat: 13.0,
+            minLng: 121.31,
+            maxLng: 121.34,
+          },
+          population: 1250,
+        },
+        {
+          name: "Bulaklakan",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 12.98,
+            maxLat: 13.01,
+            minLng: 121.33,
+            maxLng: 121.36,
+          },
+          population: 900,
+        },
+
+        // Agricultural/Rural areas
+        {
+          name: "Batuhan",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 12.95,
+            maxLat: 12.98,
+            minLng: 121.34,
+            maxLng: 121.37,
+          },
+          population: 1050,
+        },
+        {
+          name: "Calocmahan",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 12.99,
+            maxLat: 13.02,
+            minLng: 121.36,
+            maxLng: 121.39,
+          },
+          population: 1350,
+        },
+        {
+          name: "Catmon",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 13.02,
+            maxLat: 13.05,
+            minLng: 121.27,
+            maxLng: 121.3,
+          },
+          population: 1180,
+        },
+        {
+          name: "Dampulan",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 13.06,
+            maxLat: 13.09,
+            minLng: 121.28,
+            maxLng: 121.31,
+          },
+          population: 850,
+        },
+        {
+          name: "Hiwahiwan",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 12.94,
+            maxLat: 12.97,
+            minLng: 121.36,
+            maxLng: 121.39,
+          },
+          population: 1450,
+        },
+        {
+          name: "Leuteboro II",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 12.98,
+            maxLat: 13.01,
+            minLng: 121.28,
+            maxLng: 121.31,
+          },
+          population: 920,
+        },
+        {
+          name: "Malarayat",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 12.96,
+            maxLat: 12.99,
+            minLng: 121.29,
+            maxLng: 121.32,
+          },
+          population: 1280,
+        },
+        {
+          name: "Matandang Sabang",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 12.93,
+            maxLat: 12.96,
+            minLng: 121.33,
+            maxLng: 121.36,
+          },
+          population: 1150,
+        },
+        {
+          name: "Parang",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 13.07,
+            maxLat: 13.1,
+            minLng: 121.32,
+            maxLng: 121.35,
+          },
+          population: 1680,
+        },
+        {
+          name: "Santo Niño",
+          city: "Socorro",
+          province: "Oriental Mindoro",
+          bounds: {
+            minLat: 12.92,
+            maxLat: 12.95,
+            minLng: 121.35,
+            maxLng: 121.38,
+          },
+          population: 1380,
+        },
       ];
 
       // Check if coordinates fall within any Socorro barangay
@@ -856,14 +1166,124 @@ const generateTopLocationsByIncidentsReport = async (req, res, next) => {
       return null; // Not found in Socorro database
     };
 
-    // Enhanced geocoding function with Socorro-specific handling (same as before)
+    // Enhanced geocoding function with Socorro-specific handling
     const getHumanReadableLocation = async (latitude, longitude) => {
-      // ... (same implementation as before)
+      if (!latitude || !longitude) return "Unknown Location";
+
+      // First try local Socorro database
+      const localResult = getSocorroLocation(latitude, longitude);
+      if (localResult) {
+        console.log(`Found local Socorro match: ${localResult}`);
+        return localResult;
+      }
+
+      // If not in local database, try external APIs for verification
+      try {
+        const axios = require("axios");
+
+        // Try Nominatim with Philippines-specific parameters
+        const response = await axios.get(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1&accept-language=en,tl&countrycodes=ph`,
+          {
+            headers: {
+              "User-Agent": "SocorroMDRRMO-IncidentReporting/1.0",
+            },
+            timeout: 8000,
+          }
+        );
+
+        const data = response.data;
+
+        if (data && data.address) {
+          const address = data.address;
+          const parts = [];
+
+          // Build Socorro-specific address
+          if (address.house_number && address.road) {
+            parts.push(`${address.house_number} ${address.road}`);
+          } else if (address.road) {
+            parts.push(address.road);
+          }
+
+          // Barangay identification for Socorro area
+          let barangayName = null;
+          if (address.village) {
+            barangayName = address.village;
+          } else if (address.neighbourhood) {
+            barangayName = address.neighbourhood;
+          } else if (address.suburb) {
+            barangayName = address.suburb;
+          }
+
+          if (barangayName) {
+            if (!barangayName.toLowerCase().startsWith("barangay")) {
+              parts.push(`Barangay ${barangayName}`);
+            } else {
+              parts.push(barangayName);
+            }
+          }
+
+          // Always append Socorro municipality
+          if (address.city && address.city.toLowerCase().includes("socorro")) {
+            parts.push("Socorro");
+          } else {
+            parts.push("Socorro Municipality");
+          }
+
+          parts.push("Oriental Mindoro");
+
+          if (parts.length > 0) {
+            return parts.join(", ");
+          }
+        }
+
+        // Fallback for Socorro area
+        return await getSocorroLocationFallback(latitude, longitude);
+      } catch (error) {
+        console.warn(
+          `Geocoding failed for ${latitude}, ${longitude}:`,
+          error.message
+        );
+        return await getSocorroLocationFallback(latitude, longitude);
+      }
     };
 
-    // Socorro-specific fallback geocoding (same as before)
+    // Socorro-specific fallback geocoding
     const getSocorroLocationFallback = async (latitude, longitude) => {
-      // ... (same implementation as before)
+      const numLat = parseFloat(latitude);
+      const numLng = parseFloat(longitude);
+
+      // Check if within Socorro general boundaries
+      if (
+        numLat >= 12.9 &&
+        numLat <= 13.12 &&
+        numLng >= 121.25 &&
+        numLng <= 121.43
+      ) {
+        // Provide sector-based location within Socorro
+        let sector = "Central Socorro";
+
+        if (numLat > 13.05) {
+          sector = "Northern Socorro (Near Naujan Lake)";
+        } else if (numLat < 12.98) {
+          sector = "Southern Socorro";
+        }
+
+        if (numLng < 121.3) {
+          sector = "Western Socorro";
+        } else if (numLng > 121.37) {
+          sector = "Eastern Socorro";
+        }
+
+        return `${sector}, Socorro, Oriental Mindoro (${numLat.toFixed(
+          4
+        )}°N, ${numLng.toFixed(4)}°E)`;
+      }
+
+      // Outside Socorro boundaries
+      return `Outside Socorro Municipality (${numLat.toFixed(
+        4
+      )}°N, ${numLng.toFixed(4)}°E)`;
     };
 
     // Build where clause for Incident model

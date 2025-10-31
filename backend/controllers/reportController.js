@@ -4,7 +4,16 @@ import { StatusCodes } from "http-status-codes";
 import sequelize from "../config/database.js";
 import { validateReportParams } from "../utils/reports/reportHelper.js";
 import models from "../models/index.js";
-const { User, Incident, InventoryItem, Batch, Deployment, Category } = models;
+const {
+  User,
+  Incident,
+  InventoryItem,
+  Batch,
+  Deployment,
+  Category,
+  YOLOIncident,
+  HumanIncident,
+} = models;
 
 /**
  * Generate Inventory Summary Report

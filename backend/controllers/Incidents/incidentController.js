@@ -63,10 +63,10 @@ const createCitizenReport = async (req, res, next) => {
     // ✅ Handle Supabase upload (from your middleware)
     let snapshotUrl = null;
     if (req.file?.supabasePath) {
-      snapshotUrl = getFileUrl(req.file.supabasePath); // Converts to full public URL
+      snapshotUrl = getFilePath(req.file.supabasePath); // Converts to full public URL
     }
     console.log("Snapshot url: ", snapshotUrl);
-
+    return;
     // ✅ Required fields validation
     const missing = [];
     if (!type) missing.push("type");

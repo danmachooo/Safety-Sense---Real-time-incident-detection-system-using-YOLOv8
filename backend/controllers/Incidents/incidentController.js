@@ -62,6 +62,7 @@ const createCitizenReport = async (req, res, next) => {
 
     // ✅ Handle Supabase upload (from your middleware)
     let snapshotUrl = null;
+    console.log("Supabase Path: ", req.file.supabasePath || "No supabase path");
     if (req.file?.supabasePath) {
       snapshotUrl = getFilePath(req.file.supabasePath); // Converts to full public URL
     }

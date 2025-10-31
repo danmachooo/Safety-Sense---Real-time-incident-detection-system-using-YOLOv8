@@ -24,9 +24,23 @@ const {
  */
 const getDashboardSummary = async (req, res, next) => {
   try {
-    // Get total counts
+    // --- INCIDENT COUNTS ---
     const totalIncidents = await Incident.count({
       where: { deletedAt: null },
+    });
+
+    const totalYoloIncidents = await Incident.count({
+      where: {
+        deletedAt: null,
+        reportType: "yolo",
+      },
+    });
+
+    const totalHumanIncidents = await Incident.count({
+      where: {
+        deletedAt: null,
+        reportType: "human",
+      },
     });
 
     const activeIncidents = await Incident.count({
@@ -38,6 +52,7 @@ const getDashboardSummary = async (req, res, next) => {
       },
     });
 
+    // --- USER COUNTS ---
     const totalUsers = await User.count({
       where: { isBlocked: false, deletedAt: null },
     });
@@ -50,6 +65,7 @@ const getDashboardSummary = async (req, res, next) => {
       },
     });
 
+    // --- INVENTORY & DEPLOYMENTS ---
     const totalInventoryItems = await InventoryItem.count({
       where: { is_active: true, deletedAt: null },
     });
@@ -61,7 +77,7 @@ const getDashboardSummary = async (req, res, next) => {
       },
     });
 
-    // Get recent incidents
+    // --- RECENT INCIDENTS ---
     const recentIncidents = await Incident.findAll({
       limit: 5,
       order: [["createdAt", "DESC"]],
@@ -83,17 +99,18 @@ const getDashboardSummary = async (req, res, next) => {
       where: { deletedAt: null },
     });
 
-    // Get incident statistics by type
+    // --- INCIDENTS BY TYPE (GROUPED) ---
     const incidentsByType = await Incident.findAll({
       attributes: [
         "type",
+        "reportType",
         [sequelize.fn("COUNT", sequelize.col("type")), "count"],
       ],
       where: { deletedAt: null },
-      group: ["type"],
+      group: ["reportType", "type"],
     });
 
-    // Get incident statistics by status
+    // --- INCIDENTS BY STATUS ---
     const incidentsByStatus = await Incident.findAll({
       attributes: [
         "status",
@@ -103,7 +120,7 @@ const getDashboardSummary = async (req, res, next) => {
       group: ["status"],
     });
 
-    // Get low stock inventory items
+    // --- LOW STOCK INVENTORY ---
     const lowStockItems = await InventoryItem.findAll({
       where: {
         quantity_in_stock: {
@@ -122,7 +139,7 @@ const getDashboardSummary = async (req, res, next) => {
       limit: 5,
     });
 
-    // Get recent deployments
+    // --- RECENT DEPLOYMENTS ---
     const recentDeployments = await Deployment.findAll({
       limit: 5,
       order: [["deployment_date", "DESC"]],
@@ -141,12 +158,15 @@ const getDashboardSummary = async (req, res, next) => {
       where: { deletedAt: null },
     });
 
+    // --- RESPONSE ---
     return res.status(StatusCodes.OK).json({
       success: true,
       message: "Dashboard summary retrieved successfully",
       data: {
         counts: {
           totalIncidents,
+          totalYoloIncidents,
+          totalHumanIncidents,
           activeIncidents,
           totalUsers,
           totalRescuers,

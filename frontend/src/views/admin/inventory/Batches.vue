@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted, computed, nextTick } from "vue";
 import {
   PlusCircle,
   Pencil,
@@ -77,6 +77,20 @@ onMounted(async () => {
     fetchInventoryItems(),
     fetchStatusCounts(),
   ]);
+  await nextTick();
+
+  const valueEl = document.getElementById("total-value");
+  const container = valueEl.parentElement;
+
+  const fitText = () => {
+    const containerWidth = container.offsetWidth;
+    const textWidth = valueEl.scrollWidth;
+    const scale = Math.min(1, containerWidth / textWidth);
+    valueEl.style.transform = `scale(${scale})`;
+  };
+
+  fitText();
+  window.addEventListener("resize", fitText);
 });
 
 const fetchInventoryItems = async () => {
@@ -350,19 +364,33 @@ const formatCurrency = (value) => {
         <div
           class="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg"
         >
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-sm font-medium text-gray-600">Total Value</p>
-              <p class="text-3xl font-bold text-emerald-600">
-                {{
-                  new Intl.NumberFormat("en-US", {
-                    style: "currency",
-                    currency: "PHP",
-                  }).format(totalValue)
-                }}
-              </p>
+          <div class="flex items-center justify-between gap-4">
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-medium text-gray-600 mb-1">Total Value</p>
+
+              <!-- Auto-scaling value -->
+              <div class="relative w-full">
+                <p
+                  id="total-value"
+                  class="font-bold text-emerald-600 text-3xl sm:text-4xl leading-tight text-nowrap overflow-hidden"
+                  style="
+                    display: inline-block;
+                    transform-origin: left center;
+                    white-space: nowrap;
+                    will-change: transform;
+                  "
+                >
+                  ₱{{
+                    Number(totalValue || 0).toLocaleString("en-PH", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })
+                  }}
+                </p>
+              </div>
             </div>
-            <div class="p-3 bg-emerald-100 rounded-xl">
+
+            <div class="flex-shrink-0 p-3 bg-emerald-100 rounded-xl">
               <DollarSign class="w-6 h-6 text-emerald-600" />
             </div>
           </div>

@@ -1506,6 +1506,7 @@ import {
   RefreshCw,
   Database,
   Grid,
+  Printer,
 } from "lucide-vue-next";
 import Chart from "chart.js/auto";
 import jsPDF from "jspdf";
@@ -2256,7 +2257,7 @@ const getExecutiveSummary = () => {
   const incidents =
     metrics.find((m) => m.label === "Total Incidents")?.value || 0;
 
-  return `During this reporting period, our operations maintained ${totalItems} inventory items with ${incidents} security incidents recorded. 
+  return `During this reporting period, our operations maintained ${totalItems} inventory items with ${incidents} security incidents recorded.
   ${getInventoryInsight()} ${getSecurityInsight()} Overall performance indicators suggest ${getPerformanceStatus()} operational efficiency.`;
 };
 
@@ -2315,9 +2316,9 @@ const getLongTermStrategies = () => {
 };
 
 const getConclusion = () => {
-  return `This ${selectedPeriod.value.toLowerCase()} analysis demonstrates our commitment to operational excellence and continuous improvement. 
-  The data reveals both strengths in our current processes and opportunities for enhancement. By implementing the recommended actions, 
-  we can further optimize our operations, reduce risks, and improve overall efficiency. Regular monitoring and assessment will ensure 
+  return `This ${selectedPeriod.value.toLowerCase()} analysis demonstrates our commitment to operational excellence and continuous improvement.
+  The data reveals both strengths in our current processes and opportunities for enhancement. By implementing the recommended actions,
+  we can further optimize our operations, reduce risks, and improve overall efficiency. Regular monitoring and assessment will ensure
   we maintain high standards while adapting to evolving operational requirements.`;
 };
 
@@ -2605,42 +2606,48 @@ const getPerformanceInsight = () => {
 const fetchInventoryReports = async (dateRange) => {
   try {
     loadingStep.value = "inventory data";
-    const [summaryRes, deploymentsRes, stockMovementRes] = await Promise.all([
-      api
-        .get(`${API_BASE}/inventory/summary?${new URLSearchParams(dateRange)}`)
-        .catch((err) => ({
-          data: {
-            success: false,
-            error: err.message || "Failed to fetch inventory summary",
-          },
-        })),
-      api
-        .get(
-          `${API_BASE}/inventory/deployments?${new URLSearchParams(dateRange)}`
-        )
-        .catch((err) => ({
-          data: {
-            success: false,
-            error: err.message || "Failed to fetch deployment data",
-          },
-        })),
-      api
-        .get(
-          `${API_BASE}/inventory/stock-movements?${new URLSearchParams(
-            dateRange
-          )}`
-        )
-        .catch((err) => ({
-          data: {
-            success: false,
-            error: err.message || "Failed to fetch stock movement data",
-          },
-        })),
-    ]);
+    const [summaryRes, deploymentsRes, batchRes, stockMovementRes] =
+      await Promise.all([
+        api
+          .get(
+            `${API_BASE}/inventory-summary?${new URLSearchParams(dateRange)}`
+          )
+          .catch((err) => ({
+            data: {
+              success: false,
+              error: err.message || "Failed to fetch inventory summary",
+            },
+          })),
+        api
+          .get(`${API_BASE}/item-deployment?${new URLSearchParams(dateRange)}`)
+          .catch((err) => ({
+            data: {
+              success: false,
+              error: err.message || "Failed to fetch deployment data",
+            },
+          })),
+        api
+          .get(`${API_BASE}/batch-additions?${new URLSearchParams(dateRange)}`)
+          .catch((err) => ({
+            data: {
+              success: false,
+              error: err.message || "Failed to fetch batch data",
+            },
+          })),
+        api
+          .get(`${API_BASE}/stock-movement?${new URLSearchParams(dateRange)}`)
+          .catch((err) => ({
+            data: {
+              success: false,
+              error: err.message || "Failed to fetch stock movement data",
+            },
+          })),
+      ]);
 
-    const [summary, deployments, stockMovement] = await Promise.all([
+    const [summary, deployments, batches, stockMovement] = await Promise.all([
       summaryRes.data,
       deploymentsRes.data,
+      batchRes.data,
       stockMovementRes.data,
     ]);
 
@@ -2677,7 +2684,7 @@ const fetchIncidentReports = async (dateRange) => {
       await Promise.all([
         api
           .get(
-            `${API_BASE}/incidents/summary?${new URLSearchParams({
+            `${API_BASE}/incident-summary?${new URLSearchParams({
               ...dateRange,
               period: selectedPeriod.value,
             })}`
@@ -2689,11 +2696,7 @@ const fetchIncidentReports = async (dateRange) => {
             },
           })),
         api
-          .get(
-            `${API_BASE}/incidents/top-locations?${new URLSearchParams(
-              dateRange
-            )}`
-          )
+          .get(`${API_BASE}/top-locations?${new URLSearchParams(dateRange)}`)
           .catch((err) => ({
             data: {
               success: false,
@@ -2702,9 +2705,7 @@ const fetchIncidentReports = async (dateRange) => {
           })),
         api
           .get(
-            `${API_BASE}/incidents/resolved-vs-unresolved?${new URLSearchParams(
-              dateRange
-            )}`
+            `${API_BASE}/resolved-unresolved?${new URLSearchParams(dateRange)}`
           )
           .catch((err) => ({
             data: {
@@ -2714,7 +2715,7 @@ const fetchIncidentReports = async (dateRange) => {
           })),
         api
           .get(
-            `${API_BASE}/incidents/responder-performance?${new URLSearchParams(
+            `${API_BASE}/responder-performance?${new URLSearchParams(
               dateRange
             )}`
           )

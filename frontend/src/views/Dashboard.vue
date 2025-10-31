@@ -23,6 +23,9 @@ import {
   WifiOff,
   AlertOctagon,
   Gauge,
+  Droplets,
+  Zap,
+  Heart,
 } from "lucide-vue-next";
 
 import api from "../utils/axios";
@@ -36,7 +39,7 @@ const inventoryStats = ref({});
 const deploymentStats = ref({});
 const userActivityStats = ref({});
 const activityFeed = ref([]);
-const selectedTimeframe = ref("30days");
+const selectedTimeframe = ref("month");
 
 // Computed properties
 const summaryCards = computed(() => [
@@ -85,7 +88,6 @@ const summaryCards = computed(() => [
 const timeframeOptions = [
   { value: "week", label: "Last Week" },
   { value: "month", label: "Last Month" },
-  { value: "30days", label: "Last 30 Days" },
   { value: "year", label: "Last Year" },
 ];
 
@@ -174,7 +176,9 @@ const getStatusColor = (status) => {
     resolved: "bg-emerald-50 text-emerald-700 border-emerald-200",
     dismissed: "bg-gray-50 text-gray-700 border-gray-200",
   };
-  return colors[status] || "bg-gray-50 text-gray-700 border-gray-200";
+  return (
+    colors[status?.toLowerCase()] || "bg-gray-50 text-gray-700 border-gray-200"
+  );
 };
 
 const getIncidentTypeColor = (type) => {
@@ -183,8 +187,22 @@ const getIncidentTypeColor = (type) => {
     flood: "bg-blue-50 text-blue-700 border-blue-200",
     earthquake: "bg-orange-50 text-orange-700 border-orange-200",
     accident: "bg-purple-50 text-purple-700 border-purple-200",
+    medical: "bg-pink-50 text-pink-700 border-pink-200",
   };
-  return colors[type] || "bg-gray-50 text-gray-700 border-gray-200";
+  return (
+    colors[type?.toLowerCase()] || "bg-gray-50 text-gray-700 border-gray-200"
+  );
+};
+
+const getIncidentTypeIcon = (type) => {
+  const icons = {
+    fire: AlertTriangle,
+    flood: Droplets,
+    earthquake: Zap,
+    accident: Truck,
+    medical: Heart,
+  };
+  return icons[type?.toLowerCase()] || AlertTriangle;
 };
 
 onMounted(() => {
@@ -435,22 +453,22 @@ onMounted(() => {
                         :class="getStatusColor(item.status).split(' ')[0]"
                       >
                         <Clock
-                          v-if="item.status === 'pending'"
+                          v-if="item.status.toLowerCase() === 'pending'"
                           class="w-4 h-4"
                           :class="getStatusColor(item.status).split(' ')[1]"
                         />
                         <Activity
-                          v-else-if="item.status === 'ongoing'"
+                          v-else-if="item.status.toLowerCase() === 'ongoing'"
                           class="w-4 h-4"
                           :class="getStatusColor(item.status).split(' ')[1]"
                         />
                         <CheckCircle
-                          v-else-if="item.status === 'resolved'"
+                          v-else-if="item.status.toLowerCase() === 'resolved'"
                           class="w-4 h-4"
                           :class="getStatusColor(item.status).split(' ')[1]"
                         />
                         <Eye
-                          v-else-if="item.status === 'accepted'"
+                          v-else-if="item.status.toLowerCase() === 'accepted'"
                           class="w-4 h-4"
                           :class="getStatusColor(item.status).split(' ')[1]"
                         />
@@ -494,28 +512,8 @@ onMounted(() => {
                         class="w-8 h-8 rounded-xl flex items-center justify-center shadow-sm"
                         :class="getIncidentTypeColor(item.type).split(' ')[0]"
                       >
-                        <AlertTriangle
-                          v-if="item.type === 'fire'"
-                          class="w-4 h-4"
-                          :class="getIncidentTypeColor(item.type).split(' ')[1]"
-                        />
-                        <Activity
-                          v-else-if="item.type === 'flood'"
-                          class="w-4 h-4"
-                          :class="getIncidentTypeColor(item.type).split(' ')[1]"
-                        />
-                        <AlertCircle
-                          v-else-if="item.type === 'earthquake'"
-                          class="w-4 h-4"
-                          :class="getIncidentTypeColor(item.type).split(' ')[1]"
-                        />
-                        <Truck
-                          v-else-if="item.type === 'accident'"
-                          class="w-4 h-4"
-                          :class="getIncidentTypeColor(item.type).split(' ')[1]"
-                        />
-                        <AlertTriangle
-                          v-else
+                        <component
+                          :is="getIncidentTypeIcon(item.type)"
                           class="w-4 h-4"
                           :class="getIncidentTypeColor(item.type).split(' ')[1]"
                         />
@@ -698,18 +696,30 @@ onMounted(() => {
               >
                 <div class="flex-shrink-0">
                   <div
-                    class="w-12 h-12 bg-orange-100 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300"
+                    class="w-12 h-12 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300"
+                    :class="getIncidentTypeColor(incident.type).split(' ')[0]"
                   >
-                    <AlertTriangle class="w-6 h-6 text-orange-600" />
+                    <component
+                      :is="getIncidentTypeIcon(incident.type)"
+                      class="w-6 h-6"
+                      :class="getIncidentTypeColor(incident.type).split(' ')[1]"
+                    />
                   </div>
                 </div>
                 <div class="flex-1 min-w-0 space-y-2">
                   <p class="text-sm font-bold text-gray-900 capitalize">
                     {{ incident.type }} Incident
                   </p>
-                  <p class="text-xs text-gray-500 font-medium">
-                    {{ formatDate(incident.createdAt) }}
-                  </p>
+                  <div class="flex items-center gap-2 text-xs text-gray-500">
+                    <span class="font-medium">{{
+                      incident.reportType === "yolo"
+                        ? "Camera Detected"
+                        : "Human Reported"
+                    }}</span>
+                    <span v-if="incident.camera"
+                      >• {{ incident.camera.name }}</span
+                    >
+                  </div>
                   <span
                     :class="getStatusColor(incident.status)"
                     class="inline-flex px-3 py-1 text-xs font-semibold rounded-xl border"
@@ -766,7 +776,7 @@ onMounted(() => {
                   <div
                     class="w-12 h-12 bg-gradient-to-r from-red-500 to-red-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-lg"
                   >
-                    <AlertCircle class="w-6 h-6 text-red" />
+                    <AlertCircle class="w-6 h-6 text-white" />
                   </div>
                   <div class="space-y-1">
                     <p class="text-sm font-bold text-gray-900">
@@ -842,7 +852,7 @@ onMounted(() => {
                 </div>
                 <div class="flex-1 min-w-0 space-y-2">
                   <p class="text-sm font-bold text-gray-900">
-                    {{ deployment.inventoryDeploymentItem?.name }}
+                    {{ deployment.item?.name }}
                   </p>
                   <p class="text-xs text-gray-600 font-medium">
                     {{ deployment.deployer?.firstname }}
@@ -851,11 +861,6 @@ onMounted(() => {
                   <p class="text-xs text-gray-500 font-medium">
                     {{ formatDate(deployment.deployment_date) }}
                   </p>
-                  <span
-                    class="inline-flex px-3 py-1 text-xs font-semibold rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200"
-                  >
-                    {{ deployment.status }}
-                  </span>
                 </div>
               </div>
             </div>
@@ -897,7 +902,7 @@ onMounted(() => {
             </div>
           </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
             <div
               class="group text-center p-8 bg-gradient-to-br from-blue-50/80 to-blue-100/60 rounded-3xl hover:from-blue-100/80 hover:to-blue-200/60 transition-all duration-300 border border-blue-200/40 cursor-pointer"
             >
@@ -907,7 +912,7 @@ onMounted(() => {
                 <Package class="w-8 h-8 text-white" />
               </div>
               <p class="text-4xl font-bold text-blue-600 mb-3">
-                {{ inventoryStats.data?.totalItems || 0 }}
+                {{ dashboardData.data?.counts?.totalInventoryItems || 0 }}
               </p>
               <p
                 class="text-sm font-bold text-blue-700 uppercase tracking-wide"
@@ -924,7 +929,7 @@ onMounted(() => {
                 <AlertTriangle class="w-8 h-8 text-white" />
               </div>
               <p class="text-4xl font-bold text-red-600 mb-3">
-                {{ inventoryStats.data?.lowStockItems || 0 }}
+                {{ dashboardData.data?.lowStockItems?.length || 0 }}
               </p>
               <p class="text-sm font-bold text-red-700 uppercase tracking-wide">
                 Low Stock

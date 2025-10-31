@@ -272,57 +272,39 @@ const getIncidents = async (req, res, next) => {
       source,
     } = req.query;
 
-    // ==========================
-    //  WHERE condition
-    // ==========================
     const whereCondition = {};
 
+    // 🔍 Search
     if (search) {
-      whereCondition[Op.or] = [
-        { description: { [Op.like]: `%${search}%` } },
-        { reportedBy: { [Op.like]: `%${search}%` } },
-        { contact: { [Op.like]: `%${search}%` } },
-      ];
+      whereCondition[Op.or] = [{ description: { [Op.like]: `%${search}%` } }];
     }
 
     if (status) whereCondition.status = status;
     if (type) whereCondition.type = type;
     if (cameraId) whereCondition.cameraId = cameraId;
 
+    // Source filter
     if (source === "citizen") {
-      whereCondition.cameraId = null;
+      whereCondition.reportType = "human";
     } else if (source === "camera") {
-      whereCondition.cameraId = { [Op.not]: null };
+      whereCondition.reportType = "yolo";
     }
 
+    // Date filter
     if (startDate || endDate) {
       whereCondition.createdAt = {};
       if (startDate) whereCondition.createdAt[Op.gte] = new Date(startDate);
       if (endDate) whereCondition.createdAt[Op.lte] = new Date(endDate);
     }
 
-    // ==========================
-    // Pagination + Sorting
-    // ==========================
+    // Pagination & Sorting
     const pageNumber = parseInt(page, 10);
     const limitNumber = parseInt(limit, 10);
     const offset = (pageNumber - 1) * limitNumber;
-
     const paranoidOption = showDeleted !== "true";
+    const order = [[sortBy, sortOrder.toLowerCase()]];
 
-    const validSortColumns = ["createdAt", "type", "status", "updatedAt"];
-    const validSortOrders = ["asc", "desc"];
-
-    const sortColumn = validSortColumns.includes(sortBy) ? sortBy : "createdAt";
-    const sortDirection = validSortOrders.includes(sortOrder.toLowerCase())
-      ? sortOrder.toLowerCase()
-      : "desc";
-
-    const order = [[sortColumn, sortDirection]];
-
-    // ==========================
-    // Query with JOINs
-    // ==========================
+    // Query
     const { count, rows } = await Incident.findAndCountAll({
       where: whereCondition,
       include: [
@@ -345,14 +327,20 @@ const getIncidents = async (req, res, next) => {
         },
         {
           model: YOLOIncident,
-          as: "YOLOIncident", // ✅ alias from your model association
-          attributes: ["id", "confidence", "label", "snapshotUrl"], // adjust fields to match your YOLOIncident model
+          as: "yoloDetails", // ✅ fixed alias
+          attributes: [
+            "id",
+            "cameraId",
+            "aiType",
+            "confidence",
+            "detectionFrameUrl",
+          ],
           required: false,
         },
         {
           model: HumanIncident,
-          as: "HumanIncident", // ✅ alias from your model association
-          attributes: ["id", "witnessName", "details", "snapshotUrl"], // adjust based on your schema
+          as: "humanDetails", // ✅ fixed alias
+          attributes: ["id", "reportedBy", "contact", "ipAddress"],
           required: false,
         },
       ],
@@ -363,39 +351,36 @@ const getIncidents = async (req, res, next) => {
       distinct: true,
     });
 
-    // ==========================
-    //  Add signed URLs
-    // ==========================
+    // ✅ Add signed URLs for all snapshot fields
     const dataWithSignedUrls = await Promise.all(
       rows.map(async (incident) => {
         const signedUrls = {};
 
-        // Handle main incident snapshot
+        // Base incident snapshot
         if (incident.snapshotUrl) {
-          const { data: signed, error } = await supabase.storage
+          const { data: signed } = await supabase.storage
             .from("uploads")
             .createSignedUrl(incident.snapshotUrl, 3600);
-          if (!error && signed?.signedUrl) signedUrls.main = signed.signedUrl;
+          if (signed?.signedUrl) signedUrls.main = signed.signedUrl;
         }
 
-        // Handle YOLOIncident snapshot
-        if (incident.YOLOIncident?.snapshotUrl) {
-          const { data: signed, error } = await supabase.storage
+        // YOLO snapshot
+        if (incident.yoloDetails?.detectionFrameUrl) {
+          const { data: signed } = await supabase.storage
             .from("uploads")
-            .createSignedUrl(incident.YOLOIncident.snapshotUrl, 3600);
-          if (!error && signed?.signedUrl) signedUrls.ai = signed.signedUrl;
+            .createSignedUrl(incident.yoloDetails.detectionFrameUrl, 3600);
+          if (signed?.signedUrl) signedUrls.ai = signed.signedUrl;
         }
 
-        // Handle HumanIncident snapshot
-        if (incident.HumanIncident?.snapshotUrl) {
-          const { data: signed, error } = await supabase.storage
+        // Human snapshot (if you add one later)
+        if (incident.humanDetails?.snapshotUrl) {
+          const { data: signed } = await supabase.storage
             .from("uploads")
-            .createSignedUrl(incident.HumanIncident.snapshotUrl, 3600);
-          if (!error && signed?.signedUrl) signedUrls.human = signed.signedUrl;
+            .createSignedUrl(incident.humanDetails.snapshotUrl, 3600);
+          if (signed?.signedUrl) signedUrls.human = signed.signedUrl;
         }
 
         incident.dataValues.snapshotSignedUrls = signedUrls;
-
         return incident;
       })
     );

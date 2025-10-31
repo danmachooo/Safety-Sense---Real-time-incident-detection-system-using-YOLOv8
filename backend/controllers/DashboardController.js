@@ -177,7 +177,7 @@ const getIncidentStats = async (req, res, next) => {
     const { timeframe } = req.query;
     let startDate = new Date();
 
-    // Set timeframe based on query parameter
+    // 🕒 Timeframe setup
     switch (timeframe) {
       case "week":
         startDate.setDate(startDate.getDate() - 7);
@@ -189,64 +189,57 @@ const getIncidentStats = async (req, res, next) => {
         startDate.setFullYear(startDate.getFullYear() - 1);
         break;
       default:
-        // Default to last 30 days
         startDate.setDate(startDate.getDate() - 30);
     }
 
-    // Get incidents by day for the selected timeframe
+    // 📅 Incidents by day
     const incidentsByDay = await sequelize.query(
       `
       SELECT 
-        DATE(createdAt) as date,
-        COUNT(*) as count
+        DATE(createdAt) AS date,
+        COUNT(*) AS count
       FROM Incidents
       WHERE createdAt >= :startDate
       AND deletedAt IS NULL
       GROUP BY DATE(createdAt)
       ORDER BY date ASC
-    `,
+      `,
       {
         replacements: { startDate },
         type: sequelize.QueryTypes.SELECT,
       }
     );
 
-    // Get incidents by type for the selected timeframe
+    // 🧾 Incidents by type
     const incidentsByType = await Incident.findAll({
       attributes: [
         "type",
         [sequelize.fn("COUNT", sequelize.col("type")), "count"],
       ],
-      where: {
-        createdAt: { [Op.gte]: startDate },
-        deletedAt: null,
-      },
+      where: { createdAt: { [Op.gte]: startDate }, deletedAt: null },
       group: ["type"],
     });
 
-    // Get incidents by status for the selected timeframe
+    // ⚙️ Incidents by status
     const incidentsByStatus = await Incident.findAll({
       attributes: [
         "status",
         [sequelize.fn("COUNT", sequelize.col("status")), "count"],
       ],
-      where: {
-        createdAt: { [Op.gte]: startDate },
-        deletedAt: null,
-      },
+      where: { createdAt: { [Op.gte]: startDate }, deletedAt: null },
       group: ["status"],
     });
 
-    // Get average resolution time (in hours)
+    // ⏱️ Average resolution time
     const resolutionTimeQuery = await sequelize.query(
       `
       SELECT 
-        AVG(TIMESTAMPDIFF(HOUR, createdAt, updatedAt)) as avgResolutionHours
+        AVG(TIMESTAMPDIFF(HOUR, createdAt, updatedAt)) AS avgResolutionHours
       FROM Incidents
       WHERE status = 'resolved'
       AND createdAt >= :startDate
       AND deletedAt IS NULL
-    `,
+      `,
       {
         replacements: { startDate },
         type: sequelize.QueryTypes.SELECT,
@@ -255,39 +248,54 @@ const getIncidentStats = async (req, res, next) => {
 
     const avgResolutionTime = resolutionTimeQuery[0]?.avgResolutionHours || 0;
 
-    // Get incidents by source (camera vs user reported)
+    // 🤖🧍 Incidents by report type (explicit)
     const incidentsBySource = await sequelize.query(
       `
       SELECT 
-        CASE WHEN cameraId IS NULL THEN 'user-reported' ELSE 'camera-detected' END as source,
-        COUNT(*) as count
+        reportType AS source,
+        COUNT(*) AS count
       FROM Incidents
       WHERE createdAt >= :startDate
       AND deletedAt IS NULL
-      GROUP BY CASE WHEN cameraId IS NULL THEN 'user-reported' ELSE 'camera-detected' END
-    `,
+      GROUP BY reportType
+      `,
       {
         replacements: { startDate },
         type: sequelize.QueryTypes.SELECT,
       }
     );
 
+    // Map readable labels (optional)
+    const mappedSources = incidentsBySource.map((row) => ({
+      source:
+        row.source === "YOLO"
+          ? "Camera Detected"
+          : row.source === "HUMAN"
+          ? "Human Reported"
+          : "Unknown",
+      count: row.count,
+    }));
+
+    // 🧮 Total count
+    const totalIncidents = await Incident.count({
+      where: {
+        createdAt: { [Op.gte]: startDate },
+        deletedAt: null,
+      },
+    });
+
+    // ✅ Send response
     return res.status(StatusCodes.OK).json({
       success: true,
       message: "Incident statistics retrieved successfully",
       data: {
+        timeframe: timeframe || "30days",
+        totalIncidents,
+        avgResolutionTime,
         incidentsByDay,
         incidentsByType,
         incidentsByStatus,
-        incidentsBySource,
-        avgResolutionTime,
-        timeframe: timeframe || "30days",
-        totalIncidents: await Incident.count({
-          where: {
-            createdAt: { [Op.gte]: startDate },
-            deletedAt: null,
-          },
-        }),
+        incidentsBySource: mappedSources,
       },
     });
   } catch (error) {

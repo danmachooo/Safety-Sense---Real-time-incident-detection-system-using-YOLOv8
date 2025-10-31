@@ -175,17 +175,11 @@ const createCameraDetection = async (req, res, next) => {
     const camera = await Camera.findByPk(cameraId);
     if (!camera) throw new NotFoundError("Camera not found");
 
-    // ✅ If file uploaded via middleware, use it
-    let finalSnapshotUrl = snapshotUrl;
-    if (req.file?.supabasePath) {
-      finalSnapshotUrl = getFileUrl(req.file.supabasePath);
-    }
-
     const incident = await Incident.create(
       {
         type,
         description,
-        snapshotUrl: finalSnapshotUrl,
+        snapshotUrl,
         longitude,
         latitude,
         status: "pending",
@@ -276,37 +270,35 @@ const getIncidents = async (req, res, next) => {
 
     const whereCondition = {};
 
-    // 🔍 Search
+    // 🔍 Text search
     if (search) {
       whereCondition[Op.or] = [{ description: { [Op.like]: `%${search}%` } }];
     }
 
+    // Filters
     if (status) whereCondition.status = status;
     if (type) whereCondition.type = type;
     if (cameraId) whereCondition.cameraId = cameraId;
 
-    // Source filter
-    if (source === "citizen") {
-      whereCondition.reportType = "human";
-    } else if (source === "camera") {
-      whereCondition.reportType = "yolo";
-    }
+    // 🔄 Source filter
+    if (source === "citizen") whereCondition.reportType = "human";
+    else if (source === "camera") whereCondition.reportType = "yolo";
 
-    // Date filter
+    // 📅 Date range filter
     if (startDate || endDate) {
       whereCondition.createdAt = {};
       if (startDate) whereCondition.createdAt[Op.gte] = new Date(startDate);
       if (endDate) whereCondition.createdAt[Op.lte] = new Date(endDate);
     }
 
-    // Pagination & Sorting
+    // 📄 Pagination & Sorting
     const pageNumber = parseInt(page, 10);
     const limitNumber = parseInt(limit, 10);
     const offset = (pageNumber - 1) * limitNumber;
     const paranoidOption = showDeleted !== "true";
     const order = [[sortBy, sortOrder.toLowerCase()]];
 
-    // Query
+    // 🧩 Fetch incidents with associations
     const { count, rows } = await Incident.findAndCountAll({
       where: whereCondition,
       include: [
@@ -323,13 +315,13 @@ const getIncidents = async (req, res, next) => {
         },
         {
           model: User,
-          as: "dismissers",
+          as: "dismissers", // make sure this association exists!
           attributes: ["id", "firstname", "lastname", "email", "contact"],
           through: { attributes: ["dismissedAt"] },
         },
         {
           model: YOLOIncident,
-          as: "yoloDetails", // fixed alias
+          as: "yoloDetails",
           attributes: [
             "id",
             "cameraId",
@@ -341,7 +333,7 @@ const getIncidents = async (req, res, next) => {
         },
         {
           model: HumanIncident,
-          as: "humanDetails", // fixed alias
+          as: "humanDetails",
           attributes: ["id", "reportedBy", "contact", "ipAddress"],
           required: false,
         },
@@ -353,12 +345,12 @@ const getIncidents = async (req, res, next) => {
       distinct: true,
     });
 
-    // Add signed URLs for all snapshot fields
+    // 🖼️ Add signed URLs for snapshots
     const dataWithSignedUrls = await Promise.all(
       rows.map(async (incident) => {
         const signedUrls = {};
 
-        // Base incident snapshot
+        // Base snapshot
         if (incident.snapshotUrl) {
           const { data: signed } = await supabase.storage
             .from("uploads")
@@ -366,7 +358,7 @@ const getIncidents = async (req, res, next) => {
           if (signed?.signedUrl) signedUrls.main = signed.signedUrl;
         }
 
-        // YOLO snapshot
+        // YOLO frame
         if (incident.yoloDetails?.detectionFrameUrl) {
           const { data: signed } = await supabase.storage
             .from("uploads")
@@ -374,7 +366,7 @@ const getIncidents = async (req, res, next) => {
           if (signed?.signedUrl) signedUrls.ai = signed.signedUrl;
         }
 
-        // Human snapshot (if you add one later)
+        // Human snapshot (future field)
         if (incident.humanDetails?.snapshotUrl) {
           const { data: signed } = await supabase.storage
             .from("uploads")
@@ -387,6 +379,7 @@ const getIncidents = async (req, res, next) => {
       })
     );
 
+    // 🟢 Response
     return res.status(StatusCodes.OK).json({
       success: true,
       message: "Incidents retrieved successfully",
@@ -538,7 +531,7 @@ const getIncident = async (req, res, next) => {
         },
         {
           model: YOLOIncident,
-          as: "YOLOIncident",
+          as: "yoloDetails",
           attributes: [
             "aiType",
             "confidence",
@@ -549,8 +542,8 @@ const getIncident = async (req, res, next) => {
         },
         {
           model: HumanIncident,
-          as: "HumanIncident",
-          attributes: ["reportedBy", "contact", "description"],
+          as: "humanDetails",
+          attributes: ["reportedBy", "contact", "ipAddress"],
           required: false,
         },
       ],
@@ -569,11 +562,11 @@ const getIncident = async (req, res, next) => {
       }
     }
 
-    // ✅ Add signed frame URL for AI incidents
-    if (incident.YOLOIncident?.detectionFrameUrl) {
+    // ✅ Add signed frame URL for YOLO incidents
+    if (incident.yoloDetails?.detectionFrameUrl) {
       const { data: signed, error } = await supabase.storage
         .from("uploads")
-        .createSignedUrl(incident.YOLOIncident.detectionFrameUrl, 3600);
+        .createSignedUrl(incident.yoloDetails.detectionFrameUrl, 3600);
 
       if (!error && signed?.signedUrl) {
         incident.dataValues.aiFrameSignedUrl = signed.signedUrl;
@@ -581,7 +574,7 @@ const getIncident = async (req, res, next) => {
     }
 
     // ✅ Determine source type
-    const sourceType = incident.cameraId ? "camera" : "citizen";
+    const sourceType = incident.reportType === "yolo" ? "camera" : "citizen";
 
     return res.status(StatusCodes.OK).json({
       success: true,
@@ -596,7 +589,6 @@ const getIncident = async (req, res, next) => {
     next(error);
   }
 };
-
 /**
  * Update incident
  * @param {Object} req - Express request object

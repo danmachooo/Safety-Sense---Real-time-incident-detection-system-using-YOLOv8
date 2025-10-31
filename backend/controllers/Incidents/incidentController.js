@@ -68,7 +68,6 @@ const createCitizenReport = async (req, res, next) => {
       "unknown";
 
     console.log("Snapshot url: ", snapshotUrl);
-    return;
     // ✅ Required fields validation
     const missing = [];
     if (!type) missing.push("type");

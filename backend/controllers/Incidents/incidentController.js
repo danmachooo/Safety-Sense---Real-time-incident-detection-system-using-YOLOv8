@@ -50,8 +50,15 @@ const createCitizenReport = async (req, res, next) => {
   try {
     transaction = await sequelize.transaction();
 
-    const { reportedBy, contact, type, description, longitude, latitude } =
-      req.body;
+    const {
+      reportedBy,
+      contact,
+      type,
+      description,
+      longitude,
+      latitude,
+      snapshotUrl,
+    } = req.body;
 
     const ipAddress =
       req.ip ||
@@ -60,15 +67,6 @@ const createCitizenReport = async (req, res, next) => {
       req.headers["x-forwarded-for"]?.split(",")[0] ||
       "unknown";
 
-    // ✅ Handle Supabase upload (from your middleware)
-    let snapshotUrl = null;
-    console.log(
-      "Supabase Path: ",
-      req.file?.supabasePath || "No supabase path"
-    );
-    if (req.file?.supabasePath) {
-      snapshotUrl = getFilePath(req.file.supabasePath); // Converts to full public URL
-    }
     console.log("Snapshot url: ", snapshotUrl);
     return;
     // ✅ Required fields validation

@@ -42,8 +42,8 @@ const YOLOIncident = sequelize.define(
   }
 );
 
-// Association with base Incident
-YOLOIncident.belongsTo(Incident, { foreignKey: "incidentId", as: "incident" });
-Incident.hasOne(YOLOIncident, { foreignKey: "incidentId", as: "yoloDetails" });
+// // Association with base Incident
+// YOLOIncident.belongsTo(Incident, { foreignKey: "incidentId", as: "incident" });
+// Incident.hasOne(YOLOIncident, { foreignKey: "incidentId", as: "yoloDetails" });
 
 export default YOLOIncident;

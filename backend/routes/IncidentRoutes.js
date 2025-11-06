@@ -30,7 +30,7 @@ import { uploadSingle } from "../config/multer.js";
 import { uploadIncidentImage } from "../controllers/Incidents/uploadController.js";
 import cameraAuthMiddleware from "../middlewares/cameraAuthMiddleware.js";
 // Get all incidents with filtering
-router.get("/", authMiddleware, getIncidents);
+router.get("/", getIncidents);
 
 // Get all incidents with filtering for heatmap
 router.get("/heatmap", getIncidentsForHeatmap);

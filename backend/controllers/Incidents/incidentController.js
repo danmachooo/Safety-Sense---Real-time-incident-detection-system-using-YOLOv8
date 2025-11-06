@@ -93,7 +93,7 @@ const createCitizenReport = async (req, res, next) => {
     // ✅ Create HumanIncident (subtype)
     const human = await HumanIncident.create(
       {
-        id: incident.id,
+        incidentId: incident.id,
         reportedBy: reportedBy || "Anonymous Citizen",
         contact: contact || null,
         ipAddress,
@@ -189,7 +189,7 @@ const createCameraDetection = async (req, res, next) => {
 
     const yolo = await YOLOIncident.create(
       {
-        id: incident.id,
+        incidentId: incident.id,
         cameraId,
         aiType: aiType || "ObjectDetected",
         confidence: confidence || 1.0,
@@ -278,7 +278,6 @@ const getIncidents = async (req, res, next) => {
     // Filters
     if (status) whereCondition.status = status;
     if (type) whereCondition.type = type;
-    if (cameraId) whereCondition.cameraId = cameraId;
 
     // 🔄 Source filter
     if (source === "citizen") whereCondition.reportType = "human";
@@ -291,6 +290,23 @@ const getIncidents = async (req, res, next) => {
       if (endDate) whereCondition.createdAt[Op.lte] = new Date(endDate);
     }
 
+    // 🧩 YOLO include with optional cameraId filter
+    const yoloInclude = {
+      model: YOLOIncident,
+      as: "yoloDetails",
+      attributes: [
+        "id",
+        "cameraId",
+        "aiType",
+        "confidence",
+        "detectionFrameUrl",
+      ],
+      required: false,
+      where: {},
+    };
+
+    if (cameraId) yoloInclude.where.cameraId = cameraId;
+
     // 📄 Pagination & Sorting
     const pageNumber = parseInt(page, 10);
     const limitNumber = parseInt(limit, 10);
@@ -302,10 +318,18 @@ const getIncidents = async (req, res, next) => {
     const { count, rows } = await Incident.findAndCountAll({
       where: whereCondition,
       include: [
+        yoloInclude,
+        {
+          model: HumanIncident,
+          as: "humanDetails",
+          attributes: ["id", "reportedBy", "contact", "ipAddress"],
+          required: false,
+        },
         {
           model: Camera,
           as: "camera",
           attributes: ["id", "name", "location", "status"],
+          required: false,
         },
         {
           model: User,
@@ -315,27 +339,9 @@ const getIncidents = async (req, res, next) => {
         },
         {
           model: User,
-          as: "dismissers", // make sure this association exists!
+          as: "dismissers",
           attributes: ["id", "firstname", "lastname", "email", "contact"],
           through: { attributes: ["dismissedAt"] },
-        },
-        {
-          model: YOLOIncident,
-          as: "yoloDetails",
-          attributes: [
-            "id",
-            "cameraId",
-            "aiType",
-            "confidence",
-            "detectionFrameUrl",
-          ],
-          required: false,
-        },
-        {
-          model: HumanIncident,
-          as: "humanDetails",
-          attributes: ["id", "reportedBy", "contact", "ipAddress"],
-          required: false,
         },
       ],
       paranoid: paranoidOption,
@@ -364,14 +370,6 @@ const getIncidents = async (req, res, next) => {
             .from("uploads")
             .createSignedUrl(incident.yoloDetails.detectionFrameUrl, 3600);
           if (signed?.signedUrl) signedUrls.ai = signed.signedUrl;
-        }
-
-        // Human snapshot (future field)
-        if (incident.humanDetails?.snapshotUrl) {
-          const { data: signed } = await supabase.storage
-            .from("uploads")
-            .createSignedUrl(incident.humanDetails.snapshotUrl, 3600);
-          if (signed?.signedUrl) signedUrls.human = signed.signedUrl;
         }
 
         incident.dataValues.snapshotSignedUrls = signedUrls;
@@ -403,7 +401,7 @@ const getIncidentsForHeatmap = async (req, res, next) => {
 
     const where = {};
 
-    // Date filtering
+    // 📅 Date filtering
     if (filter === "last7days") {
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -416,34 +414,34 @@ const getIncidentsForHeatmap = async (req, res, next) => {
       if (endDate) where.createdAt[Op.lte] = new Date(endDate);
     }
 
-    // Type filtering (ensure correct casing)
+    // 🧩 Type filtering
     if (type) {
       where.type = {
         [Op.eq]: type.charAt(0).toUpperCase() + type.slice(1).toLowerCase(),
       };
     }
 
-    // Source filtering
+    // 🧠 Source filtering based on cameraId
     if (source === "citizen") {
-      where.cameraId = null; // Human-reported only
+      where.cameraId = null; // Human-reported
     } else if (source === "camera") {
-      where.cameraId = { [Op.not]: null }; // AI-detected only
+      where.cameraId = { [Op.not]: null }; // AI-detected
     }
 
-    // Query incidents
+    // 📦 Query incidents with related data
     const incidents = await Incident.findAll({
       where,
       attributes: ["latitude", "longitude", "type", "cameraId"],
       include: [
         {
           model: YOLOIncident,
-          as: "YOLOIncident",
+          as: "yoloDetails",
           attributes: ["aiType", "confidence"],
           required: false,
         },
         {
           model: HumanIncident,
-          as: "HumanIncident",
+          as: "humanDetails",
           attributes: ["reportedBy", "contact"],
           required: false,
         },
@@ -451,7 +449,7 @@ const getIncidentsForHeatmap = async (req, res, next) => {
       raw: true,
     });
 
-    // Intensity weights
+    // ⚙️ Intensity weights
     const TYPE_INTENSITY = {
       Fire: 5,
       Medical: 4,
@@ -469,7 +467,7 @@ const getIncidentsForHeatmap = async (req, res, next) => {
         latitude,
         longitude,
         type,
-        "YOLOIncident.aiType": aiType,
+        "yoloDetails.aiType": aiType,
       } = incident;
       if (!latitude || !longitude) continue;
 
@@ -477,20 +475,20 @@ const getIncidentsForHeatmap = async (req, res, next) => {
       const lon = round(longitude);
       const key = `${lat},${lon}`;
 
-      // Determine type weight (fallback to AI type if type is null)
+      // Determine type weight
       const normalizedType = type || aiType || "Other";
       const intensity = TYPE_INTENSITY[normalizedType] || TYPE_INTENSITY.Other;
 
       coordMap[key] = (coordMap[key] || 0) + intensity;
     }
 
-    // 🔄 Format for frontend heatmap
+    // 🗺️ Format for frontend
     const heatmapData = Object.entries(coordMap).map(([key, intensity]) => {
       const [lat, lon] = key.split(",").map(Number);
       return [lat, lon, intensity];
     });
 
-    console.log(`Heatmap generated: ${heatmapData.length} points`);
+    console.log(`✅ Heatmap generated: ${heatmapData.length} points`);
 
     return res.status(StatusCodes.OK).json({
       success: true,
@@ -498,7 +496,7 @@ const getIncidentsForHeatmap = async (req, res, next) => {
       data: heatmapData,
     });
   } catch (error) {
-    console.error("Heatmap Error:", error);
+    console.error("❌ Heatmap Error:", error);
     next(error);
   }
 };
@@ -524,12 +522,6 @@ const getIncident = async (req, res, next) => {
           required: false,
         },
         {
-          model: User,
-          as: "accepters",
-          attributes: ["id", "firstname", "lastname", "email", "contact"],
-          through: { attributes: ["acceptedAt"] },
-        },
-        {
           model: YOLOIncident,
           as: "yoloDetails",
           attributes: [
@@ -546,35 +538,37 @@ const getIncident = async (req, res, next) => {
           attributes: ["reportedBy", "contact", "ipAddress"],
           required: false,
         },
+        {
+          model: User,
+          as: "accepters",
+          attributes: ["id", "firstname", "lastname", "email", "contact"],
+          through: { attributes: ["acceptedAt"] },
+        },
       ],
     });
 
     if (!incident) throw new NotFoundError("Incident not found");
 
-    // ✅ Generate signed snapshot URL (1-hour expiry)
+    // 🖼️ Signed snapshot URL
     if (incident.snapshotUrl) {
       const { data: signed, error } = await supabase.storage
         .from("uploads")
         .createSignedUrl(incident.snapshotUrl, 3600);
-
-      if (!error && signed?.signedUrl) {
+      if (!error && signed?.signedUrl)
         incident.dataValues.snapshotSignedUrl = signed.signedUrl;
-      }
     }
 
-    // ✅ Add signed frame URL for YOLO incidents
+    // 🤖 Signed YOLO frame URL
     if (incident.yoloDetails?.detectionFrameUrl) {
       const { data: signed, error } = await supabase.storage
         .from("uploads")
         .createSignedUrl(incident.yoloDetails.detectionFrameUrl, 3600);
-
-      if (!error && signed?.signedUrl) {
+      if (!error && signed?.signedUrl)
         incident.dataValues.aiFrameSignedUrl = signed.signedUrl;
-      }
     }
 
-    // ✅ Determine source type
-    const sourceType = incident.reportType === "yolo" ? "camera" : "citizen";
+    // 📡 Determine source type
+    const sourceType = incident.cameraId ? "camera" : "citizen";
 
     return res.status(StatusCodes.OK).json({
       success: true,
@@ -585,10 +579,11 @@ const getIncident = async (req, res, next) => {
       },
     });
   } catch (error) {
-    console.error("Error in getIncident:", error);
+    console.error("❌ Error in getIncident:", error);
     next(error);
   }
 };
+
 /**
  * Update incident
  * @param {Object} req - Express request object
@@ -698,7 +693,7 @@ const updateIncident = async (req, res, next) => {
     // ========================================
     if (source?.toLowerCase() === "ai" || aiConfidence || aiModelVersion) {
       const existingYoloIncident = await YOLOIncident.findOne({
-        where: { id },
+        where: { incidentId: id },
         transaction,
       });
 

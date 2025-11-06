@@ -5,6 +5,15 @@ import Incident from "./Incident.js";
 const HumanIncident = sequelize.define(
   "HumanIncident",
   {
+    incidentId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: "Incidents",
+        key: "id",
+      },
+      onDelete: "CASCADE",
+    },
     reportedBy: {
       type: DataTypes.STRING,
       allowNull: false,
@@ -25,12 +34,5 @@ const HumanIncident = sequelize.define(
     paranoid: true,
   }
 );
-
-// Association with base Incident
-HumanIncident.belongsTo(Incident, { foreignKey: "incidentId", as: "incident" });
-Incident.hasOne(HumanIncident, {
-  foreignKey: "incidentId",
-  as: "humanDetails",
-});
 
 export default HumanIncident;

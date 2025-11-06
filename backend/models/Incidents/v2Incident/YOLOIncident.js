@@ -5,6 +5,15 @@ import Incident from "./Incident.js";
 const YOLOIncident = sequelize.define(
   "YOLOIncident",
   {
+    incidentId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: "Incidents",
+        key: "id",
+      },
+      onDelete: "CASCADE",
+    },
     cameraId: {
       type: DataTypes.INTEGER,
       allowNull: false,
@@ -41,9 +50,5 @@ const YOLOIncident = sequelize.define(
     paranoid: true,
   }
 );
-
-// Association with base Incident
-YOLOIncident.belongsTo(Incident, { foreignKey: "incidentId", as: "incident" });
-Incident.hasOne(YOLOIncident, { foreignKey: "incidentId", as: "yoloDetails" });
 
 export default YOLOIncident;

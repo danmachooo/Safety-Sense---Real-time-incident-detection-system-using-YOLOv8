@@ -47,6 +47,7 @@ const createIncident = async (req, res, next) => {
  */
 const createCitizenReport = async (req, res, next) => {
   let transaction;
+
   try {
     transaction = await sequelize.transaction();
 
@@ -67,8 +68,6 @@ const createCitizenReport = async (req, res, next) => {
       req.headers["x-forwarded-for"]?.split(",")[0] ||
       "unknown";
 
-    console.log("Snapshot url: ", snapshotUrl);
-    // ✅ Required fields validation
     const missing = [];
     if (!type) missing.push("type");
     if (!longitude) missing.push("longitude");
@@ -77,7 +76,7 @@ const createCitizenReport = async (req, res, next) => {
     if (missing.length > 0)
       throw new BadRequestError(`Missing fields: ${missing.join(", ")}`);
 
-    // ✅ Create Incident (base table)
+    // ✅ Create Incident (within transaction)
     const incident = await Incident.create(
       {
         type,
@@ -90,10 +89,10 @@ const createCitizenReport = async (req, res, next) => {
       { transaction }
     );
 
-    // ✅ Create HumanIncident (subtype)
-    const human = await HumanIncident.create(
+    // ✅ Create HumanIncident (within transaction)
+    await HumanIncident.create(
       {
-        incidentId: incident.id,
+        incidentId: incident.id, // ✅ use incidentId, not id
         reportedBy: reportedBy || "Anonymous Citizen",
         contact: contact || null,
         ipAddress,
@@ -101,16 +100,20 @@ const createCitizenReport = async (req, res, next) => {
       { transaction }
     );
 
+    // ✅ Commit transaction before sending notifications
+    await transaction.commit();
+
+    // ✅ Send notification after commit
     try {
       const shortDescription =
-        incident.description.length > 100
+        incident.description?.length > 100
           ? `${incident.description.substring(0, 100)}...`
           : incident.description;
 
       const notificationTitle = `${type} Incident Alert!`;
-      const notificationBody = `${shortDescription} - Reported by: ${human.reportedBy}`;
-
-      console.log("Broadcasting notification to:", process.env.RESPONDER_TOPIC);
+      const notificationBody = `${shortDescription} - Reported by: ${
+        reportedBy || "Anonymous Citizen"
+      }`;
 
       await sendTopicNotification(
         process.env.RESPONDER_TOPIC || "all_responders",
@@ -124,16 +127,13 @@ const createCitizenReport = async (req, res, next) => {
           hasImage: !!incident.snapshotUrl,
         }
       );
-
-      console.log("Notification sent successfully");
     } catch (notificationError) {
-      console.error("FCM notification failed:", notificationError);
+      console.warn("⚠️ FCM notification failed:", notificationError.message);
     }
 
-    await transaction.commit();
-
+    // ✅ Fetch full incident with associations (no transaction)
     const created = await Incident.findByPk(incident.id, {
-      include: [{ model: HumanIncident, as: "HumanIncident" }],
+      include: [{ model: HumanIncident, as: "humanDetails" }],
     });
 
     return res.status(StatusCodes.CREATED).json({
@@ -142,7 +142,10 @@ const createCitizenReport = async (req, res, next) => {
       data: created,
     });
   } catch (error) {
-    if (transaction) await transaction.rollback();
+    // Only rollback if not already committed
+    if (transaction && !transaction.finished) {
+      await transaction.rollback();
+    }
     next(error);
   }
 };

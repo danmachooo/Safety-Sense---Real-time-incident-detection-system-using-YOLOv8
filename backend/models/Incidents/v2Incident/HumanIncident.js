@@ -26,11 +26,11 @@ const HumanIncident = sequelize.define(
   }
 );
 
-// // Association with base Incident
-// HumanIncident.belongsTo(Incident, { foreignKey: "incidentId", as: "incident" });
-// Incident.hasOne(HumanIncident, {
-//   foreignKey: "incidentId",
-//   as: "humanDetails",
-// });
+// Association with base Incident
+HumanIncident.belongsTo(Incident, { foreignKey: "incidentId", as: "incident" });
+Incident.hasOne(HumanIncident, {
+  foreignKey: "incidentId",
+  as: "humanDetails",
+});
 
 export default HumanIncident;

@@ -125,27 +125,26 @@ const setupAssociations = () => {
   // ========================================
   // HUMAN INCIDENT ASSOCIATIONS
   // ========================================
+
   HumanIncident.belongsTo(Incident, {
-    foreignKey: "incidentId",
+    foreignKey: "id",
     as: "incidentBaseHuman",
   });
-
   Incident.hasOne(HumanIncident, {
-    foreignKey: "incidentId",
-    as: "humanDetails",
+    foreignKey: "id",
+    as: "HumanIncident",
   });
-
   // ========================================
   // AI INCIDENT ASSOCIATIONS
   // ========================================
+
   YOLOIncident.belongsTo(Incident, {
-    foreignKey: "incidentId",
+    foreignKey: "id",
     as: "incidentBaseYolo",
   });
-
   Incident.hasOne(YOLOIncident, {
-    foreignKey: "incidentId",
-    as: "yoloDetails",
+    foreignKey: "id",
+    as: "YOLOIncident",
   });
 
   // CAMERA ↔ INCIDENT

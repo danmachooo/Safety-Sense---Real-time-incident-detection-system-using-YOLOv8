@@ -28,7 +28,7 @@ import {
 } from "../controllers/Incidents/incidentController.js";
 import { uploadSingle } from "../config/multer.js";
 import { uploadIncidentImage } from "../controllers/Incidents/uploadController.js";
-
+import cameraAuthMiddleware from "../middlewares/cameraAuthMiddleware.js";
 // Get all incidents with filtering
 router.get("/", authMiddleware, getIncidents);
 
@@ -69,7 +69,7 @@ router.post("/", createIncident);
 
 // Create new incident
 router.post("/citizen", createCitizenReport);
-router.post("/ai", createCameraDetection);
+router.post("/ai", cameraAuthMiddleware, createCameraDetection);
 router.post("/upload-image", uploadSingle, uploadIncidentImage);
 
 // Accept an incident

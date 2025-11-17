@@ -290,7 +290,7 @@ const getIncidents = async (req, res, next) => {
       if (endDate) whereCondition.createdAt[Op.lte] = new Date(endDate);
     }
 
-    // 🧩 YOLO include with optional cameraId filter
+    // 🧩 YOLO include with optional cameraId filter and full camera details
     const yoloInclude = {
       model: YOLOIncident,
       as: "yoloDetails",
@@ -300,11 +300,36 @@ const getIncidents = async (req, res, next) => {
         "aiType",
         "confidence",
         "detectionFrameUrl",
+        "modelVersion",
+        "detectedObjects",
+        "processingTime",
       ],
       required: false,
       where: {},
+      include: [
+        {
+          model: Camera,
+          as: "camera",
+          attributes: [
+            "id",
+            "name",
+            "ipAddress",
+            "rtspUrl",
+            "location",
+            "longitude",
+            "latitude",
+            "model",
+            "description",
+            "status",
+            "lastCheckedAt",
+            "lastOnlineAt",
+          ],
+          required: false,
+        },
+      ],
     };
 
+    // Apply cameraId filter to YOLOIncident if provided
     if (cameraId) yoloInclude.where.cameraId = cameraId;
 
     // 📄 Pagination & Sorting
@@ -323,12 +348,6 @@ const getIncidents = async (req, res, next) => {
           model: HumanIncident,
           as: "humanDetails",
           attributes: ["id", "reportedBy", "contact", "ipAddress"],
-          required: false,
-        },
-        {
-          model: Camera,
-          as: "camera",
-          attributes: ["id", "name", "location", "status"],
           required: false,
         },
         {
@@ -403,26 +422,45 @@ const getIncident = async (req, res, next) => {
     const incident = await Incident.findByPk(id, {
       include: [
         {
-          model: Camera,
-          as: "camera",
-          attributes: ["id", "name", "location", "status", "ipAddress"],
-          required: false,
-        },
-        {
           model: YOLOIncident,
           as: "yoloDetails",
           attributes: [
+            "id",
+            "cameraId",
             "aiType",
             "confidence",
             "detectionFrameUrl",
             "modelVersion",
+            "detectedObjects",
+            "processingTime",
           ],
           required: false,
+          include: [
+            {
+              model: Camera,
+              as: "camera",
+              attributes: [
+                "id",
+                "name",
+                "ipAddress",
+                "rtspUrl",
+                "location",
+                "longitude",
+                "latitude",
+                "model",
+                "description",
+                "status",
+                "lastCheckedAt",
+                "lastOnlineAt",
+              ],
+              required: false,
+            },
+          ],
         },
         {
           model: HumanIncident,
           as: "humanDetails",
-          attributes: ["reportedBy", "contact", "ipAddress"],
+          attributes: ["id", "reportedBy", "contact", "ipAddress"],
           required: false,
         },
         {
@@ -430,6 +468,12 @@ const getIncident = async (req, res, next) => {
           as: "accepters",
           attributes: ["id", "firstname", "lastname", "email", "contact"],
           through: { attributes: ["acceptedAt"] },
+        },
+        {
+          model: User,
+          as: "dismissers",
+          attributes: ["id", "firstname", "lastname", "email", "contact"],
+          through: { attributes: ["dismissedAt"] },
         },
       ],
     });
@@ -454,8 +498,8 @@ const getIncident = async (req, res, next) => {
         incident.dataValues.aiFrameSignedUrl = signed.signedUrl;
     }
 
-    // 📡 Determine source type
-    const sourceType = incident.cameraId ? "camera" : "citizen";
+    // 📡 Determine source type based on reportType
+    const sourceType = incident.reportType === "yolo" ? "camera" : "citizen";
 
     return res.status(StatusCodes.OK).json({
       success: true,

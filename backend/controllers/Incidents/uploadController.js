@@ -42,16 +42,18 @@ const uploadIncidentImage = async (req, res, next) => {
       );
     }
 
-    // Generate URL for the uploaded file
-    // Use the full path since it includes incidents/ folder
-    const imageUrl = getFileUrl(req.file.supabasePath);
+    // Get the relative path (this is what should be stored in DB)
     const imagePath = getFilePath(req.file.supabasePath);
+
+    // Generate public URL for reference (but DON'T store this in DB)
+    const imageUrl = getFileUrl(req.file.supabasePath);
 
     console.log("Upload successful:", {
       supabasePath: req.file.supabasePath,
       mimetype: req.file.mimetype,
       size: req.file.size,
-      imageUrl: imageUrl,
+      imagePath: imagePath, // This is what should be saved to DB
+      imageUrl: imageUrl, // This is just for reference
     });
 
     return res.status(StatusCodes.OK).json({
@@ -59,11 +61,16 @@ const uploadIncidentImage = async (req, res, next) => {
       message: "Image uploaded successfully",
       data: {
         filename: req.file.supabasePath.split("/").pop(),
+        // ✅ Primary path to use for database storage (relative path)
+        path: imagePath,
+        // ⚠️ Deprecated - for backward compatibility only
         fullPath: req.file.supabasePath,
+        imagePath: imagePath,
+        // 📝 Public URL for immediate display (don't store this in DB)
+        imageUrl: imageUrl,
+        // Metadata
         mimetype: req.file.mimetype,
         size: req.file.size,
-        imagePath: imagePath,
-        imageUrl: imageUrl,
         uploadedAt: new Date().toISOString(),
       },
     });

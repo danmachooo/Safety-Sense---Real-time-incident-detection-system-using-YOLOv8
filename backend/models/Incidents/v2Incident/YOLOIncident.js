@@ -16,7 +16,7 @@ const YOLOIncident = sequelize.define(
     },
     cameraId: {
       type: DataTypes.INTEGER,
-      allowNull: false,
+      allowNull: true,
     },
     aiType: {
       type: DataTypes.ENUM("car_accident", "fire", "person_fall"),

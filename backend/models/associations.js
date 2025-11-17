@@ -5,7 +5,6 @@ import LoginHistory from "./Users/LoginHistory.js";
 import Camera from "./Incidents/Camera.js";
 import CameraHealthCheck from "./Incidents/CameraHealthCheck.js";
 import CameraLog from "./Incidents/CameraLog.js";
-// import Incident from "./Incidents/Incident.js";
 import IncidentAcceptance from "./Incidents/IncidentAcceptance.js";
 import IncidentDismissal from "./Incidents/IncidentDismissal.js";
 import Notification from "./Notification/Notification.js";
@@ -17,7 +16,7 @@ import InventoryNotification from "./Inventory/InventoryNotification.js";
 import ActionLog from "./Inventory/ActionLog.js";
 import SerialItemDeployment from "./Inventory/SerialItemDeployment.js";
 import SerializedItem from "./Inventory/SerializedItem.js";
-import SerializedItemHistory from "./Inventory/SerializedItemHistory.js"; // 👈 new model
+import SerializedItemHistory from "./Inventory/SerializedItemHistory.js";
 import DeploymentNotes from "./Inventory/DeploymentNotes.js";
 
 import YOLOIncident from "./Incidents/v2Incident/YOLOIncident.js";
@@ -121,6 +120,7 @@ const setupAssociations = () => {
     foreignKey: "incidentId",
     otherKey: "userId",
   });
+
   // ========================================
   // HUMAN INCIDENT ASSOCIATIONS
   // ========================================
@@ -153,13 +153,18 @@ const setupAssociations = () => {
     onDelete: "CASCADE",
   });
 
-  // CAMERA ↔ INCIDENT
-  Camera.hasMany(Incident, {
+  // ========================================
+  // CAMERA ↔ YOLO INCIDENT ASSOCIATION
+  // ========================================
+
+  // 🔹 Camera has many YOLOIncidents (cameraId is stored in YOLOIncident table)
+  Camera.hasMany(YOLOIncident, {
     foreignKey: "cameraId",
-    as: "incidents",
+    as: "yoloIncidents",
     onDelete: "SET NULL",
   });
-  Incident.belongsTo(Camera, {
+
+  YOLOIncident.belongsTo(Camera, {
     foreignKey: "cameraId",
     as: "camera",
   });
@@ -168,7 +173,6 @@ const setupAssociations = () => {
   // CAMERA HEALTH & LOGGING ASSOCIATIONS
   // ========================================
 
-  // CAMERA ↔ CAMERA HEALTH & LOG
   Camera.hasMany(CameraHealthCheck, {
     foreignKey: "cameraId",
     as: "healthChecks",
@@ -188,6 +192,7 @@ const setupAssociations = () => {
     foreignKey: "cameraId",
     as: "camera",
   });
+
   // ========================================
   // INVENTORY SYSTEM ASSOCIATIONS
   // ========================================
@@ -304,7 +309,7 @@ const setupAssociations = () => {
   });
 
   // ========================================
-  // SERIALIZED ITEM HISTORY ASSOCIATIONS 👇
+  // SERIALIZED ITEM HISTORY ASSOCIATIONS
   // ========================================
   SerializedItem.hasMany(SerializedItemHistory, {
     foreignKey: "serialized_item_id",
@@ -316,7 +321,6 @@ const setupAssociations = () => {
     as: "item",
   });
 
-  // 🔹 User who deployed the item
   User.hasMany(SerializedItemHistory, {
     foreignKey: "deployed_by",
     as: "deployedHistories",
@@ -327,7 +331,6 @@ const setupAssociations = () => {
     as: "deployer",
   });
 
-  // 🔹 User who received the item
   User.hasMany(SerializedItemHistory, {
     foreignKey: "deployed_to",
     as: "receivedHistories",

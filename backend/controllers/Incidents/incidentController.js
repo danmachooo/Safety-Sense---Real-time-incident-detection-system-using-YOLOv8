@@ -82,6 +82,7 @@ const createCitizenReport = async (req, res, next) => {
         type,
         description,
         snapshotUrl,
+        reportType: "human",
         longitude,
         latitude,
         status: "pending",
@@ -178,9 +179,11 @@ const createCameraDetection = async (req, res, next) => {
     const camera = await Camera.findByPk(cameraId);
     if (!camera) throw new NotFoundError("Camera not found");
 
+    // ✅ Create Incident (within transaction)
     const incident = await Incident.create(
       {
         type,
+        reportType: "yolo", // ✅ Correct report type
         description,
         snapshotUrl,
         longitude,
@@ -190,27 +193,29 @@ const createCameraDetection = async (req, res, next) => {
       { transaction }
     );
 
-    const yolo = await YOLOIncident.create(
+    // ✅ Create YOLOIncident (within transaction)
+    await YOLOIncident.create(
       {
-        incidentId: incident.id,
+        incidentId: incident.id, // ✅ Use incidentId for consistency
         cameraId,
         aiType: aiType || "ObjectDetected",
         confidence: confidence || 1.0,
       },
-
       { transaction }
     );
 
+    // ✅ Commit transaction before sending notifications
+    await transaction.commit();
+
+    // ✅ Send notification after commit
     try {
       const shortDescription =
-        incident.description.length > 100
+        incident.description?.length > 100
           ? `${incident.description.substring(0, 100)}...`
           : incident.description;
 
       const notificationTitle = `${type} Incident Alert!`;
       const notificationBody = `${shortDescription} - AI Reported`;
-
-      console.log("Broadcasting notification to:", process.env.RESPONDER_TOPIC);
 
       await sendTopicNotification(
         process.env.RESPONDER_TOPIC || "all_responders",
@@ -224,16 +229,13 @@ const createCameraDetection = async (req, res, next) => {
           hasImage: !!incident.snapshotUrl,
         }
       );
-
-      console.log("Notification sent successfully");
     } catch (notificationError) {
-      console.error("FCM notification failed:", notificationError);
+      console.warn("⚠️ FCM notification failed:", notificationError.message);
     }
 
-    await transaction.commit();
-
+    // ✅ Fetch full incident with associations (no transaction) - use correct association name
     const created = await Incident.findByPk(incident.id, {
-      include: [{ model: YOLOIncident, as: "YOLOIncident" }],
+      include: [{ model: YOLOIncident, as: "yoloDetails" }], // ✅ Changed from "YOLOIncident" to "yoloDetails"
     });
 
     return res.status(StatusCodes.CREATED).json({
@@ -242,18 +244,13 @@ const createCameraDetection = async (req, res, next) => {
       data: created,
     });
   } catch (error) {
-    if (transaction) await transaction.rollback();
+    // Only rollback if not already committed
+    if (transaction && !transaction.finished) {
+      await transaction.rollback();
+    }
     next(error);
   }
 };
-
-/**
- * Get all incidents with optional filtering
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- * @param {Function} next - Express next middleware function
- */
-
 const getIncidents = async (req, res, next) => {
   try {
     const {
@@ -398,6 +395,82 @@ const getIncidents = async (req, res, next) => {
   }
 };
 
+const getIncident = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (!id) throw new BadRequestError("Incident ID is required");
+
+    const incident = await Incident.findByPk(id, {
+      include: [
+        {
+          model: Camera,
+          as: "camera",
+          attributes: ["id", "name", "location", "status", "ipAddress"],
+          required: false,
+        },
+        {
+          model: YOLOIncident,
+          as: "yoloDetails",
+          attributes: [
+            "aiType",
+            "confidence",
+            "detectionFrameUrl",
+            "modelVersion",
+          ],
+          required: false,
+        },
+        {
+          model: HumanIncident,
+          as: "humanDetails",
+          attributes: ["reportedBy", "contact", "ipAddress"],
+          required: false,
+        },
+        {
+          model: User,
+          as: "accepters",
+          attributes: ["id", "firstname", "lastname", "email", "contact"],
+          through: { attributes: ["acceptedAt"] },
+        },
+      ],
+    });
+
+    if (!incident) throw new NotFoundError("Incident not found");
+
+    // 🖼️ Signed snapshot URL
+    if (incident.snapshotUrl) {
+      const { data: signed, error } = await supabase.storage
+        .from("uploads")
+        .createSignedUrl(incident.snapshotUrl, 3600);
+      if (!error && signed?.signedUrl)
+        incident.dataValues.snapshotSignedUrl = signed.signedUrl;
+    }
+
+    // 🤖 Signed YOLO frame URL
+    if (incident.yoloDetails?.detectionFrameUrl) {
+      const { data: signed, error } = await supabase.storage
+        .from("uploads")
+        .createSignedUrl(incident.yoloDetails.detectionFrameUrl, 3600);
+      if (!error && signed?.signedUrl)
+        incident.dataValues.aiFrameSignedUrl = signed.signedUrl;
+    }
+
+    // 📡 Determine source type
+    const sourceType = incident.cameraId ? "camera" : "citizen";
+
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Incident retrieved successfully",
+      data: {
+        ...incident.toJSON(),
+        sourceType,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Error in getIncident:", error);
+    next(error);
+  }
+};
+
 const getIncidentsForHeatmap = async (req, res, next) => {
   try {
     const { filter, startDate, endDate, type, source } = req.query;
@@ -500,89 +573,6 @@ const getIncidentsForHeatmap = async (req, res, next) => {
     });
   } catch (error) {
     console.error("❌ Heatmap Error:", error);
-    next(error);
-  }
-};
-
-/**
- * Get incident by ID
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- * @param {Function} next - Express next middleware function
- */
-
-const getIncident = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    if (!id) throw new BadRequestError("Incident ID is required");
-
-    const incident = await Incident.findByPk(id, {
-      include: [
-        {
-          model: Camera,
-          as: "camera",
-          attributes: ["id", "name", "location", "status", "ipAddress"],
-          required: false,
-        },
-        {
-          model: YOLOIncident,
-          as: "yoloDetails",
-          attributes: [
-            "aiType",
-            "confidence",
-            "detectionFrameUrl",
-            "modelVersion",
-          ],
-          required: false,
-        },
-        {
-          model: HumanIncident,
-          as: "humanDetails",
-          attributes: ["reportedBy", "contact", "ipAddress"],
-          required: false,
-        },
-        {
-          model: User,
-          as: "accepters",
-          attributes: ["id", "firstname", "lastname", "email", "contact"],
-          through: { attributes: ["acceptedAt"] },
-        },
-      ],
-    });
-
-    if (!incident) throw new NotFoundError("Incident not found");
-
-    // 🖼️ Signed snapshot URL
-    if (incident.snapshotUrl) {
-      const { data: signed, error } = await supabase.storage
-        .from("uploads")
-        .createSignedUrl(incident.snapshotUrl, 3600);
-      if (!error && signed?.signedUrl)
-        incident.dataValues.snapshotSignedUrl = signed.signedUrl;
-    }
-
-    // 🤖 Signed YOLO frame URL
-    if (incident.yoloDetails?.detectionFrameUrl) {
-      const { data: signed, error } = await supabase.storage
-        .from("uploads")
-        .createSignedUrl(incident.yoloDetails.detectionFrameUrl, 3600);
-      if (!error && signed?.signedUrl)
-        incident.dataValues.aiFrameSignedUrl = signed.signedUrl;
-    }
-
-    // 📡 Determine source type
-    const sourceType = incident.cameraId ? "camera" : "citizen";
-
-    return res.status(StatusCodes.OK).json({
-      success: true,
-      message: "Incident retrieved successfully",
-      data: {
-        ...incident.toJSON(),
-        sourceType,
-      },
-    });
-  } catch (error) {
-    console.error("❌ Error in getIncident:", error);
     next(error);
   }
 };

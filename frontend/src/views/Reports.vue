@@ -2405,6 +2405,10 @@ const formatDate = (date) => {
 
 const getDateRange = () => {
   if (customStartDate.value && customEndDate.value) {
+    console.log({
+      startDate: customStartDate.value,
+      endDate: customEndDate.value,
+    });
     return {
       startDate: customStartDate.value,
       endDate: customEndDate.value,

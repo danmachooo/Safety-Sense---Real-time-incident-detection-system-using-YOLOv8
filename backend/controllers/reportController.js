@@ -567,79 +567,76 @@ const generateStockMovementReport = async (req, res, next) => {
 
 const generateIncidentSummaryReport = async (req, res, next) => {
   try {
-    // Add validation
+    // Validate
     const validation = validateReportParams(req.query);
     if (!validation.isValid) {
       throw new BadRequestError(validation.errors.join(", "));
     }
 
-    const {
-      period = "monthly", // daily, weekly, monthly
+    let {
+      period = "monthly",
       startDate,
       endDate,
       incidentType,
       status,
-      reportType, // human, yolo, or both
+      reportType, // human | yolo | all
     } = req.query;
 
-    // Calculate date range based on period
-    let dateRange = {};
-    const now = new Date();
-    if (startDate && endDate) {
-      dateRange = {
-        createdAt: {
+    reportType = reportType === "all" ? null : reportType;
+
+    // ------------------------------
+    // FIXED DATE RANGE GENERATION
+    // ------------------------------
+    const getDateRange = () => {
+      if (startDate && endDate) {
+        return {
           [Op.between]: [new Date(startDate), new Date(endDate)],
-        },
-      };
-    } else {
+        };
+      }
+
+      const now = new Date();
+      let fromDate = new Date();
+
       switch (period) {
         case "daily":
-          dateRange = {
-            createdAt: {
-              [Op.gte]: new Date(now.setDate(now.getDate() - 1)),
-            },
-          };
+          fromDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
           break;
         case "weekly":
-          dateRange = {
-            createdAt: {
-              [Op.gte]: new Date(now.setDate(now.getDate() - 7)),
-            },
-          };
+          fromDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
           break;
         case "monthly":
         default:
-          dateRange = {
-            createdAt: {
-              [Op.gte]: new Date(now.setMonth(now.getMonth() - 1)),
-            },
-          };
+          fromDate = new Date(now.setMonth(now.getMonth() - 1));
           break;
       }
-    }
 
-    // Build where clause
+      return { [Op.gte]: fromDate };
+    };
+
+    const dateFilter = getDateRange();
+
+    // ------------------------------
+    // BUILD FINAL WHERE CLAUSE
+    // ------------------------------
     const whereClause = {
-      ...dateRange,
+      createdAt: dateFilter,
       deletedAt: null,
     };
 
-    if (incidentType) {
-      whereClause.type = incidentType;
-    }
+    if (incidentType) whereClause.type = incidentType;
+    if (status) whereClause.status = status;
+    if (reportType) whereClause.reportType = reportType;
 
-    if (status) {
-      whereClause.status = status;
-    }
+    console.log("WHERE CLAUSE:", whereClause);
 
-    if (reportType && reportType !== "all") {
-      whereClause.reportType = reportType;
-    }
-    console.log("Where clause: ", whereClause);
-    // Get total incidents
+    // ------------------------------
+    // COUNT TOTAL INCIDENTS
+    // ------------------------------
     const totalIncidents = await Incident.count({ where: whereClause });
-    console.log("Total Incidents: ", totalIncidents);
-    // Get incidents by type
+
+    // ------------------------------
+    // GROUP COUNTS
+    // ------------------------------
     const incidentsByType = await Incident.findAll({
       attributes: [
         "type",
@@ -649,7 +646,6 @@ const generateIncidentSummaryReport = async (req, res, next) => {
       group: ["type"],
     });
 
-    // Get incidents by status
     const incidentsByStatus = await Incident.findAll({
       attributes: [
         "status",
@@ -659,7 +655,6 @@ const generateIncidentSummaryReport = async (req, res, next) => {
       group: ["status"],
     });
 
-    // Get incidents by report type (human vs yolo)
     const incidentsByReportType = await Incident.findAll({
       attributes: [
         "reportType",
@@ -669,76 +664,69 @@ const generateIncidentSummaryReport = async (req, res, next) => {
       group: ["reportType"],
     });
 
-    // Get response time statistics (only for accepted incidents)
+    // ------------------------------
+    // RESPONSE TIME STATS (ACCEPTED ONLY)
+    // ------------------------------
     const responseTimeStats = await sequelize.query(
       `
-        SELECT 
-          AVG(TIMESTAMPDIFF(MINUTE, i.createdAt, ia.acceptedAt)) as avgResponseMinutes,
-          MIN(TIMESTAMPDIFF(MINUTE, i.createdAt, ia.acceptedAt)) as minResponseMinutes,
-          MAX(TIMESTAMPDIFF(MINUTE, i.createdAt, ia.acceptedAt)) as maxResponseMinutes
-        FROM Incidents i
-        LEFT JOIN IncidentAcceptance ia ON i.id = ia.incidentId
-        WHERE i.deletedAt IS NULL
-        ${
-          Object.keys(dateRange).length > 0
-            ? "AND i.createdAt >= :startDate"
-            : ""
-        }
-        ${incidentType ? "AND i.type = :incidentType" : ""}
-        ${
-          reportType && reportType !== "all"
-            ? "AND i.reportType = :reportType"
-            : ""
-        }
-      `,
+      SELECT 
+        AVG(TIMESTAMPDIFF(MINUTE, i.createdAt, ia.acceptedAt)) AS avgResponseMinutes,
+        MIN(TIMESTAMPDIFF(MINUTE, i.createdAt, ia.acceptedAt)) AS minResponseMinutes,
+        MAX(TIMESTAMPDIFF(MINUTE, i.createdAt, ia.acceptedAt)) AS maxResponseMinutes
+      FROM Incidents i
+      LEFT JOIN IncidentAcceptance ia ON i.id = ia.incidentId
+      WHERE i.deletedAt IS NULL
+      AND i.createdAt BETWEEN :start AND :end
+      ${incidentType ? "AND i.type = :incidentType" : ""}
+      ${reportType ? "AND i.reportType = :reportType" : ""}
+      ${status ? "AND i.status = :status" : ""}
+    `,
       {
         replacements: {
-          startDate:
-            dateRange.createdAt?.[Op.gte] ||
-            dateRange.createdAt?.[Op.between]?.[0],
+          start: dateFilter[Op.between]?.[0] || dateFilter[Op.gte],
+          end: dateFilter[Op.between]?.[1] || new Date(),
           incidentType,
-          reportType: reportType && reportType !== "all" ? reportType : null,
+          reportType,
+          status,
         },
         type: sequelize.QueryTypes.SELECT,
       }
     );
 
-    // Get incidents by time period
+    // ------------------------------
+    // INCIDENT TREND OVER TIME
+    // ------------------------------
     const timeFormat = period === "daily" ? "%H:00" : "%Y-%m-%d";
+
     const incidentsByTime = await sequelize.query(
       `
-        SELECT 
-          DATE_FORMAT(createdAt, '${timeFormat}') as timePeriod,
-          COUNT(*) as count
-        FROM Incidents
-        WHERE deletedAt IS NULL
-        ${
-          Object.keys(dateRange).length > 0 ? "AND createdAt >= :startDate" : ""
-        }
-        ${incidentType ? "AND type = :incidentType" : ""}
-        ${status ? "AND status = :status" : ""}
-        ${
-          reportType && reportType !== "all"
-            ? "AND reportType = :reportType"
-            : ""
-        }
-        GROUP BY timePeriod
-        ORDER BY timePeriod
-      `,
+      SELECT 
+        DATE_FORMAT(createdAt, '${timeFormat}') AS timePeriod,
+        COUNT(*) AS count
+      FROM Incidents
+      WHERE deletedAt IS NULL
+      AND createdAt BETWEEN :start AND :end
+      ${incidentType ? "AND type = :incidentType" : ""}
+      ${status ? "AND status = :status" : ""}
+      ${reportType ? "AND reportType = :reportType" : ""}
+      GROUP BY timePeriod
+      ORDER BY timePeriod
+    `,
       {
         replacements: {
-          startDate:
-            dateRange.createdAt?.[Op.gte] ||
-            dateRange.createdAt?.[Op.between]?.[0],
+          start: dateFilter[Op.between]?.[0] || dateFilter[Op.gte],
+          end: dateFilter[Op.between]?.[1] || new Date(),
           incidentType,
           status,
-          reportType: reportType && reportType !== "all" ? reportType : null,
+          reportType,
         },
         type: sequelize.QueryTypes.SELECT,
       }
     );
 
-    // Get AI detection statistics for YOLO incidents
+    // ------------------------------
+    // YOLO AI DETECTION STATS
+    // ------------------------------
     const aiDetectionStats = await YOLOIncident.findAll({
       attributes: [
         "aiType",
@@ -760,9 +748,12 @@ const generateIncidentSummaryReport = async (req, res, next) => {
       group: ["aiType"],
     });
 
+    // ------------------------------
+    // FINAL REPORT DATA
+    // ------------------------------
     const reportData = {
       reportType: `${
-        period.charAt(0).toUpperCase() + period.slice(1)
+        period[0].toUpperCase() + period.slice(1)
       } Incident Summary Report`,
       generatedAt: new Date(),
       period,
@@ -786,7 +777,7 @@ const generateIncidentSummaryReport = async (req, res, next) => {
       data: reportData,
     });
   } catch (error) {
-    console.error("An error occurred: " + error);
+    console.error("Incident summary error:", error);
     next(error);
   }
 };

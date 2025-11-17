@@ -1298,38 +1298,48 @@ const generateTopLocationsByIncidentsReport = async (req, res, next) => {
     // Camera coordinates are fetched via association when cameraId exists
     const incidentsWithCoordinates = await sequelize.query(
       `
-        SELECT 
-          i.id,
-          i.type,
-          i.reportType,
-          i.status,
-          i.createdAt,
-          i.latitude,
-          i.longitude,
-          y.cameraId,
-          COALESCE(c.location, NULL) as cameraLocation,
-          COALESCE(c.latitude, NULL) as cameraLatitude,
-          COALESCE(c.longitude, NULL) as cameraLongitude,
-          y.aiType as yoloAiType,
-          y.confidence as yoloConfidence,
-          h.reportedBy as humanReporter
-        FROM Incidents i
-        LEFT JOIN Cameras c ON y.cameraId = c.id
-        LEFT JOIN YOLOIncidents y ON i.id = y.incidentId
-        LEFT JOIN HumanIncidents h ON i.id = h.incidentId
-        WHERE i.deletedAt IS NULL
-        ${
-          startDate && endDate
-            ? "AND i.createdAt BETWEEN :startDate AND :endDate"
-            : ""
-        }
-        ${incidentType ? "AND i.type = :incidentType" : ""}
-        ${
-          reportType && reportType !== "all"
-            ? "AND i.reportType = :reportType"
-            : ""
-        }
-      `,
+    SELECT 
+      i.id,
+      i.type,
+      i.reportType,
+      i.status,
+      i.createdAt,
+      i.latitude,
+      i.longitude,
+      
+      -- Camera details (now coming from YOLOIncident -> Camera)
+      y.cameraId,
+      c.location as cameraLocation,
+      c.latitude as cameraLatitude,
+      c.longitude as cameraLongitude,
+
+      -- YOLO AI details
+      y.aiType as yoloAiType,
+      y.confidence as yoloConfidence,
+      y.modelVersion as yoloModelVersion,
+      y.detectionFrameUrl,
+      y.detectedObjects,
+
+      -- Human report details
+      h.reportedBy as humanReporter
+
+    FROM Incidents i
+    LEFT JOIN YOLOIncidents y ON i.id = y.incidentId
+    LEFT JOIN Cameras c ON y.cameraId = c.id
+    LEFT JOIN HumanIncidents h ON i.id = h.incidentId
+    WHERE i.deletedAt IS NULL
+      ${
+        startDate && endDate
+          ? "AND i.createdAt BETWEEN :startDate AND :endDate"
+          : ""
+      }
+      ${incidentType ? "AND i.type = :incidentType" : ""}
+      ${
+        reportType && reportType !== "all"
+          ? "AND i.reportType = :reportType"
+          : ""
+      }
+  `,
       {
         replacements: {
           startDate: startDate ? new Date(startDate) : null,

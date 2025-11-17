@@ -33,7 +33,7 @@
   "scripts": {
     "start": "node app.js",
     "dev": "nodemon app.js",
-    "run_db": "node run_db_config.js"
+    "migrate": "node run_db_config.js"
   },
   "type": "module"
 }

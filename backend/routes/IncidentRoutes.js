@@ -22,7 +22,6 @@ import {
   getIncidentsByUser,
   getUsersByIncident,
   getDismissedIncidentsByUser,
-  getUsersByDismissedIncident,
   getIncidentStats,
   getIncidentsForHeatmap,
 } from "../controllers/Incidents/incidentController.js";
@@ -51,7 +50,7 @@ router.get("/:incidentId/users", authMiddleware, getUsersByIncident);
 router.get(
   "/:incidentId/dismissers",
   authMiddleware,
-  getUsersByDismissedIncident
+  getDismissedIncidentsByUser
 );
 
 // Get incidents accepted by a user

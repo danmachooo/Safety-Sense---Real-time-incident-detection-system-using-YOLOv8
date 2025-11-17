@@ -783,6 +783,10 @@ const dismissIncident = async (req, res, next) => {
 };
 
 /**
+ * Get dismissed incidents by a user
+ */
+
+/**
  * Get users who accepted an incident
  */
 const getUsersByIncident = async (req, res, next) => {
@@ -1791,7 +1795,6 @@ export {
   getIncidentsByUser,
   getUsersByIncident,
   getDismissedIncidentsByUser,
-  getUsersByDismissedIncident,
   getIncidentStats,
   generateEmptyTemplate,
   getIncidentsForHeatmap,

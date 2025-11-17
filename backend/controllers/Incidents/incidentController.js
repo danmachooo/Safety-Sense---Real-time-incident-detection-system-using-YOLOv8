@@ -615,12 +615,276 @@ const getIncidentsForHeatmap = async (req, res, next) => {
   }
 };
 
+const softDeleteIncident = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) throw new BadRequestError("Incident ID is required");
+
+    const incident = await Incident.findByPk(id);
+    if (!incident) throw new NotFoundError("Incident not found");
+
+    await incident.destroy(); // Soft delete since paranoid is true
+
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Incident has been soft deleted",
+    });
+  } catch (error) {
+    console.error("An error occurred: " + error);
+    next(error);
+  }
+};
+
 /**
- * Update incident
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- * @param {Function} next - Express next middleware function
+ * Restore soft deleted incident
  */
+const restoreIncident = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) throw new BadRequestError("Incident ID is required");
+
+    const incident = await Incident.findOne({
+      where: { id },
+      paranoid: false,
+    });
+
+    if (!incident) throw new NotFoundError("Incident not found");
+
+    await incident.restore(); // Restore soft deleted incident
+
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Incident has been restored",
+    });
+  } catch (error) {
+    console.error("An error occurred: " + error);
+    next(error);
+  }
+};
+
+/**
+ * Accept an incident by a user
+ */
+const acceptIncident = async (req, res, next) => {
+  let transaction;
+
+  try {
+    transaction = await sequelize.transaction();
+
+    const { incidentId } = req.params;
+    const { userId } = req.body;
+
+    if (!incidentId || !userId)
+      throw new BadRequestError("Incident ID and User ID are required");
+
+    // Validate incident exists
+    const incident = await Incident.findByPk(incidentId);
+    if (!incident) throw new NotFoundError("Incident not found");
+
+    // Validate user exists
+    const user = await User.findByPk(userId);
+    if (!user) throw new NotFoundError("User not found");
+
+    // Check if already accepted
+    const existingAcceptance = await IncidentAcceptance.findOne({
+      where: { incidentId, userId },
+    });
+
+    if (existingAcceptance) {
+      throw new BadRequestError("Incident already accepted by this user");
+    }
+
+    // Create acceptance record
+    await IncidentAcceptance.create(
+      {
+        incidentId,
+        userId,
+        acceptedAt: new Date(),
+      },
+      { transaction }
+    );
+
+    // Update incident status to accepted if not already
+    if (incident.status === "pending" || incident.status === "verified") {
+      await incident.update({ status: "accepted" }, { transaction });
+    }
+
+    await transaction.commit();
+    transaction = null;
+
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Incident accepted successfully",
+    });
+  } catch (error) {
+    if (transaction) await transaction.rollback();
+    console.error("An error occurred: " + error);
+    next(error);
+  }
+};
+
+/**
+ * Dismiss an incident for a specific user (per-user dismissal)
+ */
+const dismissIncident = async (req, res, next) => {
+  let transaction;
+
+  try {
+    transaction = await sequelize.transaction();
+
+    const { incidentId } = req.params;
+    const { userId, reason } = req.body;
+
+    if (!incidentId || !userId)
+      throw new BadRequestError("Incident ID and User ID are required");
+
+    // Validate incident exists
+    const incident = await Incident.findByPk(incidentId);
+    if (!incident) throw new NotFoundError("Incident not found");
+
+    // Validate user exists
+    const user = await User.findByPk(userId);
+    if (!user) throw new NotFoundError("User not found");
+
+    // Check if already dismissed by this user
+    const existingDismissal = await IncidentDismissal.findOne({
+      where: { incidentId, userId },
+    });
+
+    if (existingDismissal) {
+      throw new BadRequestError("Incident already dismissed by this user");
+    }
+
+    // Create dismissal record
+    await IncidentDismissal.create(
+      {
+        incidentId,
+        userId,
+        dismissedAt: new Date(),
+        reason: reason || null,
+      },
+      { transaction }
+    );
+
+    await transaction.commit();
+    transaction = null;
+
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Incident dismissed for this user successfully",
+    });
+  } catch (error) {
+    if (transaction) await transaction.rollback();
+    console.error("An error occurred: " + error);
+    next(error);
+  }
+};
+
+/**
+ * Get users who accepted an incident
+ */
+const getUsersByIncident = async (req, res, next) => {
+  try {
+    const { incidentId } = req.params;
+
+    if (!incidentId) throw new BadRequestError("Incident ID is required");
+
+    // Validate incident exists
+    const incident = await Incident.findByPk(incidentId);
+    if (!incident) throw new NotFoundError("Incident not found");
+
+    const users = await Incident.findByPk(incidentId, {
+      include: [
+        {
+          model: User,
+          as: "accepters",
+          attributes: [
+            "id",
+            "firstname",
+            "lastname",
+            "email",
+            "contact",
+            "role",
+          ],
+          through: { attributes: ["acceptedAt"] },
+        },
+      ],
+    });
+
+    if (!users || !users.accepters) {
+      return res.status(StatusCodes.OK).json({
+        success: true,
+        message: "No users have accepted this incident",
+        data: [],
+        count: 0,
+      });
+    }
+
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Incident accepters retrieved successfully",
+      data: users.accepters,
+      count: users.accepters.length,
+    });
+  } catch (error) {
+    console.error("An error occurred: " + error);
+    next(error);
+  }
+};
+
+const generateEmptyTemplate = async (req, res, next) => {
+  try {
+    const headers = [
+      "name",
+      "description",
+      "category",
+      "type",
+      "quantity_in_stock",
+      "unit_price",
+      "min_stock_level",
+      "reorder_level",
+      "unit_of_measure",
+      "condition",
+      "location",
+      "is_deployable",
+      "supplier",
+      "funding_source",
+      "batch_notes",
+      "notes",
+    ];
+
+    const workbook = xlsx.utils.book_new();
+    const worksheet = xlsx.utils.aoa_to_sheet([headers]);
+
+    worksheet["!cols"] = headers.map(() => ({ wch: 20 }));
+
+    xlsx.utils.book_append_sheet(workbook, worksheet, "Inventory Template");
+
+    const buffer = xlsx.write(workbook, {
+      type: "buffer",
+      bookType: "xlsx",
+    });
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="inventory_template_empty.xlsx"'
+    );
+
+    res.status(StatusCodes.OK).send(buffer);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ============================================
+// UPDATED: updateIncident function
+// ============================================
 const updateIncident = async (req, res, next) => {
   let transaction;
 
@@ -729,10 +993,11 @@ const updateIncident = async (req, res, next) => {
       });
 
       const yoloData = {
-        id,
+        incidentId: id,
         confidence: aiConfidence ?? existingYoloIncident?.confidence,
         modelVersion: aiModelVersion ?? existingYoloIncident?.modelVersion,
-        imageUrl: aiImageUrl ?? existingYoloIncident?.imageUrl,
+        detectionFrameUrl:
+          aiImageUrl ?? existingYoloIncident?.detectionFrameUrl,
         detectedAt:
           aiDetectedAt ?? existingYoloIncident?.detectedAt ?? new Date(),
       };
@@ -748,33 +1013,63 @@ const updateIncident = async (req, res, next) => {
     transaction = null;
 
     // ========================================
-    // 🔄 Fetch updated data with associations
+    // 🔄 Fetch updated data with CORRECT associations
     // ========================================
     const updatedIncident = await Incident.findByPk(id, {
       include: [
         {
-          model: Camera,
-          as: "camera",
-          attributes: ["id", "name", "location", "status"],
+          model: YOLOIncident,
+          as: "yoloDetails",
+          attributes: [
+            "id",
+            "cameraId",
+            "aiType",
+            "confidence",
+            "detectionFrameUrl",
+            "modelVersion",
+            "detectedObjects",
+            "processingTime",
+          ],
+          required: false,
+          include: [
+            {
+              model: Camera,
+              as: "camera",
+              attributes: [
+                "id",
+                "name",
+                "ipAddress",
+                "rtspUrl",
+                "location",
+                "longitude",
+                "latitude",
+                "model",
+                "description",
+                "status",
+                "lastCheckedAt",
+                "lastOnlineAt",
+              ],
+              required: false,
+            },
+          ],
+        },
+        {
+          model: HumanIncident,
+          as: "humanDetails",
+          attributes: ["id", "reportedBy", "contact", "ipAddress"],
           required: false,
         },
         {
           model: User,
           as: "accepters",
-          attributes: ["id", "firstname", "lastname", "email"],
+          attributes: ["id", "firstname", "lastname", "email", "contact"],
           through: { attributes: ["acceptedAt"] },
         },
         {
-          model: YOLOIncident,
-          as: "YOLOIncident",
-          attributes: ["confidence", "modelVersion", "detectedAt", "imageUrl"],
-          required: false,
-        },
-        {
-          model: HumanIncident,
-          as: "HumanIncident",
-          attributes: ["reportedAt", "imageUrl", "notes"],
-          required: false,
+          model: User,
+          as: "dismissers",
+          attributes: ["id", "firstname", "lastname", "email", "contact"],
+          through: { attributes: ["dismissedAt"] },
         },
       ],
     });
@@ -790,58 +1085,10 @@ const updateIncident = async (req, res, next) => {
     next(error);
   }
 };
-const softDeleteIncident = async (req, res, next) => {
-  try {
-    const { id } = req.params;
 
-    if (!id) throw new BadRequestError("Incident ID is required");
-
-    const incident = await Incident.findByPk(id);
-    if (!incident) throw new NotFoundError("Incident not found");
-
-    await incident.destroy(); // Soft delete since paranoid is true
-
-    return res.status(StatusCodes.OK).json({
-      success: true,
-      message: "Incident has been soft deleted",
-    });
-  } catch (error) {
-    console.error("An error occurred: " + error);
-    next(error);
-  }
-};
-
-/**
- * Restore soft deleted incident
- */
-const restoreIncident = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-
-    if (!id) throw new BadRequestError("Incident ID is required");
-
-    const incident = await Incident.findOne({
-      where: { id },
-      paranoid: false,
-    });
-
-    if (!incident) throw new NotFoundError("Incident not found");
-
-    await incident.restore(); // Restore soft deleted incident
-
-    return res.status(StatusCodes.OK).json({
-      success: true,
-      message: "Incident has been restored",
-    });
-  } catch (error) {
-    console.error("An error occurred: " + error);
-    next(error);
-  }
-};
-
-/**
- * Get deleted incidents
- */
+// ============================================
+// UPDATED: getDeletedIncidents function
+// ============================================
 const getDeletedIncidents = async (req, res, next) => {
   try {
     const {
@@ -888,40 +1135,76 @@ const getDeletedIncidents = async (req, res, next) => {
       order = [[sortBy, direction]];
     }
 
+    // 🧩 YOLO include with optional cameraId filter and full camera details
+    const yoloInclude = {
+      model: YOLOIncident,
+      as: "yoloDetails",
+      attributes: [
+        "id",
+        "cameraId",
+        "aiType",
+        "confidence",
+        "detectionFrameUrl",
+        "modelVersion",
+        "detectedObjects",
+        "processingTime",
+      ],
+      required: false,
+      where: {},
+      include: [
+        {
+          model: Camera,
+          as: "camera",
+          attributes: [
+            "id",
+            "name",
+            "ipAddress",
+            "rtspUrl",
+            "location",
+            "longitude",
+            "latitude",
+            "model",
+            "description",
+            "status",
+            "lastCheckedAt",
+            "lastOnlineAt",
+          ],
+          required: false,
+        },
+      ],
+    };
+
+    // Apply cameraId filter to YOLOIncident if provided
+    if (cameraId) yoloInclude.where.cameraId = cameraId;
+
     const { count, rows } = await Incident.findAndCountAll({
       where: whereCondition,
       include: [
         {
           model: HumanIncident,
           as: "humanDetails",
-          attributes: ["reportedBy", "contact", "ipAddress"],
+          attributes: ["id", "reportedBy", "contact", "ipAddress"],
           required: false,
         },
+        yoloInclude,
         {
-          model: YOLOIncident,
-          as: "yoloDetails",
-          attributes: [
-            "cameraId",
-            "aiType",
-            "confidence",
-            "modelVersion",
-            "detectionFrameUrl",
-          ],
-          include: [
-            {
-              model: Camera,
-              as: "camera",
-              attributes: ["id", "name", "location", "status"],
-              required: false,
-            },
-          ],
-          required: false,
+          model: User,
+          as: "accepters",
+          attributes: ["id", "firstname", "lastname", "email", "contact"],
+          through: { attributes: ["acceptedAt"] },
+        },
+        {
+          model: User,
+          as: "dismissers",
+          attributes: ["id", "firstname", "lastname", "email", "contact"],
+          through: { attributes: ["dismissedAt"] },
         },
       ],
       paranoid: false, // Include soft-deleted records
       offset,
       limit: limitNumber,
       order,
+      distinct: true,
     });
 
     return res.status(StatusCodes.OK).json({
@@ -938,70 +1221,9 @@ const getDeletedIncidents = async (req, res, next) => {
   }
 };
 
-/**
- * Accept an incident by a user
- */
-const acceptIncident = async (req, res, next) => {
-  let transaction;
-
-  try {
-    transaction = await sequelize.transaction();
-
-    const { incidentId } = req.params;
-    const { userId } = req.body;
-
-    if (!incidentId || !userId)
-      throw new BadRequestError("Incident ID and User ID are required");
-
-    // Validate incident exists
-    const incident = await Incident.findByPk(incidentId);
-    if (!incident) throw new NotFoundError("Incident not found");
-
-    // Validate user exists
-    const user = await User.findByPk(userId);
-    if (!user) throw new NotFoundError("User not found");
-
-    // Check if already accepted
-    const existingAcceptance = await IncidentAcceptance.findOne({
-      where: { incidentId, userId },
-    });
-
-    if (existingAcceptance) {
-      throw new BadRequestError("Incident already accepted by this user");
-    }
-
-    // Create acceptance record
-    await IncidentAcceptance.create(
-      {
-        incidentId,
-        userId,
-        acceptedAt: new Date(),
-      },
-      { transaction }
-    );
-
-    // Update incident status to accepted if not already
-    if (incident.status === "pending" || incident.status === "verified") {
-      await incident.update({ status: "accepted" }, { transaction });
-    }
-
-    await transaction.commit();
-    transaction = null;
-
-    return res.status(StatusCodes.OK).json({
-      success: true,
-      message: "Incident accepted successfully",
-    });
-  } catch (error) {
-    if (transaction) await transaction.rollback();
-    console.error("An error occurred: " + error);
-    next(error);
-  }
-};
-
-/**
- * Resolve an incident
- */
+// ============================================
+// UPDATED: resolveIncident function
+// ============================================
 const resolveIncident = async (req, res, next) => {
   let transaction;
 
@@ -1038,31 +1260,56 @@ const resolveIncident = async (req, res, next) => {
         {
           model: HumanIncident,
           as: "humanDetails",
-          attributes: ["reportedBy", "contact", "ipAddress"],
+          attributes: ["id", "reportedBy", "contact", "ipAddress"],
+          required: false,
         },
         {
           model: YOLOIncident,
           as: "yoloDetails",
           attributes: [
+            "id",
             "cameraId",
             "aiType",
             "confidence",
-            "modelVersion",
             "detectionFrameUrl",
+            "modelVersion",
+            "detectedObjects",
+            "processingTime",
           ],
           required: false,
-        },
-        {
-          model: Camera,
-          as: "camera",
-          attributes: ["id", "name", "location", "status"],
-          required: false,
+          include: [
+            {
+              model: Camera,
+              as: "camera",
+              attributes: [
+                "id",
+                "name",
+                "ipAddress",
+                "rtspUrl",
+                "location",
+                "longitude",
+                "latitude",
+                "model",
+                "description",
+                "status",
+                "lastCheckedAt",
+                "lastOnlineAt",
+              ],
+              required: false,
+            },
+          ],
         },
         {
           model: User,
           as: "accepters",
-          attributes: ["id", "firstname", "lastname", "email"],
+          attributes: ["id", "firstname", "lastname", "email", "contact"],
           through: { attributes: ["acceptedAt"] },
+        },
+        {
+          model: User,
+          as: "dismissers",
+          attributes: ["id", "firstname", "lastname", "email", "contact"],
+          through: { attributes: ["dismissedAt"] },
         },
       ],
     });
@@ -1079,66 +1326,9 @@ const resolveIncident = async (req, res, next) => {
   }
 };
 
-/**
- * Dismiss an incident for a specific user (per-user dismissal)
- */
-const dismissIncident = async (req, res, next) => {
-  let transaction;
-
-  try {
-    transaction = await sequelize.transaction();
-
-    const { incidentId } = req.params;
-    const { userId, reason } = req.body;
-
-    if (!incidentId || !userId)
-      throw new BadRequestError("Incident ID and User ID are required");
-
-    // Validate incident exists
-    const incident = await Incident.findByPk(incidentId);
-    if (!incident) throw new NotFoundError("Incident not found");
-
-    // Validate user exists
-    const user = await User.findByPk(userId);
-    if (!user) throw new NotFoundError("User not found");
-
-    // Check if already dismissed by this user
-    const existingDismissal = await IncidentDismissal.findOne({
-      where: { incidentId, userId },
-    });
-
-    if (existingDismissal) {
-      throw new BadRequestError("Incident already dismissed by this user");
-    }
-
-    // Create dismissal record
-    await IncidentDismissal.create(
-      {
-        incidentId,
-        userId,
-        dismissedAt: new Date(),
-        reason: reason || null,
-      },
-      { transaction }
-    );
-
-    await transaction.commit();
-    transaction = null;
-
-    return res.status(StatusCodes.OK).json({
-      success: true,
-      message: "Incident dismissed for this user successfully",
-    });
-  } catch (error) {
-    if (transaction) await transaction.rollback();
-    console.error("An error occurred: " + error);
-    next(error);
-  }
-};
-
-/**
- * Globally dismiss an incident (admin only)
- */
+// ============================================
+// UPDATED: globalDismissIncident function
+// ============================================
 const globalDismissIncident = async (req, res, next) => {
   let transaction;
 
@@ -1191,38 +1381,55 @@ const globalDismissIncident = async (req, res, next) => {
         {
           model: HumanIncident,
           as: "humanDetails",
-          attributes: ["reportedBy", "contact", "ipAddress"],
+          attributes: ["id", "reportedBy", "contact", "ipAddress"],
+          required: false,
         },
         {
           model: YOLOIncident,
           as: "yoloDetails",
           attributes: [
+            "id",
             "cameraId",
             "aiType",
             "confidence",
-            "modelVersion",
             "detectionFrameUrl",
+            "modelVersion",
+            "detectedObjects",
+            "processingTime",
           ],
+          required: false,
           include: [
             {
               model: Camera,
               as: "camera",
-              attributes: ["id", "name", "location", "status"],
+              attributes: [
+                "id",
+                "name",
+                "ipAddress",
+                "rtspUrl",
+                "location",
+                "longitude",
+                "latitude",
+                "model",
+                "description",
+                "status",
+                "lastCheckedAt",
+                "lastOnlineAt",
+              ],
               required: false,
             },
           ],
-          required: false,
         },
         {
           model: User,
           as: "accepters",
-          attributes: ["id", "firstname", "lastname", "email"],
+          attributes: ["id", "firstname", "lastname", "email", "contact"],
           through: { attributes: ["acceptedAt"] },
         },
         {
           model: User,
           as: "dismissers",
-          attributes: ["id", "firstname", "lastname", "email"],
+          attributes: ["id", "firstname", "lastname", "email", "contact"],
           through: { attributes: ["dismissedAt", "reason"] },
         },
       ],
@@ -1240,9 +1447,9 @@ const globalDismissIncident = async (req, res, next) => {
   }
 };
 
-/**
- * Get dismissed incidents by a user
- */
+// ============================================
+// UPDATED: getDismissedIncidentsByUser function
+// ============================================
 const getDismissedIncidentsByUser = async (req, res, next) => {
   try {
     const { userId } = req.params;
@@ -1269,28 +1476,44 @@ const getDismissedIncidentsByUser = async (req, res, next) => {
             {
               model: HumanIncident,
               as: "humanDetails",
-              attributes: ["reportedBy", "contact", "ipAddress"],
+              attributes: ["id", "reportedBy", "contact", "ipAddress"],
               required: false,
             },
             {
               model: YOLOIncident,
               as: "yoloDetails",
               attributes: [
+                "id",
                 "cameraId",
                 "aiType",
                 "confidence",
-                "modelVersion",
                 "detectionFrameUrl",
+                "modelVersion",
+                "detectedObjects",
+                "processingTime",
               ],
+              required: false,
               include: [
                 {
                   model: Camera,
                   as: "camera",
-                  attributes: ["id", "name", "location", "status"],
+                  attributes: [
+                    "id",
+                    "name",
+                    "ipAddress",
+                    "rtspUrl",
+                    "location",
+                    "longitude",
+                    "latitude",
+                    "model",
+                    "description",
+                    "status",
+                    "lastCheckedAt",
+                    "lastOnlineAt",
+                  ],
                   required: false,
                 },
               ],
-              required: false,
             },
           ],
           through: { attributes: ["dismissedAt", "reason"] },
@@ -1321,41 +1544,86 @@ const getDismissedIncidentsByUser = async (req, res, next) => {
   }
 };
 
-/**
- * Get users who dismissed an incident
- */
-const getUsersByDismissedIncident = async (req, res, next) => {
+// ============================================
+// UPDATED: getIncidentsByUser function
+// ============================================
+const getIncidentsByUser = async (req, res, next) => {
   try {
-    const { incidentId } = req.params;
+    const { userId } = req.params;
+    const { page, limit } = req.query;
 
-    if (!incidentId) throw new BadRequestError("Incident ID is required");
+    if (!userId) throw new BadRequestError("User ID is required");
 
-    // Validate incident exists
-    const incident = await Incident.findByPk(incidentId);
-    if (!incident) throw new NotFoundError("Incident not found");
+    // Validate user exists
+    const user = await User.findByPk(userId);
+    if (!user) throw new NotFoundError("User not found");
 
-    const users = await Incident.findByPk(incidentId, {
+    // Pagination
+    const pageNumber = Number.parseInt(page) || 1;
+    const limitNumber = Number.parseInt(limit) || 10;
+    const offset = (pageNumber - 1) * limitNumber;
+
+    // Get incidents accepted by this user
+    const incidents = await User.findByPk(userId, {
       include: [
         {
-          model: User,
-          as: "dismissers",
-          attributes: [
-            "id",
-            "firstname",
-            "lastname",
-            "email",
-            "contact",
-            "role",
+          model: Incident,
+          as: "acceptedIncidents",
+          include: [
+            {
+              model: HumanIncident,
+              as: "humanDetails",
+              attributes: ["id", "reportedBy", "contact", "ipAddress"],
+              required: false,
+            },
+            {
+              model: YOLOIncident,
+              as: "yoloDetails",
+              attributes: [
+                "id",
+                "cameraId",
+                "aiType",
+                "confidence",
+                "detectionFrameUrl",
+                "modelVersion",
+                "detectedObjects",
+                "processingTime",
+              ],
+              required: false,
+              include: [
+                {
+                  model: Camera,
+                  as: "camera",
+                  attributes: [
+                    "id",
+                    "name",
+                    "ipAddress",
+                    "rtspUrl",
+                    "location",
+                    "longitude",
+                    "latitude",
+                    "model",
+                    "description",
+                    "status",
+                    "lastCheckedAt",
+                    "lastOnlineAt",
+                  ],
+                  required: false,
+                },
+              ],
+            },
           ],
-          through: { attributes: ["dismissedAt", "reason"] },
+          through: { attributes: ["acceptedAt"] },
         },
       ],
+      limit: limitNumber,
+      offset,
     });
 
-    if (!users || !users.dismissers) {
+    if (!incidents || !incidents.acceptedIncidents) {
       return res.status(StatusCodes.OK).json({
         success: true,
-        message: "No users have dismissed this incident",
+        message: "No accepted incidents found for this user",
         data: [],
         count: 0,
       });
@@ -1363,9 +1631,9 @@ const getUsersByDismissedIncident = async (req, res, next) => {
 
     return res.status(StatusCodes.OK).json({
       success: true,
-      message: "Incident dismissers retrieved successfully",
-      data: users.dismissers,
-      count: users.dismissers.length,
+      message: "User accepted incidents retrieved successfully",
+      data: incidents.acceptedIncidents,
+      count: incidents.acceptedIncidents.length,
     });
   } catch (error) {
     console.error("An error occurred: " + error);
@@ -1373,9 +1641,9 @@ const getUsersByDismissedIncident = async (req, res, next) => {
   }
 };
 
-/**
- * Get incident statistics
- */
+// ============================================
+// UPDATED: getIncidentStats function
+// ============================================
 const getIncidentStats = async (req, res, next) => {
   try {
     // Count incidents by status
@@ -1413,22 +1681,44 @@ const getIncidentStats = async (req, res, next) => {
         {
           model: HumanIncident,
           as: "humanDetails",
-          attributes: ["reportedBy", "contact"],
+          attributes: ["id", "reportedBy", "contact", "ipAddress"],
           required: false,
         },
         {
           model: YOLOIncident,
           as: "yoloDetails",
-          attributes: ["cameraId", "aiType", "confidence"],
+          attributes: [
+            "id",
+            "cameraId",
+            "aiType",
+            "confidence",
+            "detectionFrameUrl",
+            "modelVersion",
+            "detectedObjects",
+            "processingTime",
+          ],
+          required: false,
           include: [
             {
               model: Camera,
               as: "camera",
-              attributes: ["id", "name", "location"],
+              attributes: [
+                "id",
+                "name",
+                "ipAddress",
+                "rtspUrl",
+                "location",
+                "longitude",
+                "latitude",
+                "model",
+                "description",
+                "status",
+                "lastCheckedAt",
+                "lastOnlineAt",
+              ],
               required: false,
             },
           ],
-          required: false,
         },
       ],
     });
@@ -1480,187 +1770,6 @@ const getIncidentStats = async (req, res, next) => {
     });
   } catch (error) {
     console.error("An error occurred: " + error);
-    next(error);
-  }
-};
-
-/**
- * Get incidents accepted by a user
- */
-const getIncidentsByUser = async (req, res, next) => {
-  try {
-    const { userId } = req.params;
-    const { page, limit } = req.query;
-
-    if (!userId) throw new BadRequestError("User ID is required");
-
-    // Validate user exists
-    const user = await User.findByPk(userId);
-    if (!user) throw new NotFoundError("User not found");
-
-    // Pagination
-    const pageNumber = Number.parseInt(page) || 1;
-    const limitNumber = Number.parseInt(limit) || 10;
-    const offset = (pageNumber - 1) * limitNumber;
-
-    // Get incidents accepted by this user
-    const incidents = await User.findByPk(userId, {
-      include: [
-        {
-          model: Incident,
-          as: "acceptedIncidents",
-          include: [
-            {
-              model: HumanIncident,
-              as: "humanDetails",
-              attributes: ["reportedBy", "contact", "ipAddress"],
-              required: false,
-            },
-            {
-              model: YOLOIncident,
-              as: "yoloDetails",
-              attributes: [
-                "cameraId",
-                "aiType",
-                "confidence",
-                "modelVersion",
-                "detectionFrameUrl",
-              ],
-              include: [
-                {
-                  model: Camera,
-                  as: "camera",
-                  attributes: ["id", "name", "location", "status"],
-                  required: false,
-                },
-              ],
-              required: false,
-            },
-          ],
-          through: { attributes: ["acceptedAt"] },
-        },
-      ],
-      limit: limitNumber,
-      offset,
-    });
-
-    if (!incidents || !incidents.acceptedIncidents) {
-      return res.status(StatusCodes.OK).json({
-        success: true,
-        message: "No accepted incidents found for this user",
-        data: [],
-        count: 0,
-      });
-    }
-
-    return res.status(StatusCodes.OK).json({
-      success: true,
-      message: "User accepted incidents retrieved successfully",
-      data: incidents.acceptedIncidents,
-      count: incidents.acceptedIncidents.length,
-    });
-  } catch (error) {
-    console.error("An error occurred: " + error);
-    next(error);
-  }
-};
-
-/**
- * Get users who accepted an incident
- */
-const getUsersByIncident = async (req, res, next) => {
-  try {
-    const { incidentId } = req.params;
-
-    if (!incidentId) throw new BadRequestError("Incident ID is required");
-
-    // Validate incident exists
-    const incident = await Incident.findByPk(incidentId);
-    if (!incident) throw new NotFoundError("Incident not found");
-
-    const users = await Incident.findByPk(incidentId, {
-      include: [
-        {
-          model: User,
-          as: "accepters",
-          attributes: [
-            "id",
-            "firstname",
-            "lastname",
-            "email",
-            "contact",
-            "role",
-          ],
-          through: { attributes: ["acceptedAt"] },
-        },
-      ],
-    });
-
-    if (!users || !users.accepters) {
-      return res.status(StatusCodes.OK).json({
-        success: true,
-        message: "No users have accepted this incident",
-        data: [],
-        count: 0,
-      });
-    }
-
-    return res.status(StatusCodes.OK).json({
-      success: true,
-      message: "Incident accepters retrieved successfully",
-      data: users.accepters,
-      count: users.accepters.length,
-    });
-  } catch (error) {
-    console.error("An error occurred: " + error);
-    next(error);
-  }
-};
-
-const generateEmptyTemplate = async (req, res, next) => {
-  try {
-    const headers = [
-      "name",
-      "description",
-      "category",
-      "type",
-      "quantity_in_stock",
-      "unit_price",
-      "min_stock_level",
-      "reorder_level",
-      "unit_of_measure",
-      "condition",
-      "location",
-      "is_deployable",
-      "supplier",
-      "funding_source",
-      "batch_notes",
-      "notes",
-    ];
-
-    const workbook = xlsx.utils.book_new();
-    const worksheet = xlsx.utils.aoa_to_sheet([headers]);
-
-    worksheet["!cols"] = headers.map(() => ({ wch: 20 }));
-
-    xlsx.utils.book_append_sheet(workbook, worksheet, "Inventory Template");
-
-    const buffer = xlsx.write(workbook, {
-      type: "buffer",
-      bookType: "xlsx",
-    });
-
-    res.setHeader(
-      "Content-Type",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    );
-    res.setHeader(
-      "Content-Disposition",
-      'attachment; filename="inventory_template_empty.xlsx"'
-    );
-
-    res.status(StatusCodes.OK).send(buffer);
-  } catch (error) {
     next(error);
   }
 };

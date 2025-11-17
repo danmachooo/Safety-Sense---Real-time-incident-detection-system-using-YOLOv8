@@ -638,7 +638,7 @@ const generateIncidentSummaryReport = async (req, res, next) => {
 
     // Get total incidents
     const totalIncidents = await Incident.count({ where: whereClause });
-
+    console.log("Total Incidents: ", totalIncidents);
     // Get incidents by type
     const incidentsByType = await Incident.findAll({
       attributes: [

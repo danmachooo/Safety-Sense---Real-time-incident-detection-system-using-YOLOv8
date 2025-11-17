@@ -435,7 +435,7 @@ const openDeployModal = async (item) => {
     deployment_type: "EMERGENCY",
     quantity_deployed: 1,
     deployment_location: "",
-    deployment_date: new Date(),
+    deployment_date: new Date().toISOString().split("T")[0],
     expected_return_date: null,
     incident_type: "",
     deployed_to: "",

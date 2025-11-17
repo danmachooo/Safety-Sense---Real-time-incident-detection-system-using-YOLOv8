@@ -194,7 +194,7 @@ const createDeployment = async (req, res, next) => {
           // notes, // Remove this
           deployment_type,
           deployment_location,
-          deployment_date: finalDeploymentDate,
+          deployment_date: deployment_date,
           status: "DEPLOYED",
         },
         { transaction: t }

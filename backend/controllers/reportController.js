@@ -672,23 +672,25 @@ const generateIncidentSummaryReport = async (req, res, next) => {
     // Get response time statistics (only for accepted incidents)
     const responseTimeStats = await sequelize.query(
       `
-      SELECT 
-        AVG(TIMESTAMPDIFF(MINUTE, i.createdAt, ia.acceptedAt)) as avgResponseMinutes,
-        MIN(TIMESTAMPDIFF(MINUTE, i.createdAt, ia.acceptedAt)) as minResponseMinutes,
-        MAX(TIMESTAMPDIFF(MINUTE, i.createdAt, ia.acceptedAt)) as maxResponseMinutes
-      FROM Incidents i
-      LEFT JOIN IncidentAcceptance ia ON i.id = ia.incidentId
-      WHERE i.deletedAt IS NULL
-      ${
-        Object.keys(dateRange).length > 0 ? "AND i.createdAt >= :startDate" : ""
-      }
-      ${incidentType ? "AND i.type = :incidentType" : ""}
-      ${
-        reportType && reportType !== "all"
-          ? "AND i.reportType = :reportType"
-          : ""
-      }
-    `,
+        SELECT 
+          AVG(TIMESTAMPDIFF(MINUTE, i.createdAt, ia.acceptedAt)) as avgResponseMinutes,
+          MIN(TIMESTAMPDIFF(MINUTE, i.createdAt, ia.acceptedAt)) as minResponseMinutes,
+          MAX(TIMESTAMPDIFF(MINUTE, i.createdAt, ia.acceptedAt)) as maxResponseMinutes
+        FROM Incidents i
+        LEFT JOIN IncidentAcceptance ia ON i.id = ia.incidentId
+        WHERE i.deletedAt IS NULL
+        ${
+          Object.keys(dateRange).length > 0
+            ? "AND i.createdAt >= :startDate"
+            : ""
+        }
+        ${incidentType ? "AND i.type = :incidentType" : ""}
+        ${
+          reportType && reportType !== "all"
+            ? "AND i.reportType = :reportType"
+            : ""
+        }
+      `,
       {
         replacements: {
           startDate:
@@ -705,20 +707,24 @@ const generateIncidentSummaryReport = async (req, res, next) => {
     const timeFormat = period === "daily" ? "%H:00" : "%Y-%m-%d";
     const incidentsByTime = await sequelize.query(
       `
-      SELECT 
-        DATE_FORMAT(createdAt, '${timeFormat}') as timePeriod,
-        COUNT(*) as count
-      FROM Incidents
-      WHERE deletedAt IS NULL
-      ${Object.keys(dateRange).length > 0 ? "AND createdAt >= :startDate" : ""}
-      ${incidentType ? "AND type = :incidentType" : ""}
-      ${status ? "AND status = :status" : ""}
-      ${
-        reportType && reportType !== "all" ? "AND reportType = :reportType" : ""
-      }
-      GROUP BY timePeriod
-      ORDER BY timePeriod
-    `,
+        SELECT 
+          DATE_FORMAT(createdAt, '${timeFormat}') as timePeriod,
+          COUNT(*) as count
+        FROM Incidents
+        WHERE deletedAt IS NULL
+        ${
+          Object.keys(dateRange).length > 0 ? "AND createdAt >= :startDate" : ""
+        }
+        ${incidentType ? "AND type = :incidentType" : ""}
+        ${status ? "AND status = :status" : ""}
+        ${
+          reportType && reportType !== "all"
+            ? "AND reportType = :reportType"
+            : ""
+        }
+        GROUP BY timePeriod
+        ORDER BY timePeriod
+      `,
       {
         replacements: {
           startDate:
@@ -813,7 +819,6 @@ const generateTopLocationsByIncidentsReport = async (req, res, next) => {
       const numLng = parseFloat(lng);
 
       // Define Socorro barangays with their approximate boundaries
-      // Socorro is located at approximately 121°20' longitude and 13°03' latitude
       const socorroBarangays = [
         // Central/Poblacion area
         {
@@ -864,8 +869,7 @@ const generateTopLocationsByIncidentsReport = async (req, res, next) => {
           },
           population: 1200,
         },
-
-        // Northern barangays (near Naujan Lake)
+        // Northern barangays
         {
           name: "Subaan",
           city: "Socorro",
@@ -902,8 +906,7 @@ const generateTopLocationsByIncidentsReport = async (req, res, next) => {
           },
           population: 734,
         },
-
-        // Eastern barangays (towards Pola boundary)
+        // Eastern barangays
         {
           name: "Bayuin",
           city: "Socorro",
@@ -940,8 +943,7 @@ const generateTopLocationsByIncidentsReport = async (req, res, next) => {
           },
           population: 1800,
         },
-
-        // Western barangays (towards Occidental Mindoro boundary)
+        // Western barangays
         {
           name: "Fortuna",
           city: "Socorro",
@@ -978,8 +980,7 @@ const generateTopLocationsByIncidentsReport = async (req, res, next) => {
           },
           population: 1400,
         },
-
-        // Southern barangays (towards Pinamalayan boundary)
+        // Southern barangays
         {
           name: "Calubcub",
           city: "Socorro",
@@ -1016,7 +1017,6 @@ const generateTopLocationsByIncidentsReport = async (req, res, next) => {
           },
           population: 900,
         },
-
         // Agricultural/Rural areas
         {
           name: "Batuhan",
@@ -1163,7 +1163,7 @@ const generateTopLocationsByIncidentsReport = async (req, res, next) => {
         return "Socorro Municipality, Oriental Mindoro";
       }
 
-      return null; // Not found in Socorro database
+      return null;
     };
 
     // Enhanced geocoding function with Socorro-specific handling
@@ -1177,11 +1177,10 @@ const generateTopLocationsByIncidentsReport = async (req, res, next) => {
         return localResult;
       }
 
-      // If not in local database, try external APIs for verification
+      // If not in local database, try external APIs
       try {
         const axios = require("axios");
 
-        // Try Nominatim with Philippines-specific parameters
         const response = await axios.get(
           `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1&accept-language=en,tl&countrycodes=ph`,
           {
@@ -1198,14 +1197,12 @@ const generateTopLocationsByIncidentsReport = async (req, res, next) => {
           const address = data.address;
           const parts = [];
 
-          // Build Socorro-specific address
           if (address.house_number && address.road) {
             parts.push(`${address.house_number} ${address.road}`);
           } else if (address.road) {
             parts.push(address.road);
           }
 
-          // Barangay identification for Socorro area
           let barangayName = null;
           if (address.village) {
             barangayName = address.village;
@@ -1223,7 +1220,6 @@ const generateTopLocationsByIncidentsReport = async (req, res, next) => {
             }
           }
 
-          // Always append Socorro municipality
           if (address.city && address.city.toLowerCase().includes("socorro")) {
             parts.push("Socorro");
           } else {
@@ -1237,7 +1233,6 @@ const generateTopLocationsByIncidentsReport = async (req, res, next) => {
           }
         }
 
-        // Fallback for Socorro area
         return await getSocorroLocationFallback(latitude, longitude);
       } catch (error) {
         console.warn(
@@ -1253,14 +1248,12 @@ const generateTopLocationsByIncidentsReport = async (req, res, next) => {
       const numLat = parseFloat(latitude);
       const numLng = parseFloat(longitude);
 
-      // Check if within Socorro general boundaries
       if (
         numLat >= 12.9 &&
         numLat <= 13.12 &&
         numLng >= 121.25 &&
         numLng <= 121.43
       ) {
-        // Provide sector-based location within Socorro
         let sector = "Central Socorro";
 
         if (numLat > 13.05) {
@@ -1280,13 +1273,12 @@ const generateTopLocationsByIncidentsReport = async (req, res, next) => {
         )}°N, ${numLng.toFixed(4)}°E)`;
       }
 
-      // Outside Socorro boundaries
       return `Outside Socorro Municipality (${numLat.toFixed(
         4
       )}°N, ${numLng.toFixed(4)}°E)`;
     };
 
-    // Build where clause for Incident model
+    // Build where clause
     const whereClause = { deletedAt: null };
     if (startDate && endDate) {
       whereClause.createdAt = {
@@ -1302,40 +1294,42 @@ const generateTopLocationsByIncidentsReport = async (req, res, next) => {
       whereClause.reportType = reportType;
     }
 
-    // Get all incidents with coordinates, including report type
+    // 🔹 REFACTORED QUERY - Now uses Incident table for coordinates
+    // Camera coordinates are fetched via association when cameraId exists
     const incidentsWithCoordinates = await sequelize.query(
       `
-      SELECT 
-        i.id,
-        i.type,
-        i.reportType,
-        i.status,
-        i.createdAt,
-        i.latitude,
-        i.longitude,
-        COALESCE(c.location, NULL) as cameraLocation,
-        COALESCE(c.latitude, i.latitude) as finalLatitude,
-        COALESCE(c.longitude, i.longitude) as finalLongitude,
-        y.aiType as yoloAiType,
-        y.confidence as yoloConfidence,
-        h.reportedBy as humanReporter
-      FROM Incidents i
-      LEFT JOIN Cameras c ON i.cameraId = c.id
-      LEFT JOIN YOLOIncidents y ON i.id = y.incidentId
-      LEFT JOIN HumanIncidents h ON i.id = h.incidentId
-      WHERE i.deletedAt IS NULL
-      ${
-        startDate && endDate
-          ? "AND i.createdAt BETWEEN :startDate AND :endDate"
-          : ""
-      }
-      ${incidentType ? "AND i.type = :incidentType" : ""}
-      ${
-        reportType && reportType !== "all"
-          ? "AND i.reportType = :reportType"
-          : ""
-      }
-    `,
+        SELECT 
+          i.id,
+          i.type,
+          i.reportType,
+          i.status,
+          i.createdAt,
+          i.latitude,
+          i.longitude,
+          i.cameraId,
+          COALESCE(c.location, NULL) as cameraLocation,
+          COALESCE(c.latitude, NULL) as cameraLatitude,
+          COALESCE(c.longitude, NULL) as cameraLongitude,
+          y.aiType as yoloAiType,
+          y.confidence as yoloConfidence,
+          h.reportedBy as humanReporter
+        FROM Incidents i
+        LEFT JOIN Cameras c ON i.cameraId = c.id
+        LEFT JOIN YOLOIncidents y ON i.id = y.incidentId
+        LEFT JOIN HumanIncidents h ON i.id = h.incidentId
+        WHERE i.deletedAt IS NULL
+        ${
+          startDate && endDate
+            ? "AND i.createdAt BETWEEN :startDate AND :endDate"
+            : ""
+        }
+        ${incidentType ? "AND i.type = :incidentType" : ""}
+        ${
+          reportType && reportType !== "all"
+            ? "AND i.reportType = :reportType"
+            : ""
+        }
+      `,
       {
         replacements: {
           startDate: startDate ? new Date(startDate) : null,
@@ -1352,13 +1346,27 @@ const generateTopLocationsByIncidentsReport = async (req, res, next) => {
     const coordinateToLocation = new Map();
 
     incidentsWithCoordinates.forEach((incident) => {
-      if (incident.finalLatitude && incident.finalLongitude) {
-        const coordKey = `${parseFloat(incident.finalLatitude).toFixed(
-          6
-        )},${parseFloat(incident.finalLongitude).toFixed(6)}`;
+      // Determine final coordinates: use incident's coordinates if available,
+      // otherwise fall back to camera coordinates
+      let finalLat = incident.latitude;
+      let finalLng = incident.longitude;
+
+      if (
+        (!finalLat || !finalLng) &&
+        incident.cameraLatitude &&
+        incident.cameraLongitude
+      ) {
+        finalLat = incident.cameraLatitude;
+        finalLng = incident.cameraLongitude;
+      }
+
+      if (finalLat && finalLng) {
+        const coordKey = `${parseFloat(finalLat).toFixed(6)},${parseFloat(
+          finalLng
+        ).toFixed(6)}`;
         uniqueCoordinates.set(coordKey, {
-          lat: incident.finalLatitude,
-          lng: incident.finalLongitude,
+          lat: finalLat,
+          lng: finalLng,
         });
       }
     });
@@ -1382,20 +1390,31 @@ const generateTopLocationsByIncidentsReport = async (req, res, next) => {
       (incident) => {
         let resolvedLocation = incident.cameraLocation;
 
+        // Determine final coordinates for location resolution
+        let finalLat = incident.latitude;
+        let finalLng = incident.longitude;
+
         if (
-          !resolvedLocation &&
-          incident.finalLatitude &&
-          incident.finalLongitude
+          (!finalLat || !finalLng) &&
+          incident.cameraLatitude &&
+          incident.cameraLongitude
         ) {
-          const coordKey = `${parseFloat(incident.finalLatitude).toFixed(
-            6
-          )},${parseFloat(incident.finalLongitude).toFixed(6)}`;
+          finalLat = incident.cameraLatitude;
+          finalLng = incident.cameraLongitude;
+        }
+
+        if (!resolvedLocation && finalLat && finalLng) {
+          const coordKey = `${parseFloat(finalLat).toFixed(6)},${parseFloat(
+            finalLng
+          ).toFixed(6)}`;
           resolvedLocation =
             coordinateToLocation.get(coordKey) || "Unknown Location";
         }
 
         return {
           ...incident,
+          finalLatitude: finalLat,
+          finalLongitude: finalLng,
           resolvedLocation: resolvedLocation || "Unknown Location",
         };
       }

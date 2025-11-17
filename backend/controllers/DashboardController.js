@@ -14,6 +14,8 @@ const {
   Category,
   IncidentDismissal,
   IncidentAcceptance,
+  YOLOIncident,
+  HumanIncident,
 } = models;
 
 /**
@@ -78,14 +80,27 @@ const getDashboardSummary = async (req, res, next) => {
     });
 
     // --- RECENT INCIDENTS ---
+    // Updated to properly include camera data through YOLOIncident
     const recentIncidents = await Incident.findAll({
       limit: 5,
       order: [["createdAt", "DESC"]],
       include: [
         {
-          model: Camera,
-          as: "camera",
-          attributes: ["id", "name", "location"],
+          model: YOLOIncident,
+          as: "yoloDetails",
+          required: false,
+          include: [
+            {
+              model: Camera,
+              as: "camera",
+              attributes: ["id", "name", "location"],
+              required: false,
+            },
+          ],
+        },
+        {
+          model: HumanIncident,
+          as: "humanDetails",
           required: false,
         },
         {
@@ -285,12 +300,12 @@ const getIncidentStats = async (req, res, next) => {
       }
     );
 
-    // Map readable labels (optional)
+    // Map readable labels
     const mappedSources = incidentsBySource.map((row) => ({
       source:
-        row.source === "YOLO"
+        row.source === "yolo"
           ? "Camera Detected"
-          : row.source === "HUMAN"
+          : row.source === "human"
           ? "Human Reported"
           : "Unknown",
       count: row.count,
@@ -360,6 +375,7 @@ const getInventoryStats = async (req, res, next) => {
         deletedAt: null,
       },
     });
+
     // Get total inventory value
     const inventoryValueQuery = await sequelize.query(
       `
@@ -420,7 +436,6 @@ const getDeploymentStats = async (req, res, next) => {
         startDate.setFullYear(startDate.getFullYear() - 1);
         break;
       default:
-        // Default to last 30 days
         startDate.setDate(startDate.getDate() - 30);
     }
 
@@ -555,7 +570,6 @@ const getUserActivityStats = async (req, res, next) => {
         startDate.setFullYear(startDate.getFullYear() - 1);
         break;
       default:
-        // Default to last 30 days
         startDate.setDate(startDate.getDate() - 30);
     }
 
@@ -639,7 +653,6 @@ const getUserActivityStats = async (req, res, next) => {
     );
 
     const avgResponseTime = responseTimeQuery[0]?.avgResponseMinutes || 0;
-    console.log("Avg response time: ", avgResponseTime);
 
     return res.status(StatusCodes.OK).json({
       success: true,
@@ -671,7 +684,6 @@ const getUserActivityStats = async (req, res, next) => {
  * @param {Object} res - Express response object
  * @param {Function} next - Express next middleware function
  */
-
 const getActivityFeed = async (req, res, next) => {
   try {
     const { limit } = req.query;
@@ -743,7 +755,7 @@ const getActivityFeed = async (req, res, next) => {
         },
         {
           model: InventoryItem,
-          as: "item", // Fixed typo
+          as: "item",
           attributes: ["id", "name"],
         },
       ],
@@ -800,47 +812,11 @@ const getActivityFeed = async (req, res, next) => {
 const getMapData = async (req, res, next) => {
   try {
     const { timeframe } = req.query;
+    let startDate = null;
 
-    // First, let's get all incidents to see what we're working with
-    const allIncidents = await Incident.findAll({
-      attributes: [
-        "id",
-        "type",
-        "status",
-        "longitude",
-        "latitude",
-        "createdAt",
-        "snapshotUrl",
-        "description",
-      ],
-      include: [
-        {
-          model: Camera,
-          as: "camera",
-          attributes: ["id", "name", "location"],
-          required: false,
-        },
-      ],
-      order: [["createdAt", "DESC"]],
-      limit: 10, // Just get latest 10 for debugging
-    });
-
-    console.log(
-      "Latest incidents:",
-      allIncidents.map((i) => ({
-        id: i.id,
-        status: i.status,
-        createdAt: i.createdAt,
-        type: i.type,
-      }))
-    );
-
-    // Now apply time filtering
-    let filteredIncidents = allIncidents;
-
+    // Set timeframe based on query parameter
     if (timeframe) {
-      let startDate = new Date();
-
+      startDate = new Date();
       switch (timeframe) {
         case "day":
           startDate.setDate(startDate.getDate() - 1);
@@ -854,19 +830,58 @@ const getMapData = async (req, res, next) => {
         default:
           startDate.setDate(startDate.getDate() - 1);
       }
-
-      filteredIncidents = allIncidents.filter(
-        (incident) => new Date(incident.createdAt) >= startDate
-      );
     }
 
-    // Filter by status
-    const validStatuses = ["pending", "accepted", "ongoing", "resolved"];
-    filteredIncidents = filteredIncidents.filter((incident) =>
-      validStatuses.includes(incident.status)
-    );
+    // Build where clause for incidents
+    const incidentWhere = {
+      deletedAt: null,
+      status: {
+        [Op.in]: ["pending", "accepted", "ongoing", "resolved"],
+      },
+    };
 
-    // Get cameras and deployments as before
+    if (startDate) {
+      incidentWhere.createdAt = { [Op.gte]: startDate };
+    }
+
+    // Get incidents with camera data through YOLOIncident
+    const incidents = await Incident.findAll({
+      attributes: [
+        "id",
+        "type",
+        "status",
+        "longitude",
+        "latitude",
+        "createdAt",
+        "snapshotUrl",
+        "description",
+        "reportType",
+      ],
+      include: [
+        {
+          model: YOLOIncident,
+          as: "yoloDetails",
+          required: false,
+          include: [
+            {
+              model: Camera,
+              as: "camera",
+              attributes: ["id", "name", "location", "longitude", "latitude"],
+              required: false,
+            },
+          ],
+        },
+        {
+          model: HumanIncident,
+          as: "humanDetails",
+          required: false,
+        },
+      ],
+      where: incidentWhere,
+      order: [["createdAt", "DESC"]],
+    });
+
+    // Get active cameras
     const cameras = await Camera.findAll({
       attributes: ["id", "name", "location", "status", "longitude", "latitude"],
       where: {
@@ -874,6 +889,7 @@ const getMapData = async (req, res, next) => {
       },
     });
 
+    // Get active deployments
     const deployments = await Deployment.findAll({
       attributes: [
         "id",
@@ -884,6 +900,7 @@ const getMapData = async (req, res, next) => {
       ],
       where: {
         status: "DEPLOYED",
+        deletedAt: null,
       },
       include: [
         {
@@ -898,18 +915,23 @@ const getMapData = async (req, res, next) => {
       success: true,
       message: "Map data retrieved successfully",
       data: {
-        incidents: filteredIncidents,
+        incidents,
         cameras,
         deployments,
         timeframe: timeframe || "all",
-        debug: {
-          totalIncidentsFound: allIncidents.length,
-          filteredIncidents: filteredIncidents.length,
+        stats: {
+          totalIncidents: incidents.length,
+          yoloIncidents: incidents.filter((i) => i.reportType === "yolo")
+            .length,
+          humanIncidents: incidents.filter((i) => i.reportType === "human")
+            .length,
+          activeCameras: cameras.length,
+          activeDeployments: deployments.length,
         },
       },
     });
   } catch (error) {
-    console.error("An error occurred in getMapDataAlternative:", error);
+    console.error("An error occurred in getMapData:", error);
     next(error);
   }
 };

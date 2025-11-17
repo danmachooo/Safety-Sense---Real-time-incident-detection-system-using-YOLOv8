@@ -59,14 +59,8 @@ const createCitizenReport = async (req, res, next) => {
       longitude,
       latitude,
       snapshotUrl,
+      ipAddress,
     } = req.body;
-
-    const ipAddress =
-      req.ip ||
-      req.connection.remoteAddress ||
-      req.socket.remoteAddress ||
-      req.headers["x-forwarded-for"]?.split(",")[0] ||
-      "unknown";
 
     const missing = [];
     if (!type) missing.push("type");

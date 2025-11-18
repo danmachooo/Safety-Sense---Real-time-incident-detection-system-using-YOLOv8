@@ -951,58 +951,32 @@ export const debugStockMovement = async (req, res, next) => {
  */
 const generateStockMovementReport = async (req, res, next) => {
   try {
-    // Add validation - Make it optional for testing
-    if (validateReportParams) {
-      const validation = validateReportParams(req.query);
-      if (!validation.isValid) {
-        throw new BadRequestError(validation.errors.join(", "));
-      }
-    }
-
     const { startDate, endDate, itemId, movementType, limit = 100 } = req.query;
 
-    // Parse and validate limit
     const parsedLimit = Math.max(
       10,
       Math.min(1000, Number.parseInt(limit) || 100)
     );
-    const halfLimit = Math.floor(parsedLimit / 2);
 
-    console.log("📊 Generating stock movement report with params:", {
-      startDate,
-      endDate,
-      itemId,
-      limit: parsedLimit,
-    });
+    // Build conditions dynamically
+    const buildWhereClause = (dateField) => {
+      const conditions = ["deletedAt IS NULL"];
 
-    // Build dynamic WHERE clauses
-    const deploymentDateFilter =
-      startDate && endDate
-        ? "AND d.deployment_date BETWEEN :startDate AND :endDate"
-        : "";
-    const deploymentItemFilter = itemId
-      ? "AND d.inventory_item_id = :itemId"
-      : "";
+      if (startDate && endDate) {
+        conditions.push(
+          `DATE(${dateField}) BETWEEN DATE('${startDate}') AND DATE('${endDate}')`
+        );
+      }
 
-    const batchDateFilter =
-      startDate && endDate
-        ? "AND b.createdAt BETWEEN :startDate AND :endDate"
-        : "";
-    const batchItemFilter = itemId ? "AND b.inventory_item_id = :itemId" : "";
+      if (itemId) {
+        conditions.push(`inventory_item_id = ${parseInt(itemId)}`);
+      }
 
-    // Prepare replacements object
-    const replacements = {
-      startDate: startDate ? new Date(startDate) : null,
-      endDate: endDate ? new Date(endDate) : null,
-      itemId: itemId ? parseInt(itemId) : null,
-      limit: halfLimit,
+      return conditions.join(" AND ");
     };
 
-    console.log("🔍 Query replacements:", replacements);
-
-    // Get deployments (outflow)
-    const deploymentMovements = await sequelize.query(
-      `
+    // Get deployments
+    const deploymentQuery = `
       SELECT 
         d.id,
         'DEPLOYED' as movementType,
@@ -1015,25 +989,19 @@ const generateStockMovementReport = async (req, res, next) => {
       FROM deployments d
       INNER JOIN inventory_items i ON d.inventory_item_id = i.id
       INNER JOIN users u ON d.deployed_by = u.id
-      WHERE d.deletedAt IS NULL
+      WHERE d.${buildWhereClause("d.deployment_date")}
         AND i.deletedAt IS NULL
         AND u.deletedAt IS NULL
-      ${deploymentDateFilter}
-      ${deploymentItemFilter}
       ORDER BY d.deployment_date DESC
-      LIMIT :limit
-      `,
-      {
-        replacements,
-        type: sequelize.QueryTypes.SELECT,
-      }
-    );
+      LIMIT ${parsedLimit}
+    `;
 
-    console.log(`✅ Found ${deploymentMovements.length} deployment movements`);
+    const deploymentMovements = await sequelize.query(deploymentQuery, {
+      type: sequelize.QueryTypes.SELECT,
+    });
 
-    // Get batch additions (inflow)
-    const batchMovements = await sequelize.query(
-      `
+    // Get batches
+    const batchQuery = `
       SELECT 
         b.id,
         'REPLENISHED' as movementType,
@@ -1045,70 +1013,44 @@ const generateStockMovementReport = async (req, res, next) => {
         'System' as responsiblePerson
       FROM batches b
       INNER JOIN inventory_items i ON b.inventory_item_id = i.id
-      WHERE b.deletedAt IS NULL 
+      WHERE b.${buildWhereClause("b.createdAt")}
         AND i.deletedAt IS NULL
-        AND b.is_active = TRUE
-      ${batchDateFilter}
-      ${batchItemFilter}
       ORDER BY b.createdAt DESC
-      LIMIT :limit
-      `,
-      {
-        replacements,
-        type: sequelize.QueryTypes.SELECT,
-      }
-    );
+      LIMIT ${parsedLimit}
+    `;
 
-    console.log(`✅ Found ${batchMovements.length} batch movements`);
+    const batchMovements = await sequelize.query(batchQuery, {
+      type: sequelize.QueryTypes.SELECT,
+    });
 
-    // Combine and sort movements
+    // Combine and sort
     const allMovements = [...deploymentMovements, ...batchMovements].sort(
       (a, b) => new Date(b.movementDate) - new Date(a.movementDate)
     );
 
-    console.log(`📦 Total combined movements: ${allMovements.length}`);
-
-    // Get movement summary with proper table aliases
-    const movementSummary = await sequelize.query(
-      `
+    // Get summary
+    const summaryQuery = `
       SELECT 
         'DEPLOYED' as type,
         COUNT(*) as count,
-        COALESCE(SUM(d.quantity_deployed), 0) as totalQuantity
-      FROM deployments d
-      INNER JOIN inventory_items i ON d.inventory_item_id = i.id
-      WHERE d.deletedAt IS NULL
-        AND i.deletedAt IS NULL
-      ${deploymentDateFilter}
-      ${deploymentItemFilter}
+        COALESCE(SUM(quantity_deployed), 0) as totalQuantity
+      FROM deployments
+      WHERE ${buildWhereClause("deployment_date")}
       
       UNION ALL
       
       SELECT 
         'REPLENISHED' as type,
         COUNT(*) as count,
-        COALESCE(SUM(b.quantity), 0) as totalQuantity
-      FROM batches b
-      INNER JOIN inventory_items i ON b.inventory_item_id = i.id
-      WHERE b.deletedAt IS NULL 
-        AND i.deletedAt IS NULL
-        AND b.is_active = TRUE
-      ${batchDateFilter}
-      ${batchItemFilter}
-      `,
-      {
-        replacements: {
-          startDate: replacements.startDate,
-          endDate: replacements.endDate,
-          itemId: replacements.itemId,
-        },
-        type: sequelize.QueryTypes.SELECT,
-      }
-    );
+        COALESCE(SUM(quantity), 0) as totalQuantity
+      FROM batches
+      WHERE ${buildWhereClause("createdAt")}
+    `;
 
-    console.log("📊 Movement summary raw:", movementSummary);
+    const movementSummary = await sequelize.query(summaryQuery, {
+      type: sequelize.QueryTypes.SELECT,
+    });
 
-    // Ensure we always have both types in summary
     const summaryMap = {
       DEPLOYED: { type: "DEPLOYED", count: 0, totalQuantity: 0 },
       REPLENISHED: { type: "REPLENISHED", count: 0, totalQuantity: 0 },
@@ -1122,20 +1064,13 @@ const generateStockMovementReport = async (req, res, next) => {
       };
     });
 
-    console.log("📊 Processed summary:", summaryMap);
-
     const reportData = {
       reportType: "Stock Movement Report",
       generatedAt: new Date().toISOString(),
       filters: {
-        startDate,
-        endDate,
-        itemId,
-        movementType,
-        appliedFilters: {
-          hasDateFilter: !!(startDate && endDate),
-          hasItemFilter: !!itemId,
-        },
+        startDate: startDate || "All time",
+        endDate: endDate || "All time",
+        itemId: itemId || "All items",
       },
       summary: {
         totalMovements: allMovements.length,
@@ -1143,16 +1078,9 @@ const generateStockMovementReport = async (req, res, next) => {
         totalReplenishments: summaryMap.REPLENISHED.count,
         totalDeployedQuantity: summaryMap.DEPLOYED.totalQuantity,
         totalReplenishedQuantity: summaryMap.REPLENISHED.totalQuantity,
-        movementSummary: [summaryMap.DEPLOYED, summaryMap.REPLENISHED],
       },
       movements: allMovements.slice(0, parsedLimit),
     };
-
-    console.log("✅ Report generated successfully:", {
-      totalMovements: reportData.summary.totalMovements,
-      deployments: reportData.summary.totalDeployments,
-      replenishments: reportData.summary.totalReplenishments,
-    });
 
     return res.status(200).json({
       success: true,
@@ -1161,7 +1089,6 @@ const generateStockMovementReport = async (req, res, next) => {
     });
   } catch (error) {
     console.error("❌ Stock movement report error:", error);
-    console.error("Error stack:", error.stack);
     next(error);
   }
 };

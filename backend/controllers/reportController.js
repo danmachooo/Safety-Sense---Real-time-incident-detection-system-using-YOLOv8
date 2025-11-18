@@ -339,7 +339,7 @@ const generateItemDeploymentReport = async (req, res, next) => {
     );
 
     // ------------------------------
-    // GET MOST DEPLOYED ITEMS
+    // GET MOST DEPLOYED ITEMS (Fixed with correct column names)
     // ------------------------------
     const mostDeployedItems = await sequelize.query(
       `
@@ -350,7 +350,7 @@ const generateItemDeploymentReport = async (req, res, next) => {
         COUNT(d.id) as deploymentCount,
         SUM(d.quantity_deployed) as totalQuantityDeployed
       FROM deployments d
-      INNER JOIN inventory_items i ON d.item_id = i.id
+      INNER JOIN inventory_items i ON d.inventory_item_id = i.id
       LEFT JOIN categories c ON i.category_id = c.id
       WHERE d.deletedAt IS NULL
       AND d.deployment_date BETWEEN :startDate AND :endDate
@@ -419,7 +419,6 @@ const generateItemDeploymentReport = async (req, res, next) => {
     next(error);
   }
 };
-
 /**
  * Generate Batch Additions Report
  * @param {Object} req - Express request object

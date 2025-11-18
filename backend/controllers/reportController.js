@@ -145,6 +145,9 @@ const generateInventorySummaryReport = async (req, res, next) => {
  * @param {Object} res - Express response object
  * @param {Function} next - Express next middleware function
  */
+// Add this import at the top of your reportController.js file:
+// import { Op } from 'sequelize';
+
 const generateItemDeploymentReport = async (req, res, next) => {
   try {
     // Add validation
@@ -189,17 +192,21 @@ const generateItemDeploymentReport = async (req, res, next) => {
     const dateRange = getDateRange();
 
     // ------------------------------
-    // BUILD WHERE CLAUSE
+    // BUILD WHERE CLAUSE - USING sequelize.Op
     // ------------------------------
     const whereClause = {
       deletedAt: null,
-      deployment_date: {
-        [Op.between]: [dateRange.start, dateRange.end],
-      },
+    };
+
+    // Add date range filter using proper Sequelize Op
+    whereClause.deployment_date = {
+      [sequelize.Op.between]: [dateRange.start, dateRange.end],
     };
 
     if (location) {
-      whereClause.deployment_location = { [Op.like]: `%${location}%` };
+      whereClause.deployment_location = {
+        [sequelize.Op.like]: `%${location}%`,
+      };
     }
 
     if (deploymentType) {

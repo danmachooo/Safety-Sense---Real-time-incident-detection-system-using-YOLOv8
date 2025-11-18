@@ -625,7 +625,7 @@ const generateStockMovementReport = async (req, res, next) => {
       limit: parsedLimit,
     });
 
-    // Build dynamic WHERE clauses with proper formatting
+    // Build dynamic WHERE clauses
     const deploymentDateFilter =
       startDate && endDate
         ? "AND d.deployment_date BETWEEN :startDate AND :endDate"
@@ -650,7 +650,7 @@ const generateStockMovementReport = async (req, res, next) => {
 
     console.log("🔍 Query replacements:", replacements);
 
-    // Get deployments (outflow) - Using correct table name
+    // Get deployments (outflow)
     const deploymentMovements = await sequelize.query(
       `
       SELECT 
@@ -666,6 +666,8 @@ const generateStockMovementReport = async (req, res, next) => {
       INNER JOIN inventory_items i ON d.inventory_item_id = i.id
       INNER JOIN users u ON d.deployed_by = u.id
       WHERE d.deletedAt IS NULL
+        AND i.deletedAt IS NULL
+        AND u.deletedAt IS NULL
       ${deploymentDateFilter}
       ${deploymentItemFilter}
       ORDER BY d.deployment_date DESC
@@ -679,7 +681,7 @@ const generateStockMovementReport = async (req, res, next) => {
 
     console.log(`✅ Found ${deploymentMovements.length} deployment movements`);
 
-    // Get batch additions (inflow) - Using correct table name
+    // Get batch additions (inflow)
     const batchMovements = await sequelize.query(
       `
       SELECT 
@@ -694,7 +696,8 @@ const generateStockMovementReport = async (req, res, next) => {
       FROM batches b
       INNER JOIN inventory_items i ON b.inventory_item_id = i.id
       WHERE b.deletedAt IS NULL 
-      AND b.is_active = 1
+        AND i.deletedAt IS NULL
+        AND b.is_active = TRUE
       ${batchDateFilter}
       ${batchItemFilter}
       ORDER BY b.createdAt DESC
@@ -715,7 +718,7 @@ const generateStockMovementReport = async (req, res, next) => {
 
     console.log(`📦 Total combined movements: ${allMovements.length}`);
 
-    // Get movement summary - FIXED VERSION with better error handling
+    // Get movement summary with proper table aliases
     const movementSummary = await sequelize.query(
       `
       SELECT 
@@ -723,7 +726,9 @@ const generateStockMovementReport = async (req, res, next) => {
         COUNT(*) as count,
         COALESCE(SUM(d.quantity_deployed), 0) as totalQuantity
       FROM deployments d
+      INNER JOIN inventory_items i ON d.inventory_item_id = i.id
       WHERE d.deletedAt IS NULL
+        AND i.deletedAt IS NULL
       ${deploymentDateFilter}
       ${deploymentItemFilter}
       
@@ -734,8 +739,10 @@ const generateStockMovementReport = async (req, res, next) => {
         COUNT(*) as count,
         COALESCE(SUM(b.quantity), 0) as totalQuantity
       FROM batches b
+      INNER JOIN inventory_items i ON b.inventory_item_id = i.id
       WHERE b.deletedAt IS NULL 
-      AND b.is_active = 1
+        AND i.deletedAt IS NULL
+        AND b.is_active = TRUE
       ${batchDateFilter}
       ${batchItemFilter}
       `,
@@ -791,7 +798,7 @@ const generateStockMovementReport = async (req, res, next) => {
       movements: allMovements.slice(0, parsedLimit),
     };
 
-    console.log("Report generated successfully:", {
+    console.log("✅ Report generated successfully:", {
       totalMovements: reportData.summary.totalMovements,
       deployments: reportData.summary.totalDeployments,
       replenishments: reportData.summary.totalReplenishments,
@@ -803,7 +810,7 @@ const generateStockMovementReport = async (req, res, next) => {
       data: reportData,
     });
   } catch (error) {
-    console.error(" Stock movement report error:", error);
+    console.error("❌ Stock movement report error:", error);
     console.error("Error stack:", error.stack);
     next(error);
   }

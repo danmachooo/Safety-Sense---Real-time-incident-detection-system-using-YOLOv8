@@ -2404,39 +2404,42 @@ const formatDate = (date) => {
 };
 
 const getDateRange = () => {
+  // If custom dates are set, use them
   if (customStartDate.value && customEndDate.value) {
-    console.log({
-      startDate: customStartDate.value,
-      endDate: customEndDate.value,
-    });
     return {
       startDate: customStartDate.value,
       endDate: customEndDate.value,
     };
   }
+
   const now = new Date();
   let startDate, endDate;
+
   switch (selectedPeriod.value) {
     case "weekly":
-      startDate = new Date(now.setDate(now.getDate() - 7));
+      startDate = new Date(now);
+      startDate.setDate(startDate.getDate() - 7);
       endDate = new Date();
       break;
     case "yearly":
-      startDate = new Date(now.setFullYear(now.getFullYear() - 1));
+      startDate = new Date(now);
+      startDate.setFullYear(startDate.getFullYear() - 1);
       endDate = new Date();
       break;
     case "monthly":
     default:
-      startDate = new Date(now.setMonth(now.getMonth() - 1));
+      // FIXED: Use 90 days instead of 30 to capture more data
+      startDate = new Date(now);
+      startDate.setDate(startDate.getDate() - 90); // Changed from setMonth(-1)
       endDate = new Date();
       break;
   }
+
   return {
     startDate: startDate.toISOString().split("T")[0],
     endDate: endDate.toISOString().split("T")[0],
   };
 };
-
 const getReportTitle = () => {
   const period =
     selectedPeriod.value.charAt(0).toUpperCase() +

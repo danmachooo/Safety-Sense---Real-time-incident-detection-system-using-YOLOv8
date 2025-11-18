@@ -588,14 +588,21 @@ const generateIncidentSummaryReport = async (req, res, next) => {
     // FIXED DATE RANGE GENERATION
     // ------------------------------
     const getDateRange = () => {
+      // If custom dates provided, use them
       if (startDate && endDate) {
         return {
-          [Op.between]: [new Date(startDate), new Date(endDate)],
+          start: new Date(startDate),
+          end: new Date(endDate),
+          operator: Op.between,
+          sequelizeFilter: {
+            [Op.between]: [new Date(startDate), new Date(endDate)],
+          },
         };
       }
 
+      // Calculate date range based on period
       const now = new Date();
-      let fromDate = new Date();
+      let fromDate;
 
       switch (period) {
         case "daily":
@@ -606,20 +613,30 @@ const generateIncidentSummaryReport = async (req, res, next) => {
           break;
         case "monthly":
         default:
-          fromDate = new Date(now.setMonth(now.getMonth() - 1));
+          // Fixed: Don't mutate the date object
+          fromDate = new Date();
+          fromDate.setMonth(fromDate.getMonth() - 1);
           break;
       }
 
-      return { [Op.gte]: fromDate };
+      // Always return both start and end for consistency
+      return {
+        start: fromDate,
+        end: now,
+        operator: Op.between,
+        sequelizeFilter: {
+          [Op.between]: [fromDate, now],
+        },
+      };
     };
 
-    const dateFilter = getDateRange();
+    const dateRange = getDateRange();
 
     // ------------------------------
     // BUILD FINAL WHERE CLAUSE
     // ------------------------------
     const whereClause = {
-      createdAt: dateFilter,
+      createdAt: dateRange.sequelizeFilter,
       deletedAt: null,
     };
 
@@ -627,12 +644,18 @@ const generateIncidentSummaryReport = async (req, res, next) => {
     if (status) whereClause.status = status;
     if (reportType) whereClause.reportType = reportType;
 
-    console.log("WHERE CLAUSE:", whereClause);
+    console.log("WHERE CLAUSE:", JSON.stringify(whereClause, null, 2));
+    console.log("DATE RANGE:", {
+      start: dateRange.start,
+      end: dateRange.end,
+    });
 
     // ------------------------------
     // COUNT TOTAL INCIDENTS
     // ------------------------------
     const totalIncidents = await Incident.count({ where: whereClause });
+
+    console.log("Total Incidents Found:", totalIncidents);
 
     // ------------------------------
     // GROUP COUNTS
@@ -683,8 +706,8 @@ const generateIncidentSummaryReport = async (req, res, next) => {
     `,
       {
         replacements: {
-          start: dateFilter[Op.between]?.[0] || dateFilter[Op.gte],
-          end: dateFilter[Op.between]?.[1] || new Date(),
+          start: dateRange.start,
+          end: dateRange.end,
           incidentType,
           reportType,
           status,
@@ -714,8 +737,8 @@ const generateIncidentSummaryReport = async (req, res, next) => {
     `,
       {
         replacements: {
-          start: dateFilter[Op.between]?.[0] || dateFilter[Op.gte],
-          end: dateFilter[Op.between]?.[1] || new Date(),
+          start: dateRange.start,
+          end: dateRange.end,
           incidentType,
           status,
           reportType,
@@ -757,7 +780,13 @@ const generateIncidentSummaryReport = async (req, res, next) => {
       } Incident Summary Report`,
       generatedAt: new Date(),
       period,
-      filters: { startDate, endDate, incidentType, status, reportType },
+      filters: {
+        startDate: dateRange.start.toISOString(),
+        endDate: dateRange.end.toISOString(),
+        incidentType,
+        status,
+        reportType,
+      },
       summary: {
         totalIncidents,
         avgResponseTime: responseTimeStats[0]?.avgResponseMinutes || 0,
@@ -771,6 +800,8 @@ const generateIncidentSummaryReport = async (req, res, next) => {
       aiDetectionStats,
     };
 
+    console.log("Report Summary:", reportData.summary);
+
     return res.status(StatusCodes.OK).json({
       success: true,
       message: "Incident summary report generated successfully",
@@ -782,12 +813,6 @@ const generateIncidentSummaryReport = async (req, res, next) => {
   }
 };
 
-/**
- * Generate Top Locations by Incidents Report
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- * @param {Function} next - Express next middleware function
- */
 const generateTopLocationsByIncidentsReport = async (req, res, next) => {
   try {
     // Add validation
@@ -1269,13 +1294,32 @@ const generateTopLocationsByIncidentsReport = async (req, res, next) => {
       )}°N, ${numLng.toFixed(4)}°E)`;
     };
 
+    const getDateRange = () => {
+      if (startDate && endDate) {
+        return {
+          start: new Date(startDate),
+          end: new Date(endDate),
+        };
+      }
+
+      // Default to last 30 days if no dates provided
+      const now = new Date();
+      const fromDate = new Date();
+      fromDate.setMonth(fromDate.getMonth() - 1);
+
+      return {
+        start: fromDate,
+        end: now,
+      };
+    };
+
+    const dateRange = getDateRange();
+
     // Build where clause
     const whereClause = { deletedAt: null };
-    if (startDate && endDate) {
-      whereClause.createdAt = {
-        [Op.between]: [new Date(startDate), new Date(endDate)],
-      };
-    }
+    whereClause.createdAt = {
+      [Op.between]: [dateRange.start, dateRange.end],
+    };
 
     if (incidentType) {
       whereClause.type = incidentType;

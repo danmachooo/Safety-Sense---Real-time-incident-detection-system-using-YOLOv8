@@ -148,6 +148,10 @@ const generateInventorySummaryReport = async (req, res, next) => {
 // Add this import at the top of your reportController.js file:
 // import { Op } from 'sequelize';
 
+// Add these imports at the top of your reportController.js file:
+// import { Op } from 'sequelize';
+// import sequelize from '../config/database.js'; // Adjust path as needed
+
 const generateItemDeploymentReport = async (req, res, next) => {
   try {
     // Add validation
@@ -192,20 +196,25 @@ const generateItemDeploymentReport = async (req, res, next) => {
     const dateRange = getDateRange();
 
     // ------------------------------
-    // BUILD WHERE CLAUSE - USING sequelize.Op
+    // BUILD WHERE CLAUSE - DEBUG VERSION
     // ------------------------------
     const whereClause = {
       deletedAt: null,
     };
 
-    // Add date range filter using proper Sequelize Op
+    // Debug: Check if Op is imported correctly
+    console.log("Op object:", Op);
+    console.log("Op.between:", Op.between);
+    console.log("Op.between type:", typeof Op.between);
+
+    // Add date range filter using imported Op
     whereClause.deployment_date = {
       [Op.between]: [dateRange.start, dateRange.end],
     };
 
     if (location) {
       whereClause.deployment_location = {
-        [sequelize.Op.like]: `%${location}%`,
+        [Op.like]: `%${location}%`,
       };
     }
 
@@ -217,15 +226,57 @@ const generateItemDeploymentReport = async (req, res, next) => {
       whereClause.status = status;
     }
 
+    // Debug: Log the actual whereClause structure
     console.log(
       "Deployment WHERE CLAUSE:",
       JSON.stringify(whereClause, null, 2)
     );
+    console.log("Deployment WHERE CLAUSE (with symbols):", whereClause);
     console.log("Date Range:", {
       start: dateRange.start,
       end: dateRange.end,
       hasCustomDates: dateRange.hasCustomDates,
     });
+
+    // ------------------------------
+    // DEBUG: Check if ANY deployments exist in database
+    // ------------------------------
+    const allDeploymentsCount = await Deployment.count({
+      where: { deletedAt: null },
+    });
+    console.log(
+      "Total deployments in database (no date filter):",
+      allDeploymentsCount
+    );
+
+    // Check deployments within date range using raw SQL
+    const rawDateCheck = await sequelize.query(
+      `SELECT COUNT(*) as count FROM deployments 
+       WHERE deletedAt IS NULL 
+       AND deployment_date BETWEEN :startDate AND :endDate`,
+      {
+        replacements: {
+          startDate: dateRange.start,
+          endDate: dateRange.end,
+        },
+        type: sequelize.QueryTypes.SELECT,
+      }
+    );
+    console.log("Deployments in date range (raw SQL):", rawDateCheck[0].count);
+
+    // Check date range of all deployments
+    const dateRangeCheck = await sequelize.query(
+      `SELECT 
+        MIN(deployment_date) as earliest,
+        MAX(deployment_date) as latest,
+        COUNT(*) as total
+       FROM deployments 
+       WHERE deletedAt IS NULL`,
+      {
+        type: sequelize.QueryTypes.SELECT,
+      }
+    );
+    console.log("Deployment date range in database:", dateRangeCheck[0]);
 
     // ------------------------------
     // GET TOTAL COUNT (BEFORE LIMIT)

@@ -200,7 +200,7 @@ const generateItemDeploymentReport = async (req, res, next) => {
 
     // Add date range filter using proper Sequelize Op
     whereClause.deployment_date = {
-      [sequelize.Op.between]: [dateRange.start, dateRange.end],
+      [Op.between]: [dateRange.start, dateRange.end],
     };
 
     if (location) {

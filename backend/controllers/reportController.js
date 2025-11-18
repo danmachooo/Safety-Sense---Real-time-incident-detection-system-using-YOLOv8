@@ -162,14 +162,41 @@ const generateItemDeploymentReport = async (req, res, next) => {
       limit = 100,
     } = req.query;
 
-    // Build where clause
-    const whereClause = { deletedAt: null };
+    // ------------------------------
+    // CONSISTENT DATE RANGE HANDLING
+    // ------------------------------
+    const getDateRange = () => {
+      if (startDate && endDate) {
+        return {
+          start: new Date(startDate),
+          end: new Date(endDate),
+          hasCustomDates: true,
+        };
+      }
 
-    if (startDate && endDate) {
-      whereClause.deployment_date = {
-        [Op.between]: [new Date(startDate), new Date(endDate)],
+      // Default to last 30 days if no dates provided
+      const now = new Date();
+      const fromDate = new Date();
+      fromDate.setMonth(fromDate.getMonth() - 1);
+
+      return {
+        start: fromDate,
+        end: now,
+        hasCustomDates: false,
       };
-    }
+    };
+
+    const dateRange = getDateRange();
+
+    // ------------------------------
+    // BUILD WHERE CLAUSE
+    // ------------------------------
+    const whereClause = {
+      deletedAt: null,
+      deployment_date: {
+        [Op.between]: [dateRange.start, dateRange.end],
+      },
+    };
 
     if (location) {
       whereClause.deployment_location = { [Op.like]: `%${location}%` };
@@ -183,7 +210,45 @@ const generateItemDeploymentReport = async (req, res, next) => {
       whereClause.status = status;
     }
 
-    // Get deployments with details
+    console.log(
+      "Deployment WHERE CLAUSE:",
+      JSON.stringify(whereClause, null, 2)
+    );
+    console.log("Date Range:", {
+      start: dateRange.start,
+      end: dateRange.end,
+      hasCustomDates: dateRange.hasCustomDates,
+    });
+
+    // ------------------------------
+    // GET TOTAL COUNT (BEFORE LIMIT)
+    // ------------------------------
+    const totalDeployments = await Deployment.count({
+      where: whereClause,
+    });
+
+    console.log("Total Deployments Found:", totalDeployments);
+
+    // ------------------------------
+    // GET SUMMARY STATISTICS (ALL MATCHING RECORDS)
+    // ------------------------------
+    const summaryStats = await Deployment.findAll({
+      where: whereClause,
+      attributes: [
+        [sequelize.fn("COUNT", sequelize.col("id")), "totalCount"],
+        [
+          sequelize.fn("SUM", sequelize.col("quantity_deployed")),
+          "totalQuantity",
+        ],
+      ],
+      raw: true,
+    });
+
+    const totalQuantityDeployed = parseInt(summaryStats[0]?.totalQuantity || 0);
+
+    // ------------------------------
+    // GET DEPLOYMENTS WITH DETAILS (LIMITED)
+    // ------------------------------
     const deployments = await Deployment.findAll({
       where: whereClause,
       include: [
@@ -209,7 +274,11 @@ const generateItemDeploymentReport = async (req, res, next) => {
       limit: Number.parseInt(limit),
     });
 
-    // Get deployment summary statistics
+    console.log("Deployments Retrieved (limited):", deployments.length);
+
+    // ------------------------------
+    // GET DEPLOYMENT STATISTICS
+    // ------------------------------
     const deploymentStats = await sequelize.query(
       `
       SELECT 
@@ -219,25 +288,28 @@ const generateItemDeploymentReport = async (req, res, next) => {
         SUM(quantity_deployed) as totalQuantity
       FROM deployments
       WHERE deletedAt IS NULL
-      ${
-        startDate && endDate
-          ? "AND deployment_date BETWEEN :startDate AND :endDate"
-          : ""
-      }
+      AND deployment_date BETWEEN :startDate AND :endDate
       ${location ? "AND deployment_location LIKE :location" : ""}
+      ${deploymentType ? "AND deployment_type = :deploymentType" : ""}
+      ${status ? "AND status = :status" : ""}
       GROUP BY deployment_type, status
+      ORDER BY count DESC
     `,
       {
         replacements: {
-          startDate: startDate ? new Date(startDate) : null,
-          endDate: endDate ? new Date(endDate) : null,
+          startDate: dateRange.start,
+          endDate: dateRange.end,
           location: location ? `%${location}%` : null,
+          deploymentType: deploymentType || null,
+          status: status || null,
         },
         type: sequelize.QueryTypes.SELECT,
       }
     );
 
-    // Get top deployment locations
+    // ------------------------------
+    // GET TOP DEPLOYMENT LOCATIONS
+    // ------------------------------
     const topLocations = await sequelize.query(
       `
       SELECT 
@@ -246,39 +318,96 @@ const generateItemDeploymentReport = async (req, res, next) => {
         SUM(quantity_deployed) as totalQuantity
       FROM deployments
       WHERE deletedAt IS NULL
-      ${
-        startDate && endDate
-          ? "AND deployment_date BETWEEN :startDate AND :endDate"
-          : ""
-      }
+      AND deployment_date BETWEEN :startDate AND :endDate
+      ${location ? "AND deployment_location LIKE :location" : ""}
+      ${deploymentType ? "AND deployment_type = :deploymentType" : ""}
+      ${status ? "AND status = :status" : ""}
       GROUP BY deployment_location
       ORDER BY deploymentCount DESC
       LIMIT 10
     `,
       {
         replacements: {
-          startDate: startDate ? new Date(startDate) : null,
-          endDate: endDate ? new Date(endDate) : null,
+          startDate: dateRange.start,
+          endDate: dateRange.end,
+          location: location ? `%${location}%` : null,
+          deploymentType: deploymentType || null,
+          status: status || null,
         },
         type: sequelize.QueryTypes.SELECT,
       }
     );
 
+    // ------------------------------
+    // GET MOST DEPLOYED ITEMS
+    // ------------------------------
+    const mostDeployedItems = await sequelize.query(
+      `
+      SELECT 
+        i.id,
+        i.name,
+        c.name as categoryName,
+        COUNT(d.id) as deploymentCount,
+        SUM(d.quantity_deployed) as totalQuantityDeployed
+      FROM deployments d
+      INNER JOIN inventory_items i ON d.item_id = i.id
+      LEFT JOIN categories c ON i.category_id = c.id
+      WHERE d.deletedAt IS NULL
+      AND d.deployment_date BETWEEN :startDate AND :endDate
+      ${location ? "AND d.deployment_location LIKE :location" : ""}
+      ${deploymentType ? "AND d.deployment_type = :deploymentType" : ""}
+      ${status ? "AND d.status = :status" : ""}
+      GROUP BY i.id, i.name, c.name
+      ORDER BY deploymentCount DESC
+      LIMIT 10
+    `,
+      {
+        replacements: {
+          startDate: dateRange.start,
+          endDate: dateRange.end,
+          location: location ? `%${location}%` : null,
+          deploymentType: deploymentType || null,
+          status: status || null,
+        },
+        type: sequelize.QueryTypes.SELECT,
+      }
+    );
+
+    // ------------------------------
+    // FINAL REPORT DATA
+    // ------------------------------
     const reportData = {
       reportType: "Item Deployment Report",
       generatedAt: new Date(),
-      filters: { startDate, endDate, location, deploymentType, status },
-      summary: {
-        totalDeployments: deployments.length,
-        totalQuantityDeployed: deployments.reduce(
-          (sum, d) => sum + (d.quantity_deployed || 0),
-          0
-        ),
+      dateRange: {
+        start: dateRange.start,
+        end: dateRange.end,
+        hasCustomDates: dateRange.hasCustomDates,
       },
-      deployments,
+      filters: {
+        startDate: dateRange.start.toISOString(),
+        endDate: dateRange.end.toISOString(),
+        location,
+        deploymentType,
+        status,
+        limit: Number.parseInt(limit),
+      },
+      summary: {
+        totalDeployments, // Total count from database
+        totalQuantityDeployed, // Total quantity from database
+        recordsReturned: deployments.length, // Limited results
+        uniqueLocations: topLocations.length,
+        deploymentTypes: [
+          ...new Set(deploymentStats.map((s) => s.deployment_type)),
+        ].length,
+      },
+      deployments, // Limited to 'limit' parameter
       deploymentStats,
       topLocations,
+      mostDeployedItems,
     };
+
+    console.log("Report Summary:", reportData.summary);
 
     return res.status(StatusCodes.OK).json({
       success: true,
@@ -286,7 +415,7 @@ const generateItemDeploymentReport = async (req, res, next) => {
       data: reportData,
     });
   } catch (error) {
-    console.error("An error occurred: " + error);
+    console.error("Deployment report error:", error);
     next(error);
   }
 };

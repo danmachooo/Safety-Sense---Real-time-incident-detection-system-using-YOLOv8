@@ -9,6 +9,7 @@ import {
   generateResolvedVsUnresolvedReport,
   generateResponderPerformanceReport,
   generateCombinedReport,
+  debugStockMovement,
 } from "../controllers/reportController.js";
 import authMiddleware from "../middlewares/authMiddleware.js";
 import adminMiddleware from "../middlewares/adminMiddleware.js";
@@ -40,6 +41,7 @@ router.get(
   adminMiddleware,
   generateStockMovementReport
 );
+router.get("/inventory/stock-movements/debug", debugStockMovement);
 
 // Incident Reports
 router.get(

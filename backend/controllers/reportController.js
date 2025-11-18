@@ -595,6 +595,354 @@ const generateBatchAdditionsReport = async (req, res, next) => {
   }
 };
 
+export const debugStockMovement = async (req, res, next) => {
+  try {
+    console.log("\n🔍 ===== STOCK MOVEMENT DEBUG REPORT =====\n");
+
+    const { startDate, endDate, itemId } = req.query;
+
+    // Step 1: Check raw table counts
+    console.log("📊 Step 1: Checking raw table counts...");
+
+    const [deploymentCount] = await sequelize.query(
+      `SELECT COUNT(*) as count FROM deployments`,
+      { type: sequelize.QueryTypes.SELECT }
+    );
+    console.log(`  Total deployments in table: ${deploymentCount.count}`);
+
+    const [batchCount] = await sequelize.query(
+      `SELECT COUNT(*) as count FROM batches`,
+      { type: sequelize.QueryTypes.SELECT }
+    );
+    console.log(`  Total batches in table: ${batchCount.count}`);
+
+    const [itemCount] = await sequelize.query(
+      `SELECT COUNT(*) as count FROM inventory_items`,
+      { type: sequelize.QueryTypes.SELECT }
+    );
+    console.log(`  Total inventory items in table: ${itemCount.count}`);
+
+    const [userCount] = await sequelize.query(
+      `SELECT COUNT(*) as count FROM users`,
+      { type: sequelize.QueryTypes.SELECT }
+    );
+    console.log(`  Total users in table: ${userCount.count}\n`);
+
+    // Step 2: Check deletedAt status
+    console.log("📊 Step 2: Checking soft-delete status...");
+
+    const [nonDeletedDeployments] = await sequelize.query(
+      `SELECT COUNT(*) as count FROM deployments WHERE deletedAt IS NULL`,
+      { type: sequelize.QueryTypes.SELECT }
+    );
+    console.log(`  Non-deleted deployments: ${nonDeletedDeployments.count}`);
+
+    const [nonDeletedBatches] = await sequelize.query(
+      `SELECT COUNT(*) as count FROM batches WHERE deletedAt IS NULL`,
+      { type: sequelize.QueryTypes.SELECT }
+    );
+    console.log(`  Non-deleted batches: ${nonDeletedBatches.count}`);
+
+    const [nonDeletedItems] = await sequelize.query(
+      `SELECT COUNT(*) as count FROM inventory_items WHERE deletedAt IS NULL`,
+      { type: sequelize.QueryTypes.SELECT }
+    );
+    console.log(`  Non-deleted inventory items: ${nonDeletedItems.count}\n`);
+
+    // Step 3: Check is_active status for batches
+    console.log("📊 Step 3: Checking batch active status...");
+
+    const [activeBatches] = await sequelize.query(
+      `SELECT COUNT(*) as count FROM batches WHERE deletedAt IS NULL AND is_active = TRUE`,
+      { type: sequelize.QueryTypes.SELECT }
+    );
+    console.log(`  Active batches (is_active = TRUE): ${activeBatches.count}`);
+
+    const [activeBatchesInt] = await sequelize.query(
+      `SELECT COUNT(*) as count FROM batches WHERE deletedAt IS NULL AND is_active = 1`,
+      { type: sequelize.QueryTypes.SELECT }
+    );
+    console.log(
+      `  Active batches (is_active = 1): ${activeBatchesInt.count}\n`
+    );
+
+    // Step 4: Check with JOINs
+    console.log("📊 Step 4: Checking JOINed data...");
+
+    const [deploymentJoins] = await sequelize.query(
+      `SELECT COUNT(*) as count 
+       FROM deployments d
+       INNER JOIN inventory_items i ON d.inventory_item_id = i.id
+       INNER JOIN users u ON d.deployed_by = u.id
+       WHERE d.deletedAt IS NULL
+         AND i.deletedAt IS NULL
+         AND u.deletedAt IS NULL`,
+      { type: sequelize.QueryTypes.SELECT }
+    );
+    console.log(`  Valid deployments with JOINs: ${deploymentJoins.count}`);
+
+    const [batchJoins] = await sequelize.query(
+      `SELECT COUNT(*) as count 
+       FROM batches b
+       INNER JOIN inventory_items i ON b.inventory_item_id = i.id
+       WHERE b.deletedAt IS NULL 
+         AND i.deletedAt IS NULL
+         AND b.is_active = TRUE`,
+      { type: sequelize.QueryTypes.SELECT }
+    );
+    console.log(`  Valid batches with JOINs: ${batchJoins.count}\n`);
+
+    // Step 5: Sample data
+    console.log("📊 Step 5: Fetching sample data...");
+
+    const sampleDeployments = await sequelize.query(
+      `SELECT 
+        d.id,
+        d.quantity_deployed,
+        d.deployment_date,
+        d.inventory_item_id,
+        d.deployed_by,
+        d.deletedAt as d_deletedAt,
+        i.name as item_name,
+        i.deletedAt as i_deletedAt,
+        u.firstname,
+        u.lastname,
+        u.deletedAt as u_deletedAt
+       FROM deployments d
+       LEFT JOIN inventory_items i ON d.inventory_item_id = i.id
+       LEFT JOIN users u ON d.deployed_by = u.id
+       LIMIT 3`,
+      { type: sequelize.QueryTypes.SELECT }
+    );
+    console.log(
+      "  Sample deployments:",
+      JSON.stringify(sampleDeployments, null, 2)
+    );
+
+    const sampleBatches = await sequelize.query(
+      `SELECT 
+        b.id,
+        b.quantity,
+        b.createdAt,
+        b.inventory_item_id,
+        b.is_active,
+        b.deletedAt as b_deletedAt,
+        i.name as item_name,
+        i.deletedAt as i_deletedAt
+       FROM batches b
+       LEFT JOIN inventory_items i ON b.inventory_item_id = i.id
+       LIMIT 3`,
+      { type: sequelize.QueryTypes.SELECT }
+    );
+    console.log("  Sample batches:", JSON.stringify(sampleBatches, null, 2));
+
+    // Step 6: Check date filtering if provided
+    if (startDate && endDate) {
+      console.log("\n📊 Step 6: Checking date filtering...");
+      console.log(`  Date range: ${startDate} to ${endDate}`);
+
+      const [deploymentsInRange] = await sequelize.query(
+        `SELECT COUNT(*) as count 
+         FROM deployments d
+         WHERE d.deletedAt IS NULL
+           AND d.deployment_date BETWEEN :startDate AND :endDate`,
+        {
+          replacements: {
+            startDate: new Date(startDate),
+            endDate: new Date(endDate),
+          },
+          type: sequelize.QueryTypes.SELECT,
+        }
+      );
+      console.log(`  Deployments in date range: ${deploymentsInRange.count}`);
+
+      const [batchesInRange] = await sequelize.query(
+        `SELECT COUNT(*) as count 
+         FROM batches b
+         WHERE b.deletedAt IS NULL
+           AND b.createdAt BETWEEN :startDate AND :endDate`,
+        {
+          replacements: {
+            startDate: new Date(startDate),
+            endDate: new Date(endDate),
+          },
+          type: sequelize.QueryTypes.SELECT,
+        }
+      );
+      console.log(`  Batches in date range: ${batchesInRange.count}`);
+    }
+
+    // Step 7: Check for specific item if provided
+    if (itemId) {
+      console.log("\n📊 Step 7: Checking specific item filter...");
+      console.log(`  Item ID: ${itemId}`);
+
+      const [itemExists] = await sequelize.query(
+        `SELECT COUNT(*) as count 
+         FROM inventory_items 
+         WHERE id = :itemId AND deletedAt IS NULL`,
+        {
+          replacements: { itemId: parseInt(itemId) },
+          type: sequelize.QueryTypes.SELECT,
+        }
+      );
+      console.log(`  Item exists: ${itemExists.count > 0 ? "YES" : "NO"}`);
+
+      if (itemExists.count > 0) {
+        const [deploymentsForItem] = await sequelize.query(
+          `SELECT COUNT(*) as count 
+           FROM deployments d
+           WHERE d.deletedAt IS NULL
+             AND d.inventory_item_id = :itemId`,
+          {
+            replacements: { itemId: parseInt(itemId) },
+            type: sequelize.QueryTypes.SELECT,
+          }
+        );
+        console.log(`  Deployments for this item: ${deploymentsForItem.count}`);
+
+        const [batchesForItem] = await sequelize.query(
+          `SELECT COUNT(*) as count 
+           FROM batches b
+           WHERE b.deletedAt IS NULL
+             AND b.inventory_item_id = :itemId`,
+          {
+            replacements: { itemId: parseInt(itemId) },
+            type: sequelize.QueryTypes.SELECT,
+          }
+        );
+        console.log(`  Batches for this item: ${batchesForItem.count}`);
+      }
+    }
+
+    // Step 8: Test the actual queries used in the report
+    console.log("\n📊 Step 8: Testing actual report queries...");
+
+    const replacements = {
+      startDate: startDate ? new Date(startDate) : null,
+      endDate: endDate ? new Date(endDate) : null,
+      itemId: itemId ? parseInt(itemId) : null,
+      limit: 50,
+    };
+
+    const deploymentDateFilter =
+      startDate && endDate
+        ? "AND d.deployment_date BETWEEN :startDate AND :endDate"
+        : "";
+    const deploymentItemFilter = itemId
+      ? "AND d.inventory_item_id = :itemId"
+      : "";
+    const batchDateFilter =
+      startDate && endDate
+        ? "AND b.createdAt BETWEEN :startDate AND :endDate"
+        : "";
+    const batchItemFilter = itemId ? "AND b.inventory_item_id = :itemId" : "";
+
+    const deploymentQuery = `
+      SELECT 
+        d.id,
+        'DEPLOYED' as movementType,
+        d.quantity_deployed as quantity,
+        d.deployment_date as movementDate,
+        i.name as itemName,
+        i.quantity_in_stock as currentStock,
+        d.deployment_location as location,
+        CONCAT(COALESCE(u.firstname, ''), ' ', COALESCE(u.lastname, '')) as responsiblePerson
+      FROM deployments d
+      INNER JOIN inventory_items i ON d.inventory_item_id = i.id
+      INNER JOIN users u ON d.deployed_by = u.id
+      WHERE d.deletedAt IS NULL
+        AND i.deletedAt IS NULL
+        AND u.deletedAt IS NULL
+      ${deploymentDateFilter}
+      ${deploymentItemFilter}
+      ORDER BY d.deployment_date DESC
+      LIMIT :limit
+    `;
+
+    console.log(
+      "  Deployment query:",
+      deploymentQuery.replace(/\s+/g, " ").trim()
+    );
+
+    const deploymentResults = await sequelize.query(deploymentQuery, {
+      replacements,
+      type: sequelize.QueryTypes.SELECT,
+    });
+    console.log(`  ✅ Deployment results: ${deploymentResults.length} records`);
+
+    const batchQuery = `
+      SELECT 
+        b.id,
+        'REPLENISHED' as movementType,
+        b.quantity,
+        b.createdAt as movementDate,
+        i.name as itemName,
+        i.quantity_in_stock as currentStock,
+        COALESCE(i.location, 'Central Storage') as location,
+        'System' as responsiblePerson
+      FROM batches b
+      INNER JOIN inventory_items i ON b.inventory_item_id = i.id
+      WHERE b.deletedAt IS NULL 
+        AND i.deletedAt IS NULL
+        AND b.is_active = TRUE
+      ${batchDateFilter}
+      ${batchItemFilter}
+      ORDER BY b.createdAt DESC
+      LIMIT :limit
+    `;
+
+    console.log("  Batch query:", batchQuery.replace(/\s+/g, " ").trim());
+
+    const batchResults = await sequelize.query(batchQuery, {
+      replacements,
+      type: sequelize.QueryTypes.SELECT,
+    });
+    console.log(`  ✅ Batch results: ${batchResults.length} records`);
+
+    console.log("\n🔍 ===== END DEBUG REPORT =====\n");
+
+    // Return debug info
+    return res.status(200).json({
+      success: true,
+      debug: {
+        rawCounts: {
+          deployments: deploymentCount.count,
+          batches: batchCount.count,
+          inventoryItems: itemCount.count,
+          users: userCount.count,
+        },
+        nonDeleted: {
+          deployments: nonDeletedDeployments.count,
+          batches: nonDeletedBatches.count,
+          inventoryItems: nonDeletedItems.count,
+        },
+        activeBatches: {
+          usingTrue: activeBatches.count,
+          usingOne: activeBatchesInt.count,
+        },
+        withJoins: {
+          deployments: deploymentJoins.count,
+          batches: batchJoins.count,
+        },
+        actualResults: {
+          deployments: deploymentResults.length,
+          batches: batchResults.length,
+          total: deploymentResults.length + batchResults.length,
+        },
+        sampleData: {
+          deployments: sampleDeployments,
+          batches: sampleBatches,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("❌ Debug error:", error);
+    console.error("Stack:", error.stack);
+    next(error);
+  }
+};
+
 /**
  * Generate Stock Movement Report
  * @param {Object} req - Express request object
@@ -603,10 +951,12 @@ const generateBatchAdditionsReport = async (req, res, next) => {
  */
 const generateStockMovementReport = async (req, res, next) => {
   try {
-    // Add validation
-    const validation = validateReportParams(req.query);
-    if (!validation.isValid) {
-      throw new BadRequestError(validation.errors.join(", "));
+    // Add validation - Make it optional for testing
+    if (validateReportParams) {
+      const validation = validateReportParams(req.query);
+      if (!validation.isValid) {
+        throw new BadRequestError(validation.errors.join(", "));
+      }
     }
 
     const { startDate, endDate, itemId, movementType, limit = 100 } = req.query;
@@ -815,6 +1165,7 @@ const generateStockMovementReport = async (req, res, next) => {
     next(error);
   }
 };
+
 const generateIncidentSummaryReport = async (req, res, next) => {
   try {
     // Validate

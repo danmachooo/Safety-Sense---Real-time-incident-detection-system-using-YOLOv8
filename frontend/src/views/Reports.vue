@@ -658,21 +658,6 @@
                     >
                       {{ metric.value }}
                     </div>
-                    <div
-                      v-if="metric.change"
-                      class="text-xs font-semibold flex items-center"
-                      :class="metric.changeColor"
-                    >
-                      <TrendingUp
-                        v-if="metric.trend === 'up'"
-                        class="w-3 h-3 mr-1"
-                      />
-                      <TrendingDown
-                        v-else-if="metric.trend === 'down'"
-                        class="w-3 h-3 mr-1"
-                      />
-                      {{ metric.change }}
-                    </div>
                   </div>
                 </div>
                 <p class="text-sm font-semibold text-gray-600">
@@ -2457,7 +2442,7 @@ const getKeyMetrics = () => {
   if (showInventoryCharts.value && inventoryData.value) {
     metrics.push({
       label: "Total Items",
-      value: inventoryData.value.summary?.totalItems || 0,
+      value: inventoryData.value.summary?.totalItretems || 0,
       icon: Package,
       iconColor: "text-blue-600",
       trend: "up",

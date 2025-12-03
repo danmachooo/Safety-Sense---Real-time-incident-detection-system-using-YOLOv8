@@ -385,25 +385,6 @@ onMounted(() => {
                   <component :is="card.icon" class="w-7 h-7 text-white" />
                 </div>
               </div>
-
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-2">
-                  <TrendingUp
-                    v-if="card.trendUp"
-                    class="w-4 h-4 text-emerald-500"
-                  />
-                  <TrendingDown v-else class="w-4 h-4 text-red-500" />
-                  <span
-                    :class="card.trendUp ? 'text-emerald-600' : 'text-red-600'"
-                    class="text-sm font-bold"
-                  >
-                    {{ card.trend }}
-                  </span>
-                  <span class="text-gray-500 text-sm font-medium"
-                    >vs last period</span
-                  >
-                </div>
-              </div>
             </div>
           </div>
         </div>

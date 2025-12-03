@@ -364,31 +364,24 @@ const getIncidents = async (req, res, next) => {
       distinct: true,
     });
 
-    // 🖼️ Add signed URLs for snapshots
-    const dataWithSignedUrls = await Promise.all(
-      rows.map(async (incident) => {
-        const signedUrls = {};
+    const dataWithPublicUrls = rows.map((incident) => {
+      const publicUrls = {};
 
-        // Base snapshot
-        if (incident.snapshotUrl) {
-          const { data: signed } = await supabase.storage
-            .from("uploads")
-            .createSignedUrl(incident.snapshotUrl, 3600);
-          if (signed?.signedUrl) signedUrls.main = signed.signedUrl;
-        }
+      if (incident.snapshotUrl) {
+        publicUrls.main = supabase.storage
+          .from("uploads")
+          .getPublicUrl(incident.snapshotUrl).data.publicUrl;
+      }
 
-        // YOLO frame
-        if (incident.yoloDetails?.detectionFrameUrl) {
-          const { data: signed } = await supabase.storage
-            .from("uploads")
-            .createSignedUrl(incident.yoloDetails.detectionFrameUrl, 3600);
-          if (signed?.signedUrl) signedUrls.ai = signed.signedUrl;
-        }
+      if (incident.yoloDetails?.detectionFrameUrl) {
+        publicUrls.ai = supabase.storage
+          .from("uploads")
+          .getPublicUrl(incident.yoloDetails.detectionFrameUrl).data.publicUrl;
+      }
 
-        incident.dataValues.snapshotSignedUrls = signedUrls;
-        return incident;
-      })
-    );
+      incident.dataValues.snapshotSignedUrls = publicUrls;
+      return incident;
+    });
 
     // 🟢 Response
     return res.status(StatusCodes.OK).json({
@@ -400,7 +393,7 @@ const getIncidents = async (req, res, next) => {
         currentPage: pageNumber,
         limit: limitNumber,
       },
-      data: dataWithSignedUrls,
+      data: dataWithPublicUrls,
     });
   } catch (error) {
     console.error("Error fetching incidents:", error);

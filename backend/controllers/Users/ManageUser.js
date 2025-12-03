@@ -33,7 +33,7 @@ const createUser = async (req, res, next) => {
       firstname,
       lastname,
       email,
-      contact,
+      contact: contact === "" ? null : contact,
       password: hashedPassword,
       isVerified: true,
     });

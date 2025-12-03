@@ -27,7 +27,7 @@ const newUser = ref({
 });
 
 const showPassword = ref(false);
-const formStep = ref(1); // For multi-step form
+const formStep = ref(1);
 const isSubmitting = ref(false);
 const notification = reactive({
   show: false,
@@ -55,6 +55,17 @@ const passwordStrength = computed(() => {
   };
 
   return { score, ...strengthMap[score] };
+});
+
+// Strong password validation - ALL requirements must be met
+const isPasswordStrong = computed(() => {
+  const password = newUser.value.password;
+  return (
+    password.length >= 8 &&
+    /[A-Z]/.test(password) &&
+    /[0-9]/.test(password) &&
+    /[^A-Za-z0-9]/.test(password)
+  );
 });
 
 const isValidEmail = computed(() => {
@@ -97,10 +108,23 @@ const showNotification = (type, message) => {
 const createUser = async () => {
   if (isSubmitting.value) return;
 
-  isSubmitting.value = true;
+  // Enforce strong password before submission
+  if (!isPasswordStrong.value) {
+    showNotification(
+      "error",
+      "Password must meet all requirements: 8+ characters, uppercase, number, and special character"
+    );
+    return;
+  }
 
+  // Validate email
+  if (!isValidEmail.value) {
+    showNotification("error", "Please enter a valid email address");
+    return;
+  }
+
+  isSubmitting.value = true;
   try {
-    // Make API request to create a user
     const response = await api.post("/manage-user/create", {
       firstname: newUser.value.firstname,
       lastname: newUser.value.lastname,
@@ -110,7 +134,6 @@ const createUser = async () => {
     });
 
     if (response.data.success) {
-      // Reset form after submission
       newUser.value = {
         firstname: "",
         lastname: "",
@@ -139,7 +162,7 @@ const createUser = async () => {
   }
 };
 
-// Password requirements
+// Password requirements with validation
 const passwordRequirements = computed(() => [
   {
     text: "At least 8 characters",
@@ -334,9 +357,6 @@ const passwordRequirements = computed(() => [
                   placeholder="+63 (012) (3456) (789)"
                 />
               </div>
-              <p class="mt-1 text-xs text-gray-500">
-                Optional, but recommended for account recovery
-              </p>
             </div>
 
             <div class="flex justify-end pt-4">
@@ -419,7 +439,12 @@ const passwordRequirements = computed(() => [
                   v-model="newUser.password"
                   :type="showPassword ? 'text' : 'password'"
                   required
-                  class="pl-10 w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                  :class="[
+                    'pl-10 w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200',
+                    newUser.password && !isPasswordStrong
+                      ? 'border-red-300'
+                      : 'border-gray-300',
+                  ]"
                   placeholder="••••••••"
                 />
                 <button
@@ -462,13 +487,23 @@ const passwordRequirements = computed(() => [
 
               <!-- Password Requirements -->
               <div
-                class="mt-4 bg-gray-50 p-4 rounded-xl border border-gray-200"
+                :class="[
+                  'mt-4 p-4 rounded-xl border transition-all duration-200',
+                  newUser.password && !isPasswordStrong
+                    ? 'bg-red-50 border-red-200'
+                    : 'bg-gray-50 border-gray-200',
+                ]"
               >
                 <h4
                   class="text-sm font-medium text-gray-700 mb-2 flex items-center"
                 >
                   <Shield class="w-4 h-4 mr-1 text-blue-500" />
                   Password Requirements
+                  <span
+                    v-if="newUser.password && !isPasswordStrong"
+                    class="ml-2 text-xs text-red-600"
+                    >(All required)</span
+                  >
                 </h4>
                 <ul class="space-y-1">
                   <li
@@ -500,7 +535,7 @@ const passwordRequirements = computed(() => [
               <button
                 type="submit"
                 class="inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-xl shadow-md text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-                :disabled="isSubmitting || !isValidEmail || !newUser.password"
+                :disabled="isSubmitting || !isValidEmail || !isPasswordStrong"
               >
                 <span v-if="isSubmitting" class="inline-flex items-center">
                   <svg

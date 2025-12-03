@@ -60,19 +60,29 @@
               required
             />
           </div>
-          <div class="mb-4">
+          <div class="mb-4 relative">
             <label class="block text-gray-300 text-sm font-medium mb-1"
               >Password</label
             >
             <input
-              type="password"
+              :type="showPassword ? 'text' : 'password'"
               v-model="password"
-              class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:outline-none pr-10"
               :class="{ 'border-red-500': errorMessage && !password }"
               placeholder="Enter your password"
               :disabled="isLoading"
               required
             />
+
+            <!-- Toggle Button -->
+            <button
+              type="button"
+              class="absolute right-3 top-9 text-gray-400 hover:text-gray-200"
+              @click="showPassword = !showPassword"
+            >
+              <Eye v-if="!showPassword" class="w-5 h-5" />
+              <EyeOff v-else class="w-5 h-5" />
+            </button>
           </div>
 
           <!-- Forgot Password -->
@@ -104,7 +114,13 @@ import { ref, nextTick, onMounted } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { useAuthStore } from "../stores/authStore";
 import { storeToRefs } from "pinia";
-import { CheckCircle, AlertCircle, Loader2 } from "lucide-vue-next";
+import {
+  CheckCircle,
+  AlertCircle,
+  Loader2,
+  Eye,
+  EyeOff,
+} from "lucide-vue-next";
 import logo from "../assets/final.png";
 
 const router = useRouter();
@@ -114,6 +130,7 @@ const password = ref("");
 const errorMessage = ref("");
 const showSuccessMessage = ref(false);
 const isLoading = ref(false);
+const showPassword = ref(false);
 
 const authStore = useAuthStore();
 const { isAuthenticated } = storeToRefs(authStore);

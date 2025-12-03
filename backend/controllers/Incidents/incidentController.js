@@ -365,30 +365,24 @@ const getIncidents = async (req, res, next) => {
     });
 
     // 🖼️ Add signed URLs for snapshots
-    const dataWithSignedUrls = await Promise.all(
-      rows.map(async (incident) => {
-        const signedUrls = {};
+    const dataWithUrls = rows.map((incident) => {
+      const urls = {};
 
-        // Base snapshot
-        if (incident.snapshotUrl) {
-          const { data: signed } = await supabase.storage
-            .from("uploads")
-            .createSignedUrl(incident.snapshotUrl, 3600);
-          if (signed?.signedUrl) signedUrls.main = signed.signedUrl;
-        }
+      if (incident.snapshotUrl) {
+        urls.main = supabase.storage
+          .from("uploads")
+          .getPublicUrl(incident.snapshotUrl).data.publicUrl;
+      }
 
-        // YOLO frame
-        if (incident.yoloDetails?.detectionFrameUrl) {
-          const { data: signed } = await supabase.storage
-            .from("uploads")
-            .createSignedUrl(incident.yoloDetails.detectionFrameUrl, 3600);
-          if (signed?.signedUrl) signedUrls.ai = signed.signedUrl;
-        }
+      if (incident.yoloDetails?.detectionFrameUrl) {
+        urls.ai = supabase.storage
+          .from("uploads")
+          .getPublicUrl(incident.yoloDetails.detectionFrameUrl).data.publicUrl;
+      }
 
-        incident.dataValues.snapshotSignedUrls = signedUrls;
-        return incident;
-      })
-    );
+      incident.dataValues.snapshotSignedUrls = urls;
+      return incident;
+    });
 
     // 🟢 Response
     return res.status(StatusCodes.OK).json({
@@ -400,7 +394,7 @@ const getIncidents = async (req, res, next) => {
         currentPage: pageNumber,
         limit: limitNumber,
       },
-      data: dataWithSignedUrls,
+      data: dataWithUrls,
     });
   } catch (error) {
     console.error("Error fetching incidents:", error);
@@ -474,22 +468,22 @@ const getIncident = async (req, res, next) => {
 
     if (!incident) throw new NotFoundError("Incident not found");
 
-    // 🖼️ Signed snapshot URL
+    // 🖼️ Snapshot URL
     if (incident.snapshotUrl) {
-      const { data: signed, error } = await supabase.storage
+      const { data } = supabase.storage
         .from("uploads")
-        .createSignedUrl(incident.snapshotUrl, 3600);
-      if (!error && signed?.signedUrl)
-        incident.dataValues.snapshotSignedUrl = signed.signedUrl;
+        .getPublicUrl(incident.snapshotUrl);
+      if (data?.publicUrl)
+        incident.dataValues.snapshotSignedUrl = data.publicUrl;
     }
 
-    // 🤖 Signed YOLO frame URL
+    // 🤖 YOLO frame URL
     if (incident.yoloDetails?.detectionFrameUrl) {
-      const { data: signed, error } = await supabase.storage
+      const { data } = supabase.storage
         .from("uploads")
-        .createSignedUrl(incident.yoloDetails.detectionFrameUrl, 3600);
-      if (!error && signed?.signedUrl)
-        incident.dataValues.aiFrameSignedUrl = signed.signedUrl;
+        .getPublicUrl(incident.yoloDetails.detectionFrameUrl);
+      if (data?.publicUrl)
+        incident.dataValues.aiFrameSignedUrl = data.publicUrl;
     }
 
     // 📡 Determine source type based on reportType

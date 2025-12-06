@@ -719,7 +719,7 @@ import {
 
 // --- CONFIGURATION ---
 // Set your backend base URL here
-const API_BASE_URL = "http://api.safetysense.team/api/incidents/";
+const API_BASE_URL = "https://api.safetysense.team/api/incidents/";
 
 // IMPORTANT: Replace this with your actual Auth logic (e.g. from Pinia store, localStorage)
 const CURRENT_USER_ID = 1;

@@ -18,7 +18,16 @@
               </p>
             </div>
           </div>
-          <div class="flex items-center space-x-3"></div>
+          <div class="flex items-center space-x-3">
+            <div
+              class="flex items-center space-x-2 px-4 py-2 bg-green-100 rounded-full"
+            >
+              <div
+                class="w-2 h-2 bg-green-500 rounded-full animate-pulse"
+              ></div>
+              <span class="text-sm font-semibold text-green-800">Live</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -142,10 +151,22 @@
               </div>
               <h3 class="text-xl font-bold text-gray-900">Incident List</h3>
             </div>
-            <span class="text-sm text-gray-500 font-medium">
-              <span v-if="isLoading">Loading...</span>
-              <span v-else>{{ incidents.length }} incidents found</span>
-            </span>
+            <div class="flex items-center space-x-4">
+              <span class="text-sm text-gray-500 font-medium">
+                <span v-if="isLoading">Loading...</span>
+                <span v-else>{{ incidents.length }} incidents found</span>
+              </span>
+              <button
+                @click="fetchIncidents"
+                class="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200 border border-gray-200 hover:border-gray-300"
+                title="Refresh List"
+              >
+                <RefreshCw
+                  class="w-4 h-4 text-gray-600"
+                  :class="{ 'animate-spin': isLoading }"
+                />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -706,6 +727,7 @@ import {
   Check,
   CheckCircle,
   Clock,
+  RefreshCw, // Added Import
 } from "lucide-vue-next";
 
 // --- CONFIGURATION ---

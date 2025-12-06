@@ -190,7 +190,7 @@
                   Status
                 </th>
                 <th
-                  class="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider"
+                  class="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider w-1/3"
                 >
                   Location
                 </th>
@@ -251,10 +251,16 @@
                   </span>
                 </td>
                 <td class="px-6 py-4 text-sm text-gray-600">
-                  <div class="flex items-center">
-                    <MapPin class="w-4 h-4 mr-1 text-gray-400" />
-                    {{ parseFloat(incident.latitude).toFixed(4) }},
-                    {{ parseFloat(incident.longitude).toFixed(4) }}
+                  <div class="flex items-start">
+                    <MapPin
+                      class="w-4 h-4 mr-2 mt-0.5 flex-shrink-0 text-gray-400"
+                    />
+                    <span
+                      class="truncate max-w-[200px] block"
+                      :title="getDisplayAddress(incident)"
+                    >
+                      {{ getDisplayAddress(incident) }}
+                    </span>
                   </div>
                 </td>
                 <td class="px-6 py-4 text-sm text-gray-600">
@@ -402,7 +408,7 @@
                     <MapPin class="w-5 h-5 mr-2 text-green-600" />
                     Location
                   </h3>
-                  <div class="text-right">
+                  <div class="text-right flex-1 ml-4">
                     <p
                       v-if="isAddressLoading"
                       class="text-sm text-gray-500 animate-pulse"
@@ -411,12 +417,13 @@
                     </p>
                     <p
                       v-else
-                      class="text-sm font-medium text-gray-900 max-w-[250px] md:max-w-[300px] truncate"
-                      :title="incidentAddress"
+                      class="text-sm font-medium text-gray-900 break-words whitespace-normal"
                     >
-                      {{ incidentAddress || "Unknown Location" }}
+                      {{
+                        incidentAddress || getDisplayAddress(selectedIncident)
+                      }}
                     </p>
-                    <p class="text-xs font-mono text-gray-500">
+                    <p class="text-xs font-mono text-gray-500 mt-1">
                       {{ selectedIncident.latitude }},
                       {{ selectedIncident.longitude }}
                     </p>
@@ -748,6 +755,7 @@ const error = ref(null);
 // Geocoding State
 const incidentAddress = ref("");
 const isAddressLoading = ref(false);
+const tableAddresses = ref({}); // Cache for table display
 
 // Filter States
 const filterSource = ref("all");
@@ -770,7 +778,6 @@ const notification = ref({
 
 // --- API ACTIONS ---
 
-// Transform Backend Data to Frontend Structure
 const transformIncidentData = (data) => {
   return {
     ...data,
@@ -805,6 +812,7 @@ const fetchIncidents = async () => {
 
     if (response.data && response.data.success) {
       incidents.value = response.data.data.map(transformIncidentData);
+      processAddressQueue(incidents.value); // Start background fetch for missing addresses
     } else {
       incidents.value = [];
     }
@@ -832,21 +840,71 @@ const dismissIncident = async (id) => {
   }
 };
 
-// --- REVERSE GEOCODING ---
-const fetchAddress = async (lat, lon) => {
+// --- SMART REVERSE GEOCODING QUEUE ---
+const processAddressQueue = (incidentList) => {
+  // Filter items that need geocoding:
+  // 1. Don't have a camera location name
+  // 2. Haven't been cached yet
+  const queue = incidentList.filter((incident) => {
+    const hasCameraLocation = incident.yoloData?.camera?.location;
+    const isCached = tableAddresses.value[incident.id];
+    return !hasCameraLocation && !isCached;
+  });
+
+  // Process queue with 1s delay to respect OpenStreetMap rate limits
+  let delay = 0;
+  queue.forEach((incident) => {
+    setTimeout(() => {
+      axios
+        .get(`https://nominatim.openstreetmap.org/reverse`, {
+          params: {
+            lat: incident.latitude,
+            lon: incident.longitude,
+            format: "json",
+          },
+        })
+        .then((response) => {
+          if (response.data && response.data.display_name) {
+            // Store shortened address in cache
+            const shortName =
+              response.data.address?.road ||
+              response.data.address?.suburb ||
+              response.data.display_name.split(",")[0];
+            tableAddresses.value[incident.id] = shortName || "Unknown Location";
+          }
+        })
+        .catch(() => {
+          tableAddresses.value[incident.id] = "Loc. Unavailable";
+        });
+    }, delay);
+    delay += 1200; // 1.2 second interval
+  });
+};
+
+// --- HELPERS ---
+const getDisplayAddress = (incident) => {
+  // 1. Prefer Camera Location Name (Fastest)
+  if (incident.yoloData?.camera?.location) {
+    return incident.yoloData.camera.location;
+  }
+  // 2. Check Cache (From Queue)
+  if (tableAddresses.value[incident.id]) {
+    return tableAddresses.value[incident.id];
+  }
+  // 3. Fallback to Coordinates
+  return `${parseFloat(incident.latitude).toFixed(4)}, ${parseFloat(
+    incident.longitude
+  ).toFixed(4)}`;
+};
+
+const fetchAddressForModal = async (lat, lon) => {
   isAddressLoading.value = true;
-  incidentAddress.value = ""; // Reset previous address
+  incidentAddress.value = "";
   try {
     const response = await axios.get(
       `https://nominatim.openstreetmap.org/reverse`,
       {
-        params: {
-          lat,
-          lon,
-          format: "json",
-        },
-        // Important: Nominatim asks for a User-Agent header, but browser requests usually
-        // handle this by sending the Origin. This is fine for low-volume frontend use.
+        params: { lat, lon, format: "json" },
       }
     );
     if (response.data && response.data.display_name) {
@@ -855,7 +913,6 @@ const fetchAddress = async (lat, lon) => {
       incidentAddress.value = "Address not found";
     }
   } catch (e) {
-    console.error("Geocoding error", e);
     incidentAddress.value = "Address unavailable";
   } finally {
     isAddressLoading.value = false;
@@ -901,7 +958,7 @@ const mapUrl = computed(() => {
   if (!selectedIncident.value) return "";
   const lat = parseFloat(selectedIncident.value.latitude);
   const lon = parseFloat(selectedIncident.value.longitude);
-  const delta = 0.005; // Zoom level
+  const delta = 0.005;
   return `https://www.openstreetmap.org/export/embed.html?bbox=${
     lon - delta
   }%2C${lat - delta}%2C${lon + delta}%2C${
@@ -953,13 +1010,13 @@ const getTypeClass = (type) => {
 
 const openIncidentDetail = (incident) => {
   selectedIncident.value = incident;
-  // Trigger Geocoding whenever modal opens
-  fetchAddress(incident.latitude, incident.longitude);
+  // Trigger Detailed Geocoding for Modal
+  fetchAddressForModal(incident.latitude, incident.longitude);
 };
 
 const closeIncidentDetail = () => {
   selectedIncident.value = null;
-  incidentAddress.value = ""; // Clear address
+  incidentAddress.value = "";
 };
 
 const blockIpAddress = (ip) => {

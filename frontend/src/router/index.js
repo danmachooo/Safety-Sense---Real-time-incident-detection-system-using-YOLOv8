@@ -16,7 +16,7 @@ import Categories from "../views/admin/inventory/Categories.vue";
 import Deployments from "../views/admin/inventory/Deployments.vue";
 import InventoryItems from "../views/admin/inventory/InventoryItems.vue";
 import Notifications from "../views/admin/inventory/Notifications.vue";
-
+import Incidents from "../views/Incidents.vue";
 import ManageCamera from "../views/admin/camera/ManageCamera.vue";
 import CameraDetail from "../views/admin/camera/CameraDetail.vue";
 import ArchivedCamera from "../views/admin/camera/ArchivedCamera.vue";
@@ -32,6 +32,7 @@ const routes = [
       { path: "", redirect: "dashboard" }, // Redirect /admin to /admin/dashboard
       { path: "dashboard", component: Dashboard },
       { path: "reports", component: Reports },
+      { path: "incidents", component: Incidents },
 
       // User Management routes
       { path: "users/view", component: ViewUsers },

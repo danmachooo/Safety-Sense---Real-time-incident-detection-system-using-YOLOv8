@@ -402,10 +402,25 @@
                     <MapPin class="w-5 h-5 mr-2 text-green-600" />
                     Location
                   </h3>
-                  <span class="text-xs font-mono text-gray-500">
-                    {{ selectedIncident.latitude }},
-                    {{ selectedIncident.longitude }}
-                  </span>
+                  <div class="text-right">
+                    <p
+                      v-if="isAddressLoading"
+                      class="text-sm text-gray-500 animate-pulse"
+                    >
+                      Loading address...
+                    </p>
+                    <p
+                      v-else
+                      class="text-sm font-medium text-gray-900 max-w-[250px] md:max-w-[300px] truncate"
+                      :title="incidentAddress"
+                    >
+                      {{ incidentAddress || "Unknown Location" }}
+                    </p>
+                    <p class="text-xs font-mono text-gray-500">
+                      {{ selectedIncident.latitude }},
+                      {{ selectedIncident.longitude }}
+                    </p>
+                  </div>
                 </div>
                 <div class="h-64 w-full bg-gray-200 relative">
                   <iframe
@@ -718,20 +733,21 @@ import {
   Check,
   CheckCircle,
   Clock,
-  RefreshCw, // Added Import
+  RefreshCw,
 } from "lucide-vue-next";
 
 // --- CONFIGURATION ---
-// Set your backend base URL here
 const API_BASE_URL = "https://api.safetysense.team/api/incidents/";
-
-// IMPORTANT: Replace this with your actual Auth logic (e.g. from Pinia store, localStorage)
 const CURRENT_USER_ID = 1;
 
 // --- STATE ---
 const incidents = ref([]);
 const isLoading = ref(false);
 const error = ref(null);
+
+// Geocoding State
+const incidentAddress = ref("");
+const isAddressLoading = ref(false);
 
 // Filter States
 const filterSource = ref("all");
@@ -758,16 +774,13 @@ const notification = ref({
 const transformIncidentData = (data) => {
   return {
     ...data,
-    // Ensure we use the signed URL if available, otherwise fallback (which might fail if private)
     snapshotUrl: data.snapshotSignedUrls?.main || data.snapshotUrl,
-    // Map backend yoloDetails to frontend yoloData
     yoloData: data.yoloDetails
       ? {
           ...data.yoloDetails,
-          detectionFrameUrl: data.snapshotSignedUrls?.ai, // Use the signed AI frame URL
+          detectionFrameUrl: data.snapshotSignedUrls?.ai,
         }
       : null,
-    // Map backend humanDetails to frontend humanData
     humanData: data.humanDetails,
   };
 };
@@ -778,8 +791,6 @@ const fetchIncidents = async () => {
 
   try {
     const params = {};
-
-    // Map frontend filters to backend query params
     if (filterSource.value === "yolo") params.source = "camera";
     else if (filterSource.value === "human") params.source = "citizen";
 
@@ -787,7 +798,6 @@ const fetchIncidents = async () => {
     if (filterType.value !== "all") params.type = filterType.value;
     if (searchQuery.value) params.search = searchQuery.value;
 
-    // Sorting defaults
     params.sortBy = "createdAt";
     params.sortOrder = "desc";
 
@@ -808,20 +818,47 @@ const fetchIncidents = async () => {
 
 const dismissIncident = async (id) => {
   try {
-    // We use the global dismiss endpoint as per requirements
-    // Requires userId and reason
     await axios.post(`${API_BASE_URL}/${id}/global-dismiss`, {
       userId: CURRENT_USER_ID,
-      reason: "Dismissed via Dashboard", // You could add a prompt for this
+      reason: "Dismissed via Dashboard",
     });
 
     showNotification(`Incident #${id} has been dismissed`, "success");
     closeIncidentDetail();
-    // Refresh list
     fetchIncidents();
   } catch (err) {
     console.error("Failed to dismiss:", err);
     showNotification("Failed to dismiss incident", "error");
+  }
+};
+
+// --- REVERSE GEOCODING ---
+const fetchAddress = async (lat, lon) => {
+  isAddressLoading.value = true;
+  incidentAddress.value = ""; // Reset previous address
+  try {
+    const response = await axios.get(
+      `https://nominatim.openstreetmap.org/reverse`,
+      {
+        params: {
+          lat,
+          lon,
+          format: "json",
+        },
+        // Important: Nominatim asks for a User-Agent header, but browser requests usually
+        // handle this by sending the Origin. This is fine for low-volume frontend use.
+      }
+    );
+    if (response.data && response.data.display_name) {
+      incidentAddress.value = response.data.display_name;
+    } else {
+      incidentAddress.value = "Address not found";
+    }
+  } catch (e) {
+    console.error("Geocoding error", e);
+    incidentAddress.value = "Address unavailable";
+  } finally {
+    isAddressLoading.value = false;
   }
 };
 
@@ -860,7 +897,6 @@ const stats = computed(() => [
   },
 ]);
 
-// Map URL for OpenStreetMap
 const mapUrl = computed(() => {
   if (!selectedIncident.value) return "";
   const lat = parseFloat(selectedIncident.value.latitude);
@@ -917,10 +953,13 @@ const getTypeClass = (type) => {
 
 const openIncidentDetail = (incident) => {
   selectedIncident.value = incident;
+  // Trigger Geocoding whenever modal opens
+  fetchAddress(incident.latitude, incident.longitude);
 };
 
 const closeIncidentDetail = () => {
   selectedIncident.value = null;
+  incidentAddress.value = ""; // Clear address
 };
 
 const blockIpAddress = (ip) => {
@@ -929,8 +968,6 @@ const blockIpAddress = (ip) => {
 };
 
 const confirmBlockIp = () => {
-  // Ideally, you would have a backend endpoint to block IPs.
-  // For now, we just notify and dismiss the incident.
   showNotification(`IP Address ${ipToBlock.value} has been blocked`, "success");
   showBlockModal.value = false;
 
@@ -948,12 +985,10 @@ const showNotification = (message, type = "success") => {
 
 // --- WATCHERS & LIFECYCLE ---
 
-// Auto-fetch when filters change
 watch([filterSource, filterStatus, filterType], () => {
   fetchIncidents();
 });
 
-// Debounce search input
 watch(searchQuery, () => {
   if (searchDebounceTimeout) clearTimeout(searchDebounceTimeout);
   searchDebounceTimeout = setTimeout(() => {

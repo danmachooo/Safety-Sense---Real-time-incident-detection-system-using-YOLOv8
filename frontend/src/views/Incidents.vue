@@ -742,11 +742,16 @@ import {
   Clock,
   RefreshCw,
 } from "lucide-vue-next";
+import { useAuthStore } from "../stores/authStore";
+import { storeToRefs } from "pinia";
 
 // --- CONFIGURATION ---
 const API_BASE_URL = "https://api.safetysense.team/api/incidents/";
-const CURRENT_USER_ID = 1;
 
+const authStore = useAuthStore();
+const { authUser } = storeToRefs(authStore);
+
+const CURRENT_USER_ID = authUser.value.id;
 // --- STATE ---
 const incidents = ref([]);
 const isLoading = ref(false);

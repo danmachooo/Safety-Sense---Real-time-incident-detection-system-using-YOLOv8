@@ -18,16 +18,7 @@
               </p>
             </div>
           </div>
-          <div class="flex items-center space-x-3">
-            <div
-              class="flex items-center space-x-2 px-4 py-2 bg-green-100 rounded-full"
-            >
-              <div
-                class="w-2 h-2 bg-green-500 rounded-full animate-pulse"
-              ></div>
-              <span class="text-sm font-semibold text-green-800">Live</span>
-            </div>
-          </div>
+          <div class="flex items-center space-x-3"></div>
         </div>
       </div>
     </div>

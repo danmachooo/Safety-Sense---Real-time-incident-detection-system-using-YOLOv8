@@ -87,7 +87,7 @@ router.post(
   globalDismissIncident
 );
 
-router.post("/block-ip", blockIPAddress);
+router.post("/block-ip", authMiddleware, adminMiddleware, blockIPAddress);
 
 // Resolve an incident
 router.put("/:id/resolve", authMiddleware, resolveIncident);

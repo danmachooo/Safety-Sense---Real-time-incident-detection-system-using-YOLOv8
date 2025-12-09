@@ -1,12 +1,10 @@
-import models from "../../models/index.js";
-const { Incident, HumanIncident } = models;
 import { recordOffense } from "../../services/redis/ipBan.js";
 import { StatusCodes } from "http-status-codes";
-import { BadRequestError, NotFoundError } from "../../utils/Error.js";
+import { BadRequestError } from "../../utils/Error.js";
 
 export const blockIPAddress = async (req, res, next) => {
   try {
-    const { ip } = req.params;
+    const { ip } = req.body;
 
     if (!ip) {
       throw new BadRequestError("No IP found for this report!");
@@ -21,6 +19,7 @@ export const blockIPAddress = async (req, res, next) => {
       offenseLevel: offense,
     });
   } catch (error) {
+    console.error("An error occured: ", error);
     next(error);
   }
 };

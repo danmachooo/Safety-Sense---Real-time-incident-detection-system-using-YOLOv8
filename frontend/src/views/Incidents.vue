@@ -626,9 +626,10 @@
             >
               Close
             </button>
+
             <button
               v-if="selectedIncident.status === 'pending'"
-              @click="dismissIncident(selectedIncident.id)"
+              @click.stop="openDismissModal"
               class="px-6 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors duration-200"
             >
               <X class="w-4 h-4 inline mr-2" />
@@ -640,8 +641,62 @@
     </div>
 
     <div
+      v-if="showDismissModal"
+      class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+      style="z-index: 100"
+      @click="showDismissModal = false"
+    >
+      <div
+        class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8"
+        @click.stop
+      >
+        <div class="text-center">
+          <div
+            class="w-16 h-16 bg-red-100 rounded-full mx-auto mb-4 flex items-center justify-center"
+          >
+            <FileText class="w-8 h-8 text-red-600" />
+          </div>
+          <h3 class="text-xl font-bold text-gray-900 mb-2">Dismiss Incident</h3>
+          <p class="text-gray-600 mb-6">
+            Please provide a reason for dismissing this incident. This will be
+            logged in the system.
+          </p>
+
+          <div class="mb-6 text-left">
+            <label class="block text-sm font-semibold text-gray-700 mb-2">
+              Reason for Dismissal <span class="text-red-500">*</span>
+            </label>
+            <textarea
+              v-model="dismissReason"
+              rows="3"
+              placeholder="e.g., Duplicate report, False alarm, Test data..."
+              class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all resize-none"
+            ></textarea>
+          </div>
+
+          <div class="flex space-x-3 justify-center">
+            <button
+              @click="showDismissModal = false"
+              class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors duration-200 flex-1"
+            >
+              Cancel
+            </button>
+            <button
+              @click="confirmDismiss"
+              :disabled="!dismissReason.trim()"
+              class="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Confirm Dismiss
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div
       v-if="showBlockModal"
-      class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4"
+      class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+      style="z-index: 100"
       @click="showBlockModal = false"
     >
       <div
@@ -655,31 +710,43 @@
             <Ban class="w-8 h-8 text-red-600" />
           </div>
           <h3 class="text-xl font-bold text-gray-900 mb-2">
-            Block IP Address?
+            Block IP & Dismiss?
           </h3>
           <p class="text-gray-600 mb-6">
             Are you sure you want to block
             <span class="font-mono font-bold">{{ ipToBlock }}</span
-            >? This will prevent future reports from this IP.
+            >? This will dismiss the incident and prevent future reports.
           </p>
+
+          <div class="mb-6 text-left">
+            <label class="block text-sm font-semibold text-gray-700 mb-2">
+              Reason for Blocking/Dismissal
+            </label>
+            <textarea
+              v-model="dismissReason"
+              rows="2"
+              class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all resize-none"
+            ></textarea>
+          </div>
+
           <div class="flex space-x-3 justify-center">
             <button
               @click="showBlockModal = false"
-              class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors duration-200"
+              class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors duration-200 flex-1"
             >
               Cancel
             </button>
             <button
               @click="confirmBlockIp"
-              class="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200"
+              :disabled="!dismissReason.trim()"
+              class="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 flex-1 disabled:opacity-50"
             >
-              Block IP
+              Confirm Block
             </button>
           </div>
         </div>
       </div>
     </div>
-
     <div
       v-if="notification.show"
       class="fixed top-6 right-6 z-[9999] animate-slide-in"
@@ -744,17 +811,20 @@ import {
 } from "lucide-vue-next";
 import { useAuthStore } from "../stores/authStore";
 import { storeToRefs } from "pinia";
-
+import api from "../utils/axios";
 // --- CONFIGURATION ---
-const API_BASE_URL = "https://api.safetysense.team/api/incidents/";
 
 const authStore = useAuthStore();
 const { authUser } = storeToRefs(authStore);
 
 const CURRENT_USER_ID = authUser.value.id;
+console.log("CURRENT LOGGED IN: ", CURRENT_USER_ID);
+
 // --- STATE ---
 const incidents = ref([]);
 const isLoading = ref(false);
+const showDismissModal = ref(false);
+const dismissReason = ref("");
 const error = ref(null);
 
 // Geocoding State
@@ -813,7 +883,7 @@ const fetchIncidents = async () => {
     params.sortBy = "createdAt";
     params.sortOrder = "desc";
 
-    const response = await axios.get(API_BASE_URL, { params });
+    const response = await api.get("/incidents/", { params });
 
     if (response.data && response.data.success) {
       incidents.value = response.data.data.map(transformIncidentData);
@@ -829,20 +899,43 @@ const fetchIncidents = async () => {
   }
 };
 
-const dismissIncident = async (id) => {
+const executeDismissal = async (id, reason) => {
   try {
-    await axios.post(`${API_BASE_URL}/${id}/global-dismiss`, {
+    await api.post(`incidents/${id}/global-dismiss`, {
       userId: CURRENT_USER_ID,
-      reason: "Dismissed via Dashboard",
+      reason: reason || "Dismissed via Dashboard", // Use the custom reason
     });
 
     showNotification(`Incident #${id} has been dismissed`, "success");
+
+    // Close modals
+    showDismissModal.value = false;
     closeIncidentDetail();
+
+    // Refresh list
     fetchIncidents();
   } catch (err) {
     console.error("Failed to dismiss:", err);
     showNotification("Failed to dismiss incident", "error");
   }
+};
+
+const openDismissModal = () => {
+  dismissReason.value = ""; // Reset reason
+  showDismissModal.value = true;
+};
+
+// Confirms the action from the modal
+const confirmDismiss = () => {
+  if (!selectedIncident.value) return;
+
+  // validation (optional: ensure reason isn't empty)
+  if (!dismissReason.value.trim()) {
+    showNotification("Please provide a reason for dismissal", "warning");
+    return;
+  }
+
+  executeDismissal(selectedIncident.value.id, dismissReason.value);
 };
 
 // --- SMART REVERSE GEOCODING QUEUE ---
@@ -1026,15 +1119,21 @@ const closeIncidentDetail = () => {
 
 const blockIpAddress = (ip) => {
   ipToBlock.value = ip;
+  // Pre-fill the reason, but allow the user to change it
+  dismissReason.value = "Troll Activity detected from IP";
   showBlockModal.value = true;
 };
-
 const confirmBlockIp = () => {
-  showNotification(`IP Address ${ipToBlock.value} has been blocked`, "success");
+  // 1. Close the modal
   showBlockModal.value = false;
 
+  // 2. Show local feedback
+  showNotification(`IP Address ${ipToBlock.value} has been blocked`, "success");
+
+  // 3. If incident is pending, dismiss it using the REASON from the input field
   if (selectedIncident.value?.status === "pending") {
-    dismissIncident(selectedIncident.value.id);
+    // Pass 'dismissReason.value' instead of a hardcoded string
+    executeDismissal(selectedIncident.value.id, dismissReason.value);
   }
 };
 
@@ -1092,3 +1191,4 @@ onMounted(() => {
   animation: slide-in 0.3s ease-out;
 }
 </style>
+w

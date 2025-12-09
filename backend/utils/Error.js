@@ -40,6 +40,14 @@ class ConflictError extends Error {
   }
 }
 
+class TooManyRequestError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "TooManyRequestError";
+    this.message = message;
+  }
+}
+
 function makeError(error) {
   const defaultError = {
     name: error.name,
@@ -100,5 +108,6 @@ export {
   ForbiddenError,
   NotFoundError,
   ConflictError,
+  TooManyRequestError,
   makeError,
 };

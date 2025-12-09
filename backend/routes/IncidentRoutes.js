@@ -28,6 +28,8 @@ import {
 import { uploadSingle } from "../config/multer.js";
 import { uploadIncidentImage } from "../controllers/Incidents/uploadController.js";
 import cameraAuthMiddleware from "../middlewares/cameraAuthMiddleware.js";
+import checkIpStatusMiddleware from "../middlewares/checkIPStatusMiddleware.js";
+import { blockIPAddress } from "../controllers/Incidents/ipBlockerController.js";
 // Get all incidents with filtering
 router.get("/", getIncidents);
 
@@ -67,7 +69,7 @@ router.get(
 router.post("/", createIncident);
 
 // Create new incident
-router.post("/citizen", createCitizenReport);
+router.post("/citizen", checkIpStatusMiddleware, createCitizenReport);
 router.post("/ai", cameraAuthMiddleware, createCameraDetection);
 router.post("/upload-image", uploadSingle, uploadIncidentImage);
 
@@ -84,6 +86,8 @@ router.post(
   adminMiddleware,
   globalDismissIncident
 );
+
+router.post("/block-ip", blockIPAddress);
 
 // Resolve an incident
 router.put("/:id/resolve", authMiddleware, resolveIncident);

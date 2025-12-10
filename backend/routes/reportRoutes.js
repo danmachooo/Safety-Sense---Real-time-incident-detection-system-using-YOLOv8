@@ -19,7 +19,8 @@ const router = express.Router();
 // Inventory Reports
 router.get(
   "/inventory/summary",
-
+  authMiddleware,
+  adminMiddleware,
   generateInventorySummaryReport
 );
 router.get(

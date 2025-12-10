@@ -714,7 +714,7 @@
                 class="p-3 bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors duration-200"
               >
                 <div class="text-2xl font-bold text-blue-600">
-                  {{ inventoryData?.summary?.totalItems || 0 }}
+                  {{ inventoryData?.summary?.totalItems || 1 }}
                 </div>
                 <div
                   class="text-xs font-semibold text-blue-800 flex items-center justify-center"
@@ -2442,7 +2442,7 @@ const getKeyMetrics = () => {
   if (showInventoryCharts.value && inventoryData.value) {
     metrics.push({
       label: "Total Items",
-      value: inventoryData.value.summary?.totalItretems || 0,
+      value: inventoryData.value.summary?.totalItems || 0,
       icon: Package,
       iconColor: "text-blue-600",
       trend: "up",

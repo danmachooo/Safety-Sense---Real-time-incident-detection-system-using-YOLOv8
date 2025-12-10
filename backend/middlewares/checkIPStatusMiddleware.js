@@ -2,10 +2,12 @@ import { StatusCodes } from "http-status-codes";
 import { checkIpStatus } from "../services/redis/ipBan.js";
 import { ForbiddenError, TooManyRequestError } from "../utils/Error.js";
 const checkIPStatusMiddleware = async (req, res, next) => {
-  const ipAddress =
-    req.headers["x-forwarded-for"]?.split(",")[0] ||
-    req.connection.remoteAddress ||
-    req.ip;
+  // const ipAddress =
+  //   req.headers["x-forwarded-for"]?.split(",")[0] ||
+  //   req.connection.remoteAddress ||
+  //   req.ip;
+
+  const ipAddress = req.body.ipAddress;
   console.log("IP address of the requestor: ", ipAddress);
   const status = await checkIpStatus(ipAddress);
 

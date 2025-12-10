@@ -2,7 +2,7 @@ import { recordOffense } from "../../services/redis/ipBan.js";
 import { StatusCodes } from "http-status-codes";
 import { BadRequestError } from "../../utils/Error.js";
 
-export const blockIPAddress = async (req, res, next) => {
+export const penalizeReporter = async (req, res, next) => {
   try {
     const { ip } = req.body;
 

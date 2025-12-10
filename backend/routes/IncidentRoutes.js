@@ -29,7 +29,7 @@ import { uploadSingle } from "../config/multer.js";
 import { uploadIncidentImage } from "../controllers/Incidents/uploadController.js";
 import cameraAuthMiddleware from "../middlewares/cameraAuthMiddleware.js";
 import checkIpStatusMiddleware from "../middlewares/checkIPStatusMiddleware.js";
-import { blockIPAddress } from "../controllers/Incidents/ipBlockerController.js";
+import { penalizeReporter } from "../controllers/Incidents/penalizeReporterController.js";
 // Get all incidents with filtering
 router.get("/", getIncidents);
 
@@ -87,7 +87,12 @@ router.post(
   globalDismissIncident
 );
 
-router.post("/block-ip", authMiddleware, adminMiddleware, blockIPAddress);
+router.post(
+  "/penalize-reporter",
+  authMiddleware,
+  adminMiddleware,
+  penalizeReporter
+);
 
 // Resolve an incident
 router.put("/:id/resolve", authMiddleware, resolveIncident);

@@ -9,8 +9,10 @@ const BAN_KEY = (ip) => `ip:ban:${ip}`;
 // =============================
 export const checkIpStatus = async (ip) => {
   const redis = await getRedisClient();
-  if (!redis) return "ok"; // fail open
-
+  if (!redis) {
+    console.log("Redis failed to open.");
+    return "ok"; // fail open
+  }
   const isBanned = await redis.exists(BAN_KEY(ip));
   if (isBanned) return "banned";
 

@@ -15,7 +15,7 @@ import {
   getMapData,
 } from "../controllers/DashboardController.js";
 
-router.get("/summary", getDashboardSummary);
+router.get("/summary", authMiddleware, getDashboardSummary);
 router.get("/incidents", authMiddleware, getIncidentStats);
 router.get("/inventory", authMiddleware, getInventoryStats);
 router.get("/deployments", authMiddleware, getDeploymentStats);

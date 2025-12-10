@@ -14,6 +14,8 @@ export const checkIpStatus = async (ip) => {
     return "ok"; // fail open
   }
   const isBanned = await redis.exists(BAN_KEY(ip));
+
+  console.log(`IP STATUS for ${ip}: ${isBanned}`);
   if (isBanned) return "banned";
 
   const isCooldown = await redis.exists(COOLDOWN_KEY(ip));

@@ -953,6 +953,7 @@ const executeDismissal = async (id, reason) => {
 const executePenalize = async (ip) => {
   try {
     const response = await api.post("/incidents/penalize-reporter", { ip });
+    console.log("Response: ", response.status);
     return response.data;
   } catch (err) {
     console.error("Failed to penalize IP:", err);

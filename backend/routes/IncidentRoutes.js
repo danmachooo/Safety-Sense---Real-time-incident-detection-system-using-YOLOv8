@@ -71,7 +71,12 @@ router.post("/", createIncident);
 // Create new incident
 router.post("/citizen", checkIpStatusMiddleware, createCitizenReport);
 router.post("/ai", cameraAuthMiddleware, createCameraDetection);
-router.post("/upload-image", uploadSingle, uploadIncidentImage);
+router.post(
+  "/upload-image",
+  checkIpStatusMiddleware,
+  uploadSingle,
+  uploadIncidentImage
+);
 
 // Accept an incident
 router.post("/:incidentId/accept", authMiddleware, acceptIncident);

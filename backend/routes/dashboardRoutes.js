@@ -17,7 +17,7 @@ import {
 
 router.get("/summary", getDashboardSummary);
 router.get("/incidents", authMiddleware, getIncidentStats);
-router.get("/inventory", getInventoryStats);
+router.get("/inventory", authMiddleware, getInventoryStats);
 router.get("/deployments", authMiddleware, getDeploymentStats);
 router.get("/users", authMiddleware, getUserActivityStats);
 router.get("/activity", authMiddleware, getActivityFeed);

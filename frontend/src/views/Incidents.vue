@@ -454,9 +454,31 @@
                   <FileText class="w-5 h-5 mr-2 text-purple-600" />
                   Description
                 </h3>
-                <p class="text-gray-700 leading-relaxed">
-                  {{ selectedIncident.description }}
+
+                <p class="text-gray-700 leading-relaxed whitespace-pre-line">
+                  {{ getParsedDescription(selectedIncident.description).text }}
                 </p>
+
+                <div
+                  v-if="
+                    getParsedDescription(selectedIncident.description).reason
+                  "
+                  class="mt-4 pt-4 border-t border-red-200"
+                >
+                  <div class="bg-red-50 p-3 rounded-lg border border-red-100">
+                    <span
+                      class="block text-xs font-bold text-red-800 uppercase tracking-wide mb-1"
+                    >
+                      Dismissal Reason
+                    </span>
+                    <p class="text-sm text-red-700 font-medium">
+                      {{
+                        getParsedDescription(selectedIncident.description)
+                          .reason
+                      }}
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -555,10 +577,12 @@
                             selectedIncident.status !== 'dismissed'
                           "
                           @click="
-                            blockIpAddress(selectedIncident.humanData.ipAddress)
+                            openPenalizeModal(
+                              selectedIncident.humanData.ipAddress
+                            )
                           "
                           class="p-1 hover:bg-red-100 rounded transition-colors"
-                          title="Block this IP"
+                          title="Penalize this Reporter"
                         >
                           <Ban class="w-4 h-4 text-red-600" />
                         </button>
@@ -575,20 +599,20 @@
                     class="text-lg font-bold text-yellow-800 mb-2 flex items-center"
                   >
                     <AlertTriangle class="w-5 h-5 mr-2" />
-                    Troll Detection
+                    Abuse Detection
                   </h3>
                   <p class="text-yellow-700 text-sm mb-4">
-                    If this incident appears to be a troll report, you can block
-                    the IP address to prevent future spam.
+                    If this incident appears to be spam or abuse, you can
+                    penalize the reporter to prevent future spam.
                   </p>
                   <button
                     @click="
-                      blockIpAddress(selectedIncident.humanData.ipAddress)
+                      openPenalizeModal(selectedIncident.humanData.ipAddress)
                     "
                     class="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200"
                   >
                     <Ban class="w-4 h-4 mr-2" />
-                    Block IP & Dismiss
+                    Penalize Reporter & Dismiss
                   </button>
                 </div>
               </div>
@@ -694,10 +718,10 @@
     </div>
 
     <div
-      v-if="showBlockModal"
+      v-if="showPenalizeModal"
       class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
       style="z-index: 100"
-      @click="showBlockModal = false"
+      @click="showPenalizeModal = false"
     >
       <div
         class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8"
@@ -710,17 +734,18 @@
             <Ban class="w-8 h-8 text-red-600" />
           </div>
           <h3 class="text-xl font-bold text-gray-900 mb-2">
-            Block IP & Dismiss?
+            Penalize & Dismiss?
           </h3>
           <p class="text-gray-600 mb-6">
-            Are you sure you want to block
-            <span class="font-mono font-bold">{{ ipToBlock }}</span
-            >? This will dismiss the incident and prevent future reports.
+            Are you sure you want to penalize
+            <span class="font-mono font-bold">{{ ipToPenalize }}</span
+            >? This will record an offense against the IP and dismiss the
+            current incident.
           </p>
 
           <div class="mb-6 text-left">
             <label class="block text-sm font-semibold text-gray-700 mb-2">
-              Reason for Blocking/Dismissal
+              Reason for Penalizing
             </label>
             <textarea
               v-model="dismissReason"
@@ -731,17 +756,17 @@
 
           <div class="flex space-x-3 justify-center">
             <button
-              @click="showBlockModal = false"
+              @click="showPenalizeModal = false"
               class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors duration-200 flex-1"
             >
               Cancel
             </button>
             <button
-              @click="confirmBlockIp"
+              @click="confirmPenalizeAndDismiss"
               :disabled="!dismissReason.trim()"
               class="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 flex-1 disabled:opacity-50"
             >
-              Confirm Block
+              Confirm Penalize
             </button>
           </div>
         </div>
@@ -841,8 +866,8 @@ let searchDebounceTimeout = null;
 
 // Modal States
 const selectedIncident = ref(null);
-const showBlockModal = ref(false);
-const ipToBlock = ref("");
+const showPenalizeModal = ref(false);
+const ipToPenalize = ref("");
 
 // Notification State
 const notification = ref({
@@ -899,17 +924,20 @@ const fetchIncidents = async () => {
   }
 };
 
+// 1. Function: Dismissing an Incident Report
 const executeDismissal = async (id, reason) => {
   try {
+    // Calls your backend: router.post("/:id/global-dismiss", ...)
     await api.post(`incidents/${id}/global-dismiss`, {
       userId: CURRENT_USER_ID,
-      reason: reason || "Dismissed via Dashboard", // Use the custom reason
+      reason: reason || "Dismissed via Dashboard",
     });
 
     showNotification(`Incident #${id} has been dismissed`, "success");
 
     // Close modals
     showDismissModal.value = false;
+    showPenalizeModal.value = false;
     closeIncidentDetail();
 
     // Refresh list
@@ -917,6 +945,18 @@ const executeDismissal = async (id, reason) => {
   } catch (err) {
     console.error("Failed to dismiss:", err);
     showNotification("Failed to dismiss incident", "error");
+    throw err;
+  }
+};
+
+// 2. Function: Penalize IP (Helper)
+const executePenalize = async (ip) => {
+  try {
+    const response = await api.post("/incidents/penalize-reporter", { ip });
+    return response.data;
+  } catch (err) {
+    console.error("Failed to penalize IP:", err);
+    throw new Error("Failed to penalize the reporter.");
   }
 };
 
@@ -977,6 +1017,30 @@ const processAddressQueue = (incidentList) => {
     }, delay);
     delay += 1200; // 1.2 second interval
   });
+};
+
+// --- HELPER: Parse Description to separate Dismissal Reason ---
+const getParsedDescription = (fullDescription) => {
+  if (!fullDescription) return { text: "", reason: null };
+
+  const separator = "Dismissal Reason:";
+
+  // Check if the specific separator exists
+  if (fullDescription.includes(separator)) {
+    // Split the string into parts
+    const parts = fullDescription.split(separator);
+
+    // The last part is the reason
+    const reason = parts.pop().trim();
+
+    // Join the remaining parts (in case user typed "Dismissal Reason:" themselves) to form the main text
+    const text = parts.join(separator).trim();
+
+    return { text, reason };
+  }
+
+  // Return original text if no reason found
+  return { text: fullDescription, reason: null };
 };
 
 // --- HELPERS ---
@@ -1117,23 +1181,37 @@ const closeIncidentDetail = () => {
   incidentAddress.value = "";
 };
 
-const blockIpAddress = (ip) => {
-  ipToBlock.value = ip;
-  // Pre-fill the reason, but allow the user to change it
-  dismissReason.value = "Troll Activity detected from IP";
-  showBlockModal.value = true;
+// 3. Function: Prepare Penalize Modal (UI Logic)
+const openPenalizeModal = (ip) => {
+  ipToPenalize.value = ip;
+  // Pre-fill reason for the dismissal part
+  dismissReason.value = "Spam/Abuse detected from Reporter";
+  showPenalizeModal.value = true;
 };
-const confirmBlockIp = () => {
-  // 1. Close the modal
-  showBlockModal.value = false;
 
-  // 2. Show local feedback
-  showNotification(`IP Address ${ipToBlock.value} has been blocked`, "success");
+// 4. Function: Penalize + Dismiss (Combined Action)
+const confirmPenalizeAndDismiss = async () => {
+  if (!dismissReason.value.trim()) {
+    showNotification("Reason is required", "warning");
+    return;
+  }
 
-  // 3. If incident is pending, dismiss it using the REASON from the input field
-  if (selectedIncident.value?.status === "pending") {
-    // Pass 'dismissReason.value' instead of a hardcoded string
-    executeDismissal(selectedIncident.value.id, dismissReason.value);
+  try {
+    // Step A: Penalize the Reporter first
+    await executePenalize(ipToPenalize.value);
+    showNotification(`Reporter IP ${ipToPenalize.value} penalized.`, "success");
+
+    // Step B: If there is an active incident, Dismiss it
+    if (selectedIncident.value) {
+      await executeDismissal(selectedIncident.value.id, dismissReason.value);
+    } else {
+      // If we just penalized without an open incident context (rare case)
+      showPenalizeModal.value = false;
+    }
+  } catch (err) {
+    // Error notification handled in individual functions,
+    // but we catch here to stop the flow.
+    console.error(err);
   }
 };
 
@@ -1191,4 +1269,3 @@ onMounted(() => {
   animation: slide-in 0.3s ease-out;
 }
 </style>
-w

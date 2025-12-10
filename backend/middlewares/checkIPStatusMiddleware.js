@@ -6,7 +6,7 @@ const checkIPStatusMiddleware = async (req, res, next) => {
     req.headers["x-forwarded-for"]?.split(",")[0] ||
     req.connection.remoteAddress ||
     req.ip;
-
+  console.log("IP address of the requestor: ", ipAddress);
   const status = await checkIpStatus(ipAddress);
 
   if (status === "banned") {

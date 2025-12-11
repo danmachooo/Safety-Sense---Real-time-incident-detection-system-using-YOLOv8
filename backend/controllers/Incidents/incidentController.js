@@ -502,7 +502,6 @@ const getIncident = async (req, res, next) => {
     next(error);
   }
 };
-
 const getIncidentsForHeatmap = async (req, res, next) => {
   try {
     const { filter, startDate, endDate, type, source } = req.query;
@@ -529,22 +528,25 @@ const getIncidentsForHeatmap = async (req, res, next) => {
       };
     }
 
-    // 🧠 Source filtering based on cameraId
+    // 🧠 Source filtering (FIXED)
+    // We use 'reportType' because 'cameraId' does not exist on the main Incident table
     if (source === "citizen") {
-      where.cameraId = null; // Human-reported
+      where.reportType = "human";
     } else if (source === "camera") {
-      where.cameraId = { [Op.not]: null }; // AI-detected
+      where.reportType = "yolo";
     }
 
     // 📦 Query incidents with related data
     const incidents = await Incident.findAll({
       where,
-      attributes: ["latitude", "longitude", "type", "cameraId"],
+      // ❌ REMOVED "cameraId" from here because it's not in the Incidents table
+      attributes: ["latitude", "longitude", "type"],
       include: [
         {
           model: YOLOIncident,
           as: "yoloDetails",
-          attributes: ["aiType", "confidence"],
+          // ✅ ADDED "cameraId" here because it belongs to the YOLOIncident model
+          attributes: ["aiType", "confidence", "cameraId"],
           required: false,
         },
         {
@@ -577,6 +579,7 @@ const getIncidentsForHeatmap = async (req, res, next) => {
         type,
         "yoloDetails.aiType": aiType,
       } = incident;
+
       if (!latitude || !longitude) continue;
 
       const lat = round(latitude);
